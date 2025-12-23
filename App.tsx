@@ -1,13 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import RootNavigator from './src/navigation/RootNavigator';
+import BubbleScreen from './src/BubbleScreen';
 
 const App = () => {
-  return (
-    <NavigationContainer>
-      <RootNavigator />
-    </NavigationContainer>
-  );
+  return <BubbleScreen />;
 };
 
 export default App;

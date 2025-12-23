@@ -1,21 +1,19 @@
 import { create } from 'zustand';
-import { GameState, Vector2, Bubble } from './gameTypes';
-import { createInitialBubbles, GridBubble } from '../utils/gridManager';
-import { updateBubblePositions } from '../utils/bubblePhysics';
-import { calculateAimPath, launchVelocityFromAim } from '../utils/aimCalculator';
-import { GAME_HEIGHT, GAME_WIDTH, SHOOTER_Y_OFFSET } from '../utils/constants';
-import { BUBBLE_SPEED } from '../config/gameConfig';
-import { BUBBLE_COLORS } from '../constants/GameConstants';
+import { GameState, Vector2, Bubble } from './types';
+import { 
+  createInitialBubbles, 
+  updateBubblePositions, 
+  calculateAimPath, 
+  launchVelocityFromAim,
+  GAME_HEIGHT, 
+  GAME_WIDTH, 
+  SHOOTER_Y_OFFSET,
+  BUBBLE_SPEED,
+  BUBBLE_COLORS,
+  GridBubble
+} from './game';
 
-type GameStore = {
-  bubbles: (Bubble | GridBubble)[];
-  shooterPosition: Vector2;
-  aimPath: Vector2[];
-  score: number;
-  moves: number;
-  currentBubbleColor: string;
-  nextBubbleColor: string;
-  aimTarget: Vector2 | null;
+type GameStore = GameState & {
   update: (dt: number) => void;
   setAimTargetFromTouch: (target: Vector2) => void;
   fireBubble: () => void;
@@ -44,8 +42,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { bubbles, score } = get();
     const updated = updateBubblePositions(bubbles, dt);
     
-    // Calculate score increase from bubble popping (this is a simplified approach)
-    // In a real implementation, you'd return the score from updateBubblePositions
     const activeBubblesBefore = bubbles.filter(b => b.isActive).length;
     const activeBubblesAfter = updated.filter(b => b.isActive).length;
     const bubblesRemoved = activeBubblesBefore - activeBubblesAfter;
@@ -68,7 +64,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { aimTarget, bubbles, moves, currentBubbleColor, nextBubbleColor } = get();
     if (!aimTarget) return;
 
-    // Use the aim target directly for velocity calculation
     const velocity = launchVelocityFromAim(shooterOrigin, aimTarget, BUBBLE_SPEED);
 
     const newBubble: Bubble = {
@@ -85,7 +80,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       moves: moves + 1,
       currentBubbleColor: nextBubbleColor,
       nextBubbleColor: getRandomBubbleColor(),
-      aimTarget: null, // Clear aim target after shooting
+      aimTarget: null,
     });
   },
 }));
