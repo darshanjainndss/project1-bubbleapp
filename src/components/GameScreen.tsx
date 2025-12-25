@@ -51,9 +51,11 @@ interface Bubble {
 
 interface GameScreenProps {
   onBackPress?: () => void;
+  onGameComplete?: (score: number, coins: number, level: number) => void;
+  level?: number;
 }
 
-const GameScreen: React.FC<GameScreenProps> = ({ onBackPress }) => {
+const GameScreen: React.FC<GameScreenProps> = ({ onBackPress, onGameComplete, level = 1 }) => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   interface ShootingBubble {
     x: number;
@@ -445,10 +447,23 @@ const GameScreen: React.FC<GameScreenProps> = ({ onBackPress }) => {
         );
         bubblesRef.current = finalGrid;
         setBubbles([...finalGrid]);
-        if (finalGrid.filter((b) => b.visible).length === 0)
-          Alert.alert("Victory!", "Cleared!", [
-            { text: "Restart", onPress: initGame },
+        if (finalGrid.filter((b) => b.visible).length === 0) {
+          const gameCoins = Math.floor(score / 10) + level * 50; // Coins based on score and level
+          const levelBonus = level * 100; // Bonus points for completing level
+          const totalScore = score + levelBonus;
+          
+          Alert.alert("Victory!", `Level ${level} Cleared!\nScore: ${totalScore}\nCoins Earned: ${gameCoins}`, [
+            { 
+              text: "Continue", 
+              onPress: () => {
+                if (onGameComplete) {
+                  onGameComplete(totalScore, gameCoins, level);
+                }
+              }
+            },
+            { text: "Restart Level", onPress: initGame },
           ]);
+        }
       });
     } else {
       bubblesRef.current = newGrid;
@@ -601,7 +616,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ onBackPress }) => {
 
           {/* CANNON WITH RECOIL */}
           <Animated.Image
-            source={require("../images/canon2-removebg-preview.png")}
+            source={require("../images/robot-removebg-preview.png")}
             style={[
               styles.cannon,
               {
