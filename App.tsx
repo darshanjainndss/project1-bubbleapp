@@ -10,7 +10,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import GameScreen from './src/components/GameScreen';
+import Roadmap from './src/components/Roadmap';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -30,7 +30,7 @@ function AppContent() {
 
   return (
     <View style={styles.container}>
-      <GameScreen />
+      <Roadmap />
     </View>
   );
 }

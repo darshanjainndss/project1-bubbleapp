@@ -9,6 +9,7 @@ import {
   GestureResponderEvent,
   Alert,
   Animated,
+  TouchableOpacity,
 } from "react-native";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -48,7 +49,11 @@ interface Bubble {
   fallOpacity: Animated.Value;
 }
 
-const GameScreen: React.FC = () => {
+interface GameScreenProps {
+  onBackPress?: () => void;
+}
+
+const GameScreen: React.FC<GameScreenProps> = ({ onBackPress }) => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   interface ShootingBubble {
     x: number;
@@ -458,6 +463,18 @@ const GameScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
+      
+      {/* Back Button */}
+      {onBackPress && (
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={onBackPress}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+      )}
+      
       <View
         style={styles.gameArea}
         onStartShouldSetResponder={() => true}
@@ -646,6 +663,23 @@ const BubbleView = React.memo(
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0a0a1a" },
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 100,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   gameArea: { flex: 1 },
   bg: { ...StyleSheet.absoluteFillObject, opacity: 1, zIndex: 0 },
   scoreContainer: {
