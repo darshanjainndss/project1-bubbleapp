@@ -16,17 +16,20 @@ const GRID_TOP = 60;
 
 const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, level?: number }) => {
   const [bubbles, setBubbles] = useState<any[]>([]);
+  const [fallingBubbles, setFallingBubbles] = useState<any[]>([]);
   const [shootingBubble, setShootingBubble] = useState<any>(null);
   const [cannonAngle, setCannonAngle] = useState(0);
   const [nextColor, setNextColor] = useState(COLORS[0]);
   const [score, setScore] = useState(0);
   const [aimDots, setAimDots] = useState<any[]>([]);
-
+  const [targetSlot, setTargetSlot] = useState<{ x: number, y: number } | null>(null);
   const scrollY = useRef(new Animated.Value(-100)).current;
   const currentScrollY = useRef(-100);
   const bubblesRef = useRef<any[]>([]);
+  const fallingRef = useRef<any[]>([]);
   const isProcessing = useRef(false);
   const rafRef = useRef<number | null>(null);
+  const fallingRafRef = useRef<number | null>(null);
 
   const muzzleFlashAnim = useRef(new Animated.Value(0)).current;
   const recoilAnim = useRef(new Animated.Value(0)).current;
@@ -126,6 +129,31 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   useEffect(() => { initGame(); }, [initGame]);
 
+  // Falling Animation Loop
+  useEffect(() => {
+    let lastTime = 0;
+    const animateFalling = (time: number) => {
+      const dt = lastTime ? (time - lastTime) / 16.67 : 1;
+      lastTime = time;
+      if (fallingRef.current.length > 0) {
+        const next = fallingRef.current
+          .map(b => ({
+            ...b,
+            x: b.x + (b.vx || 0) * dt,
+            y: b.y + (b.vy || 0) * dt,
+            vy: (b.vy || 0) + 0.8 * dt,
+          }))
+          .filter(b => b.y < SCREEN_HEIGHT + BUBBLE_SIZE);
+
+        fallingRef.current = next;
+        setFallingBubbles(next);
+      }
+      fallingRafRef.current = requestAnimationFrame(animateFalling);
+    };
+    fallingRafRef.current = requestAnimationFrame(animateFalling);
+    return () => cancelAnimationFrame(fallingRafRef.current!);
+  }, []);
+
   const updateAim = (pageX: number, pageY: number) => {
     if (isProcessing.current) return;
     const dx = pageX - cannonPos.x;
@@ -136,16 +164,39 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     const dots = [];
     let tx = cannonPos.x; let ty = cannonPos.y;
-    let vx = Math.cos(angle) * 30; let vy = Math.sin(angle) * 30;
+    let vx = Math.cos(angle) * 22; let vy = Math.sin(angle) * 22;
 
-    for (let i = 0; i < 15; i++) {
+    let hitPoint = null;
+    for (let i = 0; i < 30; i++) {
       tx += vx; ty += vy;
       if (tx < BUBBLE_SIZE / 2 || tx > SCREEN_WIDTH - BUBBLE_SIZE / 2) vx *= -1;
-      const hit = bubblesRef.current.some(b => b.visible && Math.sqrt((tx - b.x) ** 2 + (ty - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.8);
-      if (hit || ty < GRID_TOP) break;
-      dots.push({ x: tx, y: ty, opacity: 1 - i / 15 });
+
+      const hitIdx = bubblesRef.current.findIndex(b => b.visible && Math.sqrt((tx - b.x) ** 2 + (ty - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.85);
+
+      if (hitIdx !== -1 || ty < GRID_TOP) {
+        hitPoint = { x: tx, y: ty };
+        break;
+      }
+      dots.push({ x: tx, y: ty, opacity: 1 - i / 30 });
     }
     setAimDots(dots);
+
+    if (hitPoint) {
+      let best = { r: 0, c: 0, dist: Infinity };
+      for (let r = 0; r < 35; r++) {
+        const rowWidth = (r % 2 === 0) ? 9 : 8;
+        for (let c = 0; c < rowWidth; c++) {
+          if (bubblesRef.current.some(b => b.visible && b.row === r && b.col === c)) continue;
+          const coords = getPos(r, c);
+          const d = Math.sqrt((hitPoint.x - coords.x) ** 2 + (hitPoint.y - (coords.y + currentScrollY.current)) ** 2);
+          if (d < best.dist) best = { r, c, dist: d };
+        }
+      }
+      const finalPos = getPos(best.r, best.c);
+      setTargetSlot({ x: finalPos.x, y: finalPos.y + currentScrollY.current });
+    } else {
+      setTargetSlot(null);
+    }
   };
 
   const onRelease = () => {
@@ -160,21 +211,29 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     ]).start();
 
     const angle = cannonAngle - Math.PI / 2;
-    const shot = { x: cannonPos.x, y: cannonPos.y, vx: Math.cos(angle) * 26, vy: Math.sin(angle) * 26, color: nextColor };
+    // Pushing velocity to 45 for ultra-fast response
+    const velocity = 45;
+    const shot = { x: cannonPos.x, y: cannonPos.y, vx: Math.cos(angle) * velocity, vy: Math.sin(angle) * velocity, color: nextColor };
 
     const step = () => {
-      shot.x += shot.vx; shot.y += shot.vy;
-      if (shot.x < BUBBLE_SIZE / 2 || shot.x > SCREEN_WIDTH - BUBBLE_SIZE / 2) shot.vx *= -1;
+      // 3 sub-steps for rock-solid accuracy at 45px/frame
+      for (let i = 0; i < 3; i++) {
+        shot.x += shot.vx / 3;
+        shot.y += shot.vy / 3;
 
-      const hit = bubblesRef.current.find(b => b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82);
+        if (shot.x < BUBBLE_SIZE / 2 || shot.x > SCREEN_WIDTH - BUBBLE_SIZE / 2) shot.vx *= -1;
 
-      if (shot.y < GRID_TOP || hit) {
-        cancelAnimationFrame(rafRef.current!);
-        resolveLanding(shot);
-      } else {
-        setShootingBubble({ ...shot });
-        rafRef.current = requestAnimationFrame(step);
+        const hit = bubblesRef.current.find(b => b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82);
+
+        if (shot.y < GRID_TOP || hit) {
+          cancelAnimationFrame(rafRef.current!);
+          resolveLanding(shot);
+          return;
+        }
       }
+
+      setShootingBubble({ ...shot });
+      rafRef.current = requestAnimationFrame(step);
     };
     rafRef.current = requestAnimationFrame(step);
   };
@@ -209,7 +268,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       match.forEach(m => m.visible = false);
       setScore(s => s + match.length * 10);
 
-      // 2. FLOATING LOGIC: Check what is still connected to the Top Row (Row 0)
+      // 2. FLOATING LOGIC
       const connected = new Set();
       const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
       const cStack = [...topRowBubbles];
@@ -224,15 +283,22 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         });
       }
 
-      // Any bubble that is visible but NOT in the connected set must fall
+      const newFalling: any[] = [];
+      match.forEach(m => {
+        newFalling.push({ ...m, vx: (Math.random() - 0.5) * 10, vy: -Math.random() * 10, y: m.y + currentScrollY.current });
+      });
+
       grid.forEach(b => {
         if (b.visible && !connected.has(b.id)) {
-          b.visible = false; // They "fall" by disappearing
+          b.visible = false;
+          newFalling.push({ ...b, vx: (Math.random() - 0.5) * 8, vy: Math.random() * 5, y: b.y + currentScrollY.current });
           setScore(s => s + 5);
         }
       });
 
-      // Force grid to move down
+      fallingRef.current = [...fallingRef.current, ...newFalling];
+      setFallingBubbles(fallingRef.current);
+
       currentScrollY.current += ROW_HEIGHT;
       Animated.spring(scrollY, { toValue: currentScrollY.current, tension: 40, friction: 7, useNativeDriver: true }).start();
     }
@@ -278,7 +344,37 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           ))}
         </Animated.View>
 
-        {aimDots.map((d, i) => <View key={i} style={[styles.dot, { left: d.x - 4, top: d.y - 4, opacity: d.opacity }]} />)}
+        {aimDots.map((d, i) => (
+          <View
+            key={`dot-${i}`}
+            style={[
+              styles.dot,
+              {
+                left: d.x - 2.5,
+                top: d.y - 2.5,
+                opacity: d.opacity,
+                width: 5,
+                height: 5,
+                borderRadius: 2.5,
+              },
+            ]}
+          />
+        ))}
+
+        {/* Ghost Prediction Bubble */}
+        {targetSlot && (
+          <View style={[styles.bubble, styles.ghostBubble, { left: targetSlot.x - BUBBLE_SIZE / 2, top: targetSlot.y - BUBBLE_SIZE / 2, borderColor: nextColor }]}>
+            <View style={[styles.shine, { opacity: 0.1 }]} />
+          </View>
+        )}
+
+        {/* Falling Bubbles */}
+        {fallingBubbles.map(b => (
+          <View key={`fall-${b.id}-${b.x}`} style={[styles.bubble, { left: b.x - BUBBLE_SIZE / 2, top: b.y - BUBBLE_SIZE / 2, backgroundColor: b.color, zIndex: 10 }]}>
+            <View style={styles.shine} />
+          </View>
+        ))}
+
         {shootingBubble && <View style={[styles.bubble, { left: shootingBubble.x - BUBBLE_SIZE / 2, top: shootingBubble.y - BUBBLE_SIZE / 2, backgroundColor: shootingBubble.color }]} />}
 
         <View style={styles.footer}>
@@ -370,9 +466,40 @@ const styles = StyleSheet.create({
 
   gameArea: { flex: 1 },
   bg: { ...StyleSheet.absoluteFillObject, opacity: 0.5 },
-  bubble: { position: "absolute", width: BUBBLE_SIZE, height: BUBBLE_SIZE, borderRadius: BUBBLE_SIZE / 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
-  shine: { position: "absolute", top: "15%", left: "15%", width: "25%", height: "25%", backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 10 },
-  dot: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
+  bubble: {
+    position: "absolute",
+    width: BUBBLE_SIZE,
+    height: BUBBLE_SIZE,
+    borderRadius: BUBBLE_SIZE / 2,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.5)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3
+  },
+  ghostBubble: {
+    opacity: 0.4,
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    borderColor: '#fff',
+  },
+  shine: { position: "absolute", top: "15%", left: "15%", width: "25%", height: "25%", backgroundColor: "rgba(255,255,255,0.4)", borderRadius: 10 },
+  dot: {
+    position: "absolute",
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#fff",
+    shadowColor: "#00E0FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(0, 224, 255, 0.5)",
+  },
   footer: { position: "absolute", bottom: 40, width: "100%", alignItems: "center" },
   cannon: { width: 150, height: 150, resizeMode: "contain" },
   flash: { position: 'absolute', bottom: 100, width: 60, height: 60, backgroundColor: '#fff', borderRadius: 30 }
