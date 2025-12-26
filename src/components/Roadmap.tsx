@@ -74,35 +74,35 @@ const Roadmap: React.FC = () => {
     for (let i = 0; i < levels.length - 1; i++) {
       const currentPos = getRoadmapPosition(i);
       const nextPos = getRoadmapPosition(i + 1);
-      
+
       // Create natural curved path like in reference image
       const numDots = 25; // More dots for ultra-smooth curve
-      
+
       for (let j = 1; j < numDots; j++) {
         const t = j / numDots; // Parameter from 0 to 1
-        
+
         // Create more natural curve control points
         const deltaX = nextPos.x - currentPos.x;
         const deltaY = nextPos.y - currentPos.y;
-        
+
         // Control points for natural S-curve (like in reference image)
         const control1X = currentPos.x + deltaX * 0.3; // First control point
         const control1Y = currentPos.y + 75 + deltaY * 0.1;
-        
+
         const control2X = currentPos.x + deltaX * 0.7; // Second control point  
         const control2Y = nextPos.y + 75 - deltaY * 0.1;
-        
+
         // Cubic Bezier curve for smoother, more natural curves
         const dotX = Math.pow(1 - t, 3) * currentPos.x +
-                     3 * Math.pow(1 - t, 2) * t * control1X +
-                     3 * (1 - t) * Math.pow(t, 2) * control2X +
-                     Math.pow(t, 3) * nextPos.x;
-        
+          3 * Math.pow(1 - t, 2) * t * control1X +
+          3 * (1 - t) * Math.pow(t, 2) * control2X +
+          Math.pow(t, 3) * nextPos.x;
+
         const dotY = Math.pow(1 - t, 3) * (currentPos.y + 75) +
-                     3 * Math.pow(1 - t, 2) * t * control1Y +
-                     3 * (1 - t) * Math.pow(t, 2) * control2Y +
-                     Math.pow(t, 3) * (nextPos.y + 75);
-        
+          3 * Math.pow(1 - t, 2) * t * control1Y +
+          3 * (1 - t) * Math.pow(t, 2) * control2Y +
+          Math.pow(t, 3) * (nextPos.y + 75);
+
         dots.push(
           <View
             key={`dot-${i}-${j}`}
@@ -122,17 +122,17 @@ const Roadmap: React.FC = () => {
 
   if (showGameScreen) {
     return (
-      <GameScreen onBackPress={handleBackPress} />
+      <GameScreen onBackPress={handleBackPress} level={selectedLevel} />
     );
   }
 
   return (
-    <ImageBackground 
-      source={require('../images/spacebg.png')} 
+    <ImageBackground
+      source={require('../images/spacebg.png')}
       style={styles.container}
       resizeMode="cover"
     >
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.roadmapContainer}
@@ -140,11 +140,11 @@ const Roadmap: React.FC = () => {
       >
         {/* Connecting dots */}
         {renderConnectingDots()}
-        
+
         {levels.map((level, index) => {
           const isCurrent = level.id === currentLevel;
           const position = getRoadmapPosition(index);
-          
+
           return (
             <View
               key={level.id}
@@ -162,49 +162,51 @@ const Roadmap: React.FC = () => {
                 style={styles.ufoTouchable}
               >
                 {/* UFO Image - Bigger and Clear */}
-                <Image 
-                  source={require('../images/ufo2-removebg-preview.png')} 
+                <Image
+                  source={require('../images/ufo2-removebg-preview.png')}
                   style={[
                     styles.ufoIcon,
-                    { 
+                    {
                       opacity: 1, // All levels are unlocked, so always full opacity
                     }
                   ]}
                   resizeMode="contain"
                 />
-                
-                {/* Floating Level Number with Glow - Only show for current level */}
-                {isCurrent && (
-                  <Animated.View 
-                    style={[
-                      styles.floatingLevelNumber,
-                      {
-                        backgroundColor: '#00FF88', // Bright green for active level
-                        shadowColor: '#00FF88',
-                        shadowOpacity: glowAnim,
-                        shadowRadius: glowAnim.interpolate({
+
+                {/* Floating Level Number with Glow */}
+                <Animated.View
+                  style={[
+                    styles.floatingLevelNumber,
+                    {
+                      backgroundColor: isCurrent ? '#00FF88' : '#A259FF', // Green for current, Purple for others
+                      shadowColor: isCurrent ? '#00FF88' : '#A259FF',
+                      shadowOpacity: isCurrent ? glowAnim : 0.6,
+                      shadowRadius: isCurrent
+                        ? glowAnim.interpolate({
                           inputRange: [0.3, 1],
                           outputRange: [15, 30],
-                        }),
-                        transform: [
-                          {
-                            scale: glowAnim.interpolate({
+                        })
+                        : 8,
+                      transform: [
+                        {
+                          scale: isCurrent
+                            ? glowAnim.interpolate({
                               inputRange: [0.3, 1],
                               outputRange: [1, 1.1],
-                            }),
-                          }
-                        ],
-                      }
-                    ]}
-                  >
-                    <Text style={[
-                      styles.levelNumber,
-                      styles.activeLevelNumber
-                    ]}>
-                      {level.id}
-                    </Text>
-                  </Animated.View>
-                )}
+                            })
+                            : 1,
+                        }
+                      ],
+                    }
+                  ]}
+                >
+                  <Text style={[
+                    styles.levelNumber,
+                    isCurrent && styles.activeLevelNumber
+                  ]}>
+                    {level.id}
+                  </Text>
+                </Animated.View>
 
                 {/* Stars floating above UFO - Show for all completed levels */}
                 {level.id < currentLevel && (
@@ -235,16 +237,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  
+
   scrollView: {
     flex: 1,
   },
-  
+
   roadmapContainer: {
     paddingVertical: 50,
     minHeight: 3800, // More height for bigger spacing
   },
-  
+
   connectingDot: {
     position: 'absolute',
     width: 6,
@@ -253,7 +255,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     opacity: 0.8,
   },
-  
+
   ufoLevel: {
     position: 'absolute',
     width: 150,
@@ -261,19 +263,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   ufoTouchable: {
     width: 150,
     height: 150,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   ufoIcon: {
     width: 250,
     height: 250,
   },
-  
+
   floatingLevelNumber: {
     position: 'absolute',
     top: -20,
@@ -293,7 +295,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  
+
   lockedLevelNumber: {
     position: 'absolute',
     top: -20,
@@ -309,7 +311,7 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
     opacity: 0.6,
   },
-  
+
   levelNumber: {
     color: '#FFFFFF',
     fontSize: 20,
@@ -318,16 +320,16 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  
+
   activeLevelNumber: {
     textShadowColor: '#FFFFFF',
     textShadowRadius: 4,
   },
-  
+
   lockIcon: {
     fontSize: 18,
   },
-  
+
   starsAboveUfo: {
     position: 'absolute',
     top: -50,
@@ -341,7 +343,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
-  
+
   star: {
     fontSize: 14,
     marginHorizontal: 1,
