@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  View, StyleSheet, Dimensions, Image, Text, StatusBar, Animated,
+  View, StyleSheet, Dimensions, Image, Text, StatusBar, Animated, TouchableOpacity,
 } from "react-native";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -13,7 +13,7 @@ const FOOTER_BOTTOM = 30;
 const GRID_TOP = 60;
 const COLORS = ["#FF3B30", "#FF9500", "#FFD60A", "#34C759", "#007AFF"];
 
-const GameScreen = () => {
+const GameScreen = ({ onBackPress }: { onBackPress?: () => void }) => {
   const [bubbles, setBubbles] = useState<any[]>([]);
   const [shootingBubble, setShootingBubble] = useState<any>(null);
   const [cannonAngle, setCannonAngle] = useState(0);
@@ -186,9 +186,22 @@ const GameScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <View style={styles.header}>
-        <View><Text style={styles.scoreLabel}>SCORE</Text><Text style={styles.scoreValue}>{score}</Text></View>
-        <View style={{alignItems: 'flex-end'}}><Text style={styles.scoreLabel}>NEXT</Text><View style={[styles.nextPreview, {backgroundColor: nextColor}]}/></View>
+      
+      {/* Back Button */}
+      <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
+        <Text style={styles.backButtonText}>← Back</Text>
+      </TouchableOpacity>
+
+      {/* Score and Next on Bottom Left */}
+      <View style={styles.bottomLeftContainer}>
+        <View style={styles.scoreContainer}>
+          <Text style={styles.scoreLabel}>SCORE</Text>
+          <Text style={styles.scoreValue}>{score}</Text>
+        </View>
+        <View style={styles.nextContainer}>
+          <Text style={styles.nextLabel}>NEXT</Text>
+          <View style={[styles.nextPreview, {backgroundColor: nextColor}]}/>
+        </View>
       </View>
 
       <View style={styles.gameArea} onStartShouldSetResponder={() => true}
@@ -221,10 +234,79 @@ const GameScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
-  header: { position: 'absolute', top: 50, width: '100%', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 25, zIndex: 10 },
-  scoreLabel: { color: '#888', fontSize: 10, fontWeight: 'bold' },
-  scoreValue: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  nextPreview: { width: 22, height: 22, borderRadius: 11, marginTop: 5, borderWidth: 1, borderColor: '#fff' },
+  
+  // Back Button
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  // Bottom Left Score and Next
+  bottomLeftContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: 20,
+    zIndex: 10,
+  },
+  scoreContainer: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#fff',
+    alignItems: 'center',
+  },
+  nextContainer: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fff',
+    alignItems: 'center',
+  },
+  scoreLabel: { 
+    color: '#888', 
+    fontSize: 10, 
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  scoreValue: { 
+    color: '#fff', 
+    fontSize: 20, 
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  nextLabel: { 
+    color: '#888', 
+    fontSize: 10, 
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  nextPreview: { 
+    width: 22, 
+    height: 22, 
+    borderRadius: 11, 
+    marginTop: 5, 
+    borderWidth: 1, 
+    borderColor: '#fff',
+  },
+
   gameArea: { flex: 1 },
   bg: { ...StyleSheet.absoluteFillObject, opacity: 0.5 },
   bubble: { position: "absolute", width: BUBBLE_SIZE, height: BUBBLE_SIZE, borderRadius: BUBBLE_SIZE/2, borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },

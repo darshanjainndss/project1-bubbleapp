@@ -24,10 +24,10 @@ const Roadmap: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Generate levels data (only 20 levels)
+  // Generate levels data (all 20 levels unlocked)
   const levels = Array.from({ length: 20 }, (_, i) => ({
     id: i + 1,
-    isLocked: i + 1 > currentLevel,
+    isLocked: false, // Unlock all levels
     stars: Math.floor(Math.random() * 3) + 1,
   }));
 
@@ -42,7 +42,7 @@ const Roadmap: React.FC = () => {
   }, []);
 
   const handleLevelPress = (level: number, isLocked: boolean) => {
-    if (isLocked) return;
+    if (isLocked) return; // This won't trigger since all levels are unlocked
     setSelectedLevel(level);
     setShowGameScreen(true);
   };
@@ -122,7 +122,7 @@ const Roadmap: React.FC = () => {
 
   if (showGameScreen) {
     return (
-      <GameScreen />
+      <GameScreen onBackPress={handleBackPress} />
     );
   }
 
@@ -159,7 +159,6 @@ const Roadmap: React.FC = () => {
               <TouchableOpacity
                 onPress={() => handleLevelPress(level.id, level.isLocked)}
                 activeOpacity={0.8}
-                disabled={level.isLocked}
                 style={styles.ufoTouchable}
               >
                 {/* UFO Image - Bigger and Clear */}
@@ -168,7 +167,7 @@ const Roadmap: React.FC = () => {
                   style={[
                     styles.ufoIcon,
                     { 
-                      opacity: level.isLocked ? 0.4 : 1,
+                      opacity: 1, // All levels are unlocked, so always full opacity
                     }
                   ]}
                   resizeMode="contain"
@@ -207,8 +206,8 @@ const Roadmap: React.FC = () => {
                   </Animated.View>
                 )}
 
-                {/* Stars floating above UFO */}
-                {!level.isLocked && level.id < currentLevel && (
+                {/* Stars floating above UFO - Show for all completed levels */}
+                {level.id < currentLevel && (
                   <View style={styles.starsAboveUfo}>
                     {Array.from({ length: 3 }, (_, i) => (
                       <Text
