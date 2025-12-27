@@ -99,14 +99,47 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     const bgColors = COLORS.filter(c => c !== "#A259FF");
     for (let r = 0; r < 19; r++) {
       const rowWidth = (r % 2 === 0) ? 9 : 8;
+      const pRow = (r >= startRow && r < startRow + patternHeight) ? pattern[r - startRow] : null;
+
+      // Identify horizontal hole boundaries for this pattern row
+      let firstIdx = -1;
+      let actualLastIdx = -1;
+      if (pRow) {
+        firstIdx = pRow.search(/\S/);
+        const lastIdx = pRow.split('').reverse().join('').search(/\S/);
+        actualLastIdx = lastIdx === -1 ? -1 : pRow.length - 1 - lastIdx;
+      }
+
       for (let c = 0; c < rowWidth; c++) {
+        // Skip holes strictly inside the pattern string span
+        if (pRow && firstIdx !== -1 && c >= firstIdx && c <= actualLastIdx && pRow[c] === ' ') {
+          continue;
+        }
+
         const d = distMap[r][c];
         const { x, y } = getPos(r, c);
 
-        let color = "#A259FF"; // Default pattern color
+        let color;
         if (d > 0) {
-          // Cycle through background colors for each contour layer
+          // Outside the pattern: use the previous contour (layer-based) coloring
           color = bgColors[(d - 1) % bgColors.length];
+        } else {
+          // Inside the pattern (d === 0)
+          let isBorder = false;
+          const nb = neighbors(r, c);
+          for (const [nr, nc] of nb) {
+            const nWidth = (nr % 2 === 0) ? 9 : 8;
+            if (nr < 0 || nr >= 19 || nc < 0 || nc >= nWidth || distMap[nr][nc] > 0) {
+              isBorder = true;
+              break;
+            }
+          }
+
+          if (isBorder) {
+            color = "#A259FF"; // Pattern border is Purple
+          } else {
+            color = "#FFD60A"; // Pattern interior is Yellow
+          }
         }
 
         grid.push({
@@ -201,6 +234,11 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   const onRelease = () => {
     if (isProcessing.current) return;
+
+    // Clear aim indicators when starting the shot
+    setAimDots([]);
+    setTargetSlot(null);
+
     isProcessing.current = true;
 
     muzzleFlashAnim.setValue(1);
@@ -332,6 +370,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       </View>
 
       <View style={styles.gameArea} onStartShouldSetResponder={() => true}
+        onResponderGrant={(e) => updateAim(e.nativeEvent.pageX, e.nativeEvent.pageY)}
         onResponderMove={(e) => updateAim(e.nativeEvent.pageX, e.nativeEvent.pageY)}
         onResponderRelease={onRelease}>
         <Image source={require("../images/bubble -bg.png")} style={styles.bg} />
@@ -339,7 +378,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
           {bubbles.map(b => b.visible && (
             <View key={b.id} style={[styles.bubble, { left: b.x - BUBBLE_SIZE / 2, top: b.y - BUBBLE_SIZE / 2, backgroundColor: b.color }]}>
-              <View style={styles.shine} />
+              <View style={styles.bubbleInner} />
+              <View style={styles.bubbleHighlight} />
+              <View style={styles.bubbleGloss} />
             </View>
           ))}
         </Animated.View>
@@ -364,18 +405,27 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         {/* Ghost Prediction Bubble */}
         {targetSlot && (
           <View style={[styles.bubble, styles.ghostBubble, { left: targetSlot.x - BUBBLE_SIZE / 2, top: targetSlot.y - BUBBLE_SIZE / 2, borderColor: nextColor }]}>
-            <View style={[styles.shine, { opacity: 0.1 }]} />
+            <View style={[styles.bubbleInner, { opacity: 0.2 }]} />
+            <View style={[styles.bubbleHighlight, { opacity: 0.1 }]} />
           </View>
         )}
 
         {/* Falling Bubbles */}
         {fallingBubbles.map(b => (
           <View key={`fall-${b.id}-${b.x}`} style={[styles.bubble, { left: b.x - BUBBLE_SIZE / 2, top: b.y - BUBBLE_SIZE / 2, backgroundColor: b.color, zIndex: 10 }]}>
-            <View style={styles.shine} />
+            <View style={styles.bubbleInner} />
+            <View style={styles.bubbleHighlight} />
+            <View style={styles.bubbleGloss} />
           </View>
         ))}
 
-        {shootingBubble && <View style={[styles.bubble, { left: shootingBubble.x - BUBBLE_SIZE / 2, top: shootingBubble.y - BUBBLE_SIZE / 2, backgroundColor: shootingBubble.color }]} />}
+        {shootingBubble && (
+          <View style={[styles.bubble, { left: shootingBubble.x - BUBBLE_SIZE / 2, top: shootingBubble.y - BUBBLE_SIZE / 2, backgroundColor: shootingBubble.color }]}>
+            <View style={styles.bubbleInner} />
+            <View style={styles.bubbleHighlight} />
+            <View style={styles.bubbleGloss} />
+          </View>
+        )}
 
         <View style={styles.footer}>
           <Animated.View style={[styles.flash, { opacity: muzzleFlashAnim }]} />
@@ -472,15 +522,47 @@ const styles = StyleSheet.create({
     height: BUBBLE_SIZE,
     borderRadius: BUBBLE_SIZE / 2,
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.5)",
+    borderColor: "rgba(255,255,255,0.4)",
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  bubbleInner: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: BUBBLE_SIZE / 2,
+    borderWidth: 3,
+    borderColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: 'transparent',
+  },
+  bubbleHighlight: {
+    position: 'absolute',
+    top: '10%',
+    left: '10%',
+    width: '45%',
+    height: '45%',
+    borderRadius: BUBBLE_SIZE / 4,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+    transform: [{ rotate: '-15deg' }],
+  },
+  bubbleGloss: {
+    position: 'absolute',
+    bottom: '10%',
+    right: '10%',
+    width: '30%',
+    height: '20%',
+    borderRadius: BUBBLE_SIZE / 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    transform: [{ rotate: '15deg' }],
   },
   ghostBubble: {
-    opacity: 0.4,
+    opacity: 0.6,
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
     borderColor: '#fff',
