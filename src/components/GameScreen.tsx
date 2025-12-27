@@ -7,12 +7,110 @@ import { getLevelPattern, COLORS } from "../data/levelPatterns";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10); // Standardize size for 10-column capacity safety
+const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10);
 const ROW_HEIGHT = BUBBLE_SIZE * 0.86;
 const GRID_COLS = 9;
-const CANNON_SIZE = 160;
-const FOOTER_BOTTOM = 30;
+const CANNON_SIZE = 150;
+const FOOTER_BOTTOM = 60;
 const GRID_TOP = 60;
+
+// 1. MEMOIZED BUBBLE COMPONENT
+const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost }: any) => {
+  return (
+    <Animated.View
+      style={[
+        styles.bubble,
+        {
+          backgroundColor: color,
+          opacity: anim || 1,
+          transform: [
+            { translateX: x - BUBBLE_SIZE / 2 },
+            { translateY: y - BUBBLE_SIZE / 2 },
+            { translateY: entryOffset || 0 },
+            { scale: anim || 1 }
+          ],
+          ...(isGhost ? styles.ghostBubble : {})
+        }
+      ]}
+    >
+      {/* Planetary Elements */}
+      {!isGhost && (
+        <>
+          <View style={styles.planetBands} />
+          <View style={styles.planetCrater1} />
+          <View style={styles.planetCrater2} />
+          <View style={styles.planetCrater3} />
+          <View style={styles.planetRing} />
+        </>
+      )}
+      <View style={styles.bubbleInner} />
+      <View style={styles.bubbleHighlight} />
+      <View style={styles.bubbleGloss} />
+    </Animated.View>
+  );
+});
+
+// 2. MEMOIZED GRID COMPONENT
+const BubbleGrid = React.memo(({ bubbles }: { bubbles: any[] }) => {
+  return (
+    <>
+      {bubbles.map(b => b.visible && (
+        <Bubble
+          key={b.id}
+          x={b.x}
+          y={b.y}
+          color={b.color}
+          anim={b.anim}
+          entryOffset={b.entryOffset}
+        />
+      ))}
+    </>
+  );
+});
+
+// 3. PULSATING DOT COMPONENT
+const PulsatingDot = React.memo(({ x, y, delay }: { x: number, y: number, delay: number }) => {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View style={[styles.pulsatingDot, { left: x - 3, top: y - 3, opacity: pulse, transform: [{ scale: pulse }] }]} />
+  );
+});
+
+// 4. OVERALL GRID BORDER COMPONENT
+const PulsatingBorder = React.memo(() => {
+  const dots = [];
+  const gridHeight = 18.5 * ROW_HEIGHT + BUBBLE_SIZE;
+  const padding = 10;
+  let dotCount = 0;
+
+  // Sequential flow: Top -> Right -> Bottom -> Left
+  for (let x = padding; x <= SCREEN_WIDTH - padding; x += 25) {
+    dots.push(<PulsatingDot key={`t-${x}`} x={x} y={GRID_TOP - padding} delay={dotCount * 50} />);
+    dotCount++;
+  }
+  for (let y = GRID_TOP - padding + 25; y <= GRID_TOP + gridHeight + padding; y += 25) {
+    dots.push(<PulsatingDot key={`r-${y}`} x={SCREEN_WIDTH - padding} y={y} delay={dotCount * 50} />);
+    dotCount++;
+  }
+  for (let x = SCREEN_WIDTH - padding - 25; x >= padding; x -= 25) {
+    dots.push(<PulsatingDot key={`b-${x}`} x={x} y={GRID_TOP + gridHeight + padding} delay={dotCount * 50} />);
+    dotCount++;
+  }
+  for (let y = GRID_TOP + gridHeight + padding - 25; y > GRID_TOP - padding; y -= 25) {
+    dots.push(<PulsatingDot key={`l-${y}`} x={padding} y={y} delay={dotCount * 50} />);
+    dotCount++;
+  }
+  return <>{dots}</>;
+});
 
 const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, level?: number }) => {
   const [bubbles, setBubbles] = useState<any[]>([]);
@@ -22,16 +120,20 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const [nextColor, setNextColor] = useState(COLORS[0]);
   const [score, setScore] = useState(0);
   const [aimDots, setAimDots] = useState<any[]>([]);
+  const [showHint, setShowHint] = useState(true);
+  const [isAimingState, setIsAimingState] = useState(false);
   const [targetSlot, setTargetSlot] = useState<{ x: number, y: number } | null>(null);
   const scrollY = useRef(new Animated.Value(-100)).current;
   const currentScrollY = useRef(-100);
   const bubblesRef = useRef<any[]>([]);
   const fallingRef = useRef<any[]>([]);
   const isProcessing = useRef(false);
+  const isAiming = useRef(false);
   const rafRef = useRef<number | null>(null);
   const fallingRafRef = useRef<number | null>(null);
 
   const muzzleFlashAnim = useRef(new Animated.Value(0)).current;
+  const muzzleVelocityAnim = useRef(new Animated.Value(0)).current;
   const recoilAnim = useRef(new Animated.Value(0)).current;
 
   const cannonPos = { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT - FOOTER_BOTTOM - CANNON_SIZE / 2 };
@@ -51,8 +153,6 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     const patternHeight = pattern.length;
     let startRow = Math.floor((19 - patternHeight) / 2);
     if (startRow % 2 !== 0) startRow--;
-    startRow = Math.max(0, startRow);
-
     // 1. Map out which cells are "pattern" vs "empty"
     const distMap: number[][] = Array.from({ length: 35 }, () => Array(9).fill(Infinity));
     const queue: [number, number][] = [];
@@ -151,13 +251,36 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       }
     }
 
-    const initialScroll = -10 * ROW_HEIGHT;
-    currentScrollY.current = initialScroll;
-    scrollY.setValue(initialScroll);
-    bubblesRef.current = grid;
-    setBubbles(grid);
+    const finalTargetScroll = -10 * ROW_HEIGHT;
+
+    // 1. Initial Reveal: Position the grid so the pattern is clearly visible in the center
+    const centeredRevealScroll = (SCREEN_HEIGHT / 2) - (9.5 * ROW_HEIGHT);
+
+    scrollY.setValue(centeredRevealScroll);
+    currentScrollY.current = finalTargetScroll;
+
+    // Set bubbles to be visible immediately without individual offsets
+    const gridWithStaticAnims = grid.map((b, i) => ({
+      ...b,
+      anim: new Animated.Value(1),
+      entryOffset: new Animated.Value(0),
+    }));
+
+    bubblesRef.current = gridWithStaticAnims;
+    setBubbles(gridWithStaticAnims);
     setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
     setScore(0);
+
+    // 2. Wait 1 second for the player to see the pattern, then slide up to position
+    setTimeout(() => {
+      Animated.spring(scrollY, {
+        toValue: finalTargetScroll,
+        tension: 10,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
+    }, 1000);
+
   }, [level, scrollY]);
 
   useEffect(() => { initGame(); }, [initGame]);
@@ -166,20 +289,25 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   useEffect(() => {
     let lastTime = 0;
     const animateFalling = (time: number) => {
+      // Calculate delta time for frame-independent motion
       const dt = lastTime ? (time - lastTime) / 16.67 : 1;
       lastTime = time;
+
       if (fallingRef.current.length > 0) {
+        // Use a single map pass to update physics
         const next = fallingRef.current
           .map(b => ({
             ...b,
             x: b.x + (b.vx || 0) * dt,
             y: b.y + (b.vy || 0) * dt,
-            vy: (b.vy || 0) + 0.8 * dt,
+            vy: (b.vy || 0) + 0.9 * dt, // Slightly stronger gravity for punchier fall
           }))
           .filter(b => b.y < SCREEN_HEIGHT + BUBBLE_SIZE);
 
-        fallingRef.current = next;
-        setFallingBubbles(next);
+        if (next.length !== fallingRef.current.length || next.some((b, i) => b.y !== fallingRef.current[i].y)) {
+          fallingRef.current = next;
+          setFallingBubbles(next);
+        }
       }
       fallingRafRef.current = requestAnimationFrame(animateFalling);
     };
@@ -188,19 +316,28 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   }, []);
 
   const updateAim = (pageX: number, pageY: number) => {
-    if (isProcessing.current) return;
-    const dx = pageX - cannonPos.x;
-    const dy = pageY - cannonPos.y;
-    if (dy > -20) return;
+    if (isProcessing.current || !isAiming.current) return;
+    if (showHint) setShowHint(false);
+
+    // Origin for tracer - exactly at the visual muzzle (top edge of 150px robot)
+    const startX = cannonPos.x;
+    const startY = cannonPos.y;
+
+    const dx = pageX - startX;
+    const dy = pageY - startY;
+
+    // Boundary check for aiming angle
+    if (pageY > cannonPos.y - 20) return;
+
     const angle = Math.atan2(dy, dx);
     setCannonAngle(angle + Math.PI / 2);
 
     const dots = [];
-    let tx = cannonPos.x; let ty = cannonPos.y;
+    let tx = startX; let ty = startY;
     let vx = Math.cos(angle) * 22; let vy = Math.sin(angle) * 22;
-
     let hitPoint = null;
-    for (let i = 0; i < 30; i++) {
+
+    for (let i = 0; i < 25; i++) {
       tx += vx; ty += vy;
       if (tx < BUBBLE_SIZE / 2 || tx > SCREEN_WIDTH - BUBBLE_SIZE / 2) vx *= -1;
 
@@ -210,7 +347,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         hitPoint = { x: tx, y: ty };
         break;
       }
-      dots.push({ x: tx, y: ty, opacity: 1 - i / 30 });
+      dots.push({ x: tx, y: ty, opacity: 1 - i / 25 });
     }
     setAimDots(dots);
 
@@ -233,7 +370,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   };
 
   const onRelease = () => {
-    if (isProcessing.current) return;
+    if (!isAiming.current || isProcessing.current) return;
+    isAiming.current = false;
+    setIsAimingState(false);
 
     // Clear aim indicators when starting the shot
     setAimDots([]);
@@ -242,16 +381,28 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     isProcessing.current = true;
 
     muzzleFlashAnim.setValue(1);
-    Animated.timing(muzzleFlashAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+    muzzleVelocityAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(muzzleFlashAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(muzzleVelocityAnim, { toValue: 1, duration: 250, useNativeDriver: true })
+    ]).start();
+
     Animated.sequence([
       Animated.timing(recoilAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
-      Animated.timing(recoilAnim, { toValue: 0, duration: 150, useNativeDriver: true })
+      Animated.timing(recoilAnim, { toValue: 0, duration: 200, useNativeDriver: true })
     ]).start();
 
     const angle = cannonAngle - Math.PI / 2;
     // Pushing velocity to 45 for ultra-fast response
     const velocity = 45;
-    const shot = { x: cannonPos.x, y: cannonPos.y, vx: Math.cos(angle) * velocity, vy: Math.sin(angle) * velocity, color: nextColor };
+    // Start the shot from the muzzle (top of robot image)
+    const shot = {
+      x: cannonPos.x,
+      y: cannonPos.y,
+      vx: Math.cos(angle) * velocity,
+      vy: Math.sin(angle) * velocity,
+      color: nextColor
+    };
 
     const step = () => {
       // 3 sub-steps for rock-solid accuracy at 45px/frame
@@ -289,13 +440,34 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     }
 
     const { x, y } = getPos(best.r, best.c);
-    const newB = { id: `b-${Date.now()}`, row: best.r, col: best.c, x, y, color: shot.color, visible: true };
+    const hitAnim = new Animated.Value(0.7); // Start slightly smaller for "impact" feel
+    const newB = { id: `b-${Date.now()}`, row: best.r, col: best.c, x, y, color: shot.color, visible: true, anim: hitAnim };
     const grid = [...bubblesRef.current, newB];
+
+    // Trigger Impact Animation for the landed bubble
+    Animated.spring(hitAnim, {
+      toValue: 1,
+      tension: 100,
+      friction: 5,
+      useNativeDriver: true
+    }).start();
 
     // 1. FIND MATCHES
     const match = [newB];
     const stack = [newB];
     const visited = new Set([newB.id]);
+
+    // Impact neighbors - briefly shake them
+    const nb = grid.filter(g => g.visible && g.id !== newB.id && Math.sqrt((newB.x - g.x) ** 2 + (newB.y - g.y) ** 2) < BUBBLE_SIZE * 1.5);
+    nb.forEach(n => {
+      if (n.anim) {
+        Animated.sequence([
+          Animated.timing(n.anim, { toValue: 1.08, duration: 50, useNativeDriver: true }),
+          Animated.spring(n.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
+        ]).start();
+      }
+    });
+
     while (stack.length > 0) {
       const b = stack.pop()!;
       const neighbors = grid.filter(g => g.visible && !visited.has(g.id) && g.color === newB.color && Math.sqrt((b.x - g.x) ** 2 + (b.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
@@ -370,19 +542,19 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       </View>
 
       <View style={styles.gameArea} onStartShouldSetResponder={() => true}
-        onResponderGrant={(e) => updateAim(e.nativeEvent.pageX, e.nativeEvent.pageY)}
+        onResponderGrant={(e) => {
+          const { pageX, pageY } = e.nativeEvent;
+          isAiming.current = true;
+          setIsAimingState(true);
+          updateAim(pageX, pageY);
+        }}
         onResponderMove={(e) => updateAim(e.nativeEvent.pageX, e.nativeEvent.pageY)}
         onResponderRelease={onRelease}>
         <Image source={require("../images/bubble -bg.png")} style={styles.bg} />
 
         <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
-          {bubbles.map(b => b.visible && (
-            <View key={b.id} style={[styles.bubble, { left: b.x - BUBBLE_SIZE / 2, top: b.y - BUBBLE_SIZE / 2, backgroundColor: b.color }]}>
-              <View style={styles.bubbleInner} />
-              <View style={styles.bubbleHighlight} />
-              <View style={styles.bubbleGloss} />
-            </View>
-          ))}
+          <PulsatingBorder />
+          <BubbleGrid bubbles={bubbles} />
         </Animated.View>
 
         {aimDots.map((d, i) => (
@@ -391,12 +563,11 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             style={[
               styles.dot,
               {
-                left: d.x - 2.5,
-                top: d.y - 2.5,
+                left: d.x - 3,
+                top: d.y - 3,
                 opacity: d.opacity,
-                width: 5,
-                height: 5,
-                borderRadius: 2.5,
+                backgroundColor: nextColor,
+                shadowColor: nextColor,
               },
             ]}
           />
@@ -404,35 +575,59 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
         {/* Ghost Prediction Bubble */}
         {targetSlot && (
-          <View style={[styles.bubble, styles.ghostBubble, { left: targetSlot.x - BUBBLE_SIZE / 2, top: targetSlot.y - BUBBLE_SIZE / 2, borderColor: nextColor }]}>
-            <View style={[styles.bubbleInner, { opacity: 0.2 }]} />
-            <View style={[styles.bubbleHighlight, { opacity: 0.1 }]} />
-          </View>
+          <Bubble
+            x={targetSlot.x}
+            y={targetSlot.y}
+            color={nextColor}
+            isGhost
+          />
         )}
 
         {/* Falling Bubbles */}
         {fallingBubbles.map(b => (
-          <View key={`fall-${b.id}-${b.x}`} style={[styles.bubble, { left: b.x - BUBBLE_SIZE / 2, top: b.y - BUBBLE_SIZE / 2, backgroundColor: b.color, zIndex: 10 }]}>
-            <View style={styles.bubbleInner} />
-            <View style={styles.bubbleHighlight} />
-            <View style={styles.bubbleGloss} />
-          </View>
+          <Bubble
+            key={`fall-${b.id}-${b.x}`}
+            x={b.x}
+            y={b.y}
+            color={b.color}
+          />
         ))}
 
         {shootingBubble && (
-          <View style={[styles.bubble, { left: shootingBubble.x - BUBBLE_SIZE / 2, top: shootingBubble.y - BUBBLE_SIZE / 2, backgroundColor: shootingBubble.color }]}>
-            <View style={styles.bubbleInner} />
-            <View style={styles.bubbleHighlight} />
-            <View style={styles.bubbleGloss} />
-          </View>
+          <Bubble
+            x={shootingBubble.x}
+            y={shootingBubble.y}
+            color={shootingBubble.color}
+          />
         )}
 
         <View style={styles.footer}>
+          {/* Circular Touch Border around shooter - Highlighted when active */}
+          <View style={[styles.touchCircle, isAimingState && styles.touchCircleActive]} />
+
+          {/* Muzzle Velocity Effect (Blast Wave) */}
+          <Animated.View style={[
+            styles.muzzleBlast,
+            {
+              opacity: muzzleVelocityAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] }),
+              transform: [
+                { rotate: `${cannonAngle}rad` },
+                { scale: muzzleVelocityAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.5] }) },
+                { translateY: -60 }
+              ]
+            }
+          ]} />
+
           <Animated.View style={[styles.flash, { opacity: muzzleFlashAnim }]} />
           <Animated.Image
             source={require("../images/robot-removebg-preview.png")}
             style={[styles.cannon, { transform: [{ rotate: `${cannonAngle}rad` }, { translateY: recoilAnim }] }]}
           />
+          {showHint && (
+            <View style={styles.hintContainer} pointerEvents="none">
+              <Text style={styles.hintText}>TOUCH & DRAG TO AIM</Text>
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -513,6 +708,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fff',
   },
+  pulsatingDot: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF3B30',
+  },
 
   gameArea: { flex: 1 },
   bg: { ...StyleSheet.absoluteFillObject, opacity: 0.5 },
@@ -537,29 +739,82 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: BUBBLE_SIZE / 2,
-    borderWidth: 3,
-    borderColor: 'rgba(0,0,0,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.15)',
     backgroundColor: 'transparent',
+    overflow: 'hidden',
+  },
+  planetBands: {
+    position: 'absolute',
+    width: '150%',
+    height: '100%',
+    top: 0,
+    left: '-25%',
+    borderTopWidth: 6,
+    borderBottomWidth: 4,
+    borderColor: 'rgba(0,0,0,0.15)',
+    opacity: 0.6,
+  },
+  planetCrater1: {
+    position: 'absolute',
+    width: '20%',
+    height: '20%',
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    top: '20%',
+    right: '25%',
+  },
+  planetCrater2: {
+    position: 'absolute',
+    width: '12%',
+    height: '12%',
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    bottom: '25%',
+    left: '30%',
+  },
+  planetCrater3: {
+    position: 'absolute',
+    width: '15%',
+    height: '15%',
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    bottom: '40%',
+    right: '35%',
+  },
+  planetRing: {
+    position: 'absolute',
+    width: '140%',
+    height: '35%',
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.25)',
+    top: '35%',
+    left: '-20%',
+    transform: [{ rotate: '-15deg' }],
+    zIndex: -1, // Behind the planet body
   },
   bubbleHighlight: {
     position: 'absolute',
-    top: '10%',
+    top: '5%',
     left: '10%',
-    width: '45%',
-    height: '45%',
+    width: '40%',
+    height: '40%',
     borderRadius: BUBBLE_SIZE / 4,
-    backgroundColor: 'rgba(255,255,255,0.45)',
-    transform: [{ rotate: '-15deg' }],
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    transform: [{ rotate: '-10deg' }],
+    zIndex: 2,
   },
   bubbleGloss: {
     position: 'absolute',
     bottom: '10%',
     right: '10%',
     width: '30%',
-    height: '20%',
-    borderRadius: BUBBLE_SIZE / 6,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    transform: [{ rotate: '15deg' }],
+    height: '15%',
+    borderRadius: BUBBLE_SIZE,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    transform: [{ rotate: '45deg' }],
+    zIndex: 2,
   },
   ghostBubble: {
     opacity: 0.6,
@@ -573,18 +828,62 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#fff",
-    shadowColor: "#00E0FF",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
-    shadowRadius: 6,
+    shadowRadius: 5,
     elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(0, 224, 255, 0.5)",
   },
-  footer: { position: "absolute", bottom: 40, width: "100%", alignItems: "center" },
-  cannon: { width: 150, height: 150, resizeMode: "contain" },
-  flash: { position: 'absolute', bottom: 100, width: 60, height: 60, backgroundColor: '#fff', borderRadius: 30 }
+  touchCircle: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderStyle: 'dashed',
+    bottom: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  touchCircleActive: {
+    borderColor: '#00E0FF',
+    backgroundColor: 'rgba(0, 224, 255, 0.15)',
+    borderStyle: 'solid',
+    transform: [{ scale: 1.1 }],
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  hintContainer: {
+    position: 'absolute',
+    bottom: -60,
+    width: SCREEN_WIDTH,
+    alignItems: 'center',
+  },
+  hintText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    fontWeight: 'bold',
+    letterSpacing: 1.2,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  footer: { position: "absolute", bottom: 60, width: "100%", alignItems: "center" },
+  cannon: { width: 150, height: 150, resizeMode: "contain", zIndex: 10 },
+  flash: { position: 'absolute', bottom: 100, width: 60, height: 60, backgroundColor: '#fff', borderRadius: 30, zIndex: 5 },
+  muzzleBlast: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#00E0FF',
+    backgroundColor: 'rgba(0, 224, 255, 0.2)',
+    bottom: 50,
+    zIndex: 15,
+  }
 });
 
 export default GameScreen;
