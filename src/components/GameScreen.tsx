@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, StyleSheet, Dimensions, Image, Text, StatusBar, Animated, TouchableOpacity,
 } from "react-native";
+import SpaceBackground from "./SpaceBackground";
 
 import { getLevelPattern, COLORS } from "../data/levelPatterns";
 
@@ -14,15 +15,31 @@ const CANNON_SIZE = 150;
 const FOOTER_BOTTOM = 60;
 const GRID_TOP = 60;
 
+const COLOR_MAP: Record<string, any> = {
+  "#ff3b30": require("../images/red.png"),
+  "#ff9500": require("../images/orange.png"),
+  "#ffd60a": require("../images/yellow.png"),
+  "#34c759": require("../images/green.png"),
+  "#007aff": require("../images/blue.png"),
+  "#af52de": require("../images/purple.png"),
+};
+
 // 1. MEMOIZED BUBBLE COMPONENT
 const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost }: any) => {
+  const imageSource = COLOR_MAP[color.toLowerCase()];
+
   return (
     <Animated.View
       style={[
         styles.bubble,
         {
-          backgroundColor: color,
+          backgroundColor: imageSource && !isGhost ? "transparent" : color,
           opacity: anim || 1,
+          borderWidth: imageSource && !isGhost ? 0 : 1.5,
+          borderRadius: imageSource && !isGhost ? 0 : BUBBLE_SIZE / 2,
+          shadowOpacity: imageSource && !isGhost ? 0 : 0.4,
+          elevation: imageSource && !isGhost ? 0 : 5,
+          overflow: imageSource && !isGhost ? 'visible' : 'hidden',
           transform: [
             { translateX: x - BUBBLE_SIZE / 2 },
             { translateY: y - BUBBLE_SIZE / 2 },
@@ -33,19 +50,28 @@ const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost }: any) => 
         }
       ]}
     >
-      {/* Planetary Elements */}
-      {!isGhost && (
+      {imageSource && !isGhost ? (
+        <Image
+          source={imageSource}
+          style={{ width: "120%", height: "120%", resizeMode: "contain" }}
+        />
+      ) : (
         <>
-          <View style={styles.planetBands} />
-          <View style={styles.planetCrater1} />
-          <View style={styles.planetCrater2} />
-          <View style={styles.planetCrater3} />
-          <View style={styles.planetRing} />
+          {/* Planetary Elements (Only for ghosts or fallback) */}
+          {!isGhost && (
+            <>
+              <View style={styles.planetBands} />
+              <View style={styles.planetCrater1} />
+              <View style={styles.planetCrater2} />
+              <View style={styles.planetCrater3} />
+              <View style={styles.planetRing} />
+            </>
+          )}
+          <View style={styles.bubbleInner} />
+          <View style={styles.bubbleHighlight} />
+          <View style={styles.bubbleGloss} />
         </>
       )}
-      <View style={styles.bubbleInner} />
-      <View style={styles.bubbleHighlight} />
-      <View style={styles.bubbleGloss} />
     </Animated.View>
   );
 });
@@ -111,6 +137,8 @@ const PulsatingBorder = React.memo(() => {
   }
   return <>{dots}</>;
 });
+
+
 
 const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, level?: number }) => {
   const [bubbles, setBubbles] = useState<any[]>([]);
@@ -196,7 +224,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     }
 
     // 3. Build the grid using distances for color layers
-    const bgColors = COLORS.filter(c => c !== "#A259FF");
+    const bgColors = COLORS;
     for (let r = 0; r < 19; r++) {
       const rowWidth = (r % 2 === 0) ? 9 : 8;
       const pRow = (r >= startRow && r < startRow + patternHeight) ? pattern[r - startRow] : null;
@@ -236,9 +264,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           }
 
           if (isBorder) {
-            color = "#A259FF"; // Pattern border is Purple
+            color = "#af52de"; // Purple Planet for Border
           } else {
-            color = "#FFD60A"; // Pattern interior is Yellow
+            color = "#ffd60a"; // Yellow Planet for Interior
           }
         }
 
@@ -523,6 +551,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   return (
     <View style={styles.container}>
       <StatusBar hidden />
+      <SpaceBackground />
 
       {/* Back Button */}
       <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
@@ -550,7 +579,6 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         }}
         onResponderMove={(e) => updateAim(e.nativeEvent.pageX, e.nativeEvent.pageY)}
         onResponderRelease={onRelease}>
-        <Image source={require("../images/bubble -bg.png")} style={styles.bg} />
 
         <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
           <PulsatingBorder />
@@ -717,7 +745,7 @@ const styles = StyleSheet.create({
   },
 
   gameArea: { flex: 1 },
-  bg: { ...StyleSheet.absoluteFillObject, opacity: 0.5 },
+  bg: { ...StyleSheet.absoluteFillObject, opacity: 0.8, resizeMode: 'cover' },
   bubble: {
     position: "absolute",
     width: BUBBLE_SIZE,
@@ -883,7 +911,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 224, 255, 0.2)',
     bottom: 50,
     zIndex: 15,
-  }
+  },
 });
 
 export default GameScreen;

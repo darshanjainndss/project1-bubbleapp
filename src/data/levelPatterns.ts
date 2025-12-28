@@ -1,4 +1,4 @@
-export const COLORS = ["#FF3B30", "#FF9500", "#FFD60A", "#34C759", "#007AFF"];
+export const COLORS = ["#FF3B30", "#FF9500", "#FFD60A", "#34C759", "#007AFF", "#AF52DE"];
 
 export type Pattern = string[];
 

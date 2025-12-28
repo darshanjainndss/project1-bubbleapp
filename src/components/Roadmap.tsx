@@ -11,6 +11,7 @@ import {
   Image,
 } from "react-native";
 import GameScreen from './GameScreen';
+import SpaceBackground from "./SpaceBackground";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -127,11 +128,8 @@ const Roadmap: React.FC = () => {
   }
 
   return (
-    <ImageBackground
-      source={require('../images/spacebg.png')}
-      style={styles.container}
-      resizeMode="cover"
-    >
+    <View style={styles.container}>
+      <SpaceBackground />
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
@@ -229,7 +227,7 @@ const Roadmap: React.FC = () => {
           );
         })}
       </ScrollView>
-    </ImageBackground>
+    </View>
   );
 };
 
