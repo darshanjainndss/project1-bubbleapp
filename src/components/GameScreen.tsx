@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, StyleSheet, Dimensions, Image, Text, StatusBar, Animated, TouchableOpacity,
 } from "react-native";
+import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
 
 import { getLevelPattern, COLORS } from "../data/levelPatterns";
@@ -646,11 +647,14 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             }
           ]} />
 
-          <Animated.View style={[styles.flash, { opacity: muzzleFlashAnim }]} />
-          <Animated.Image
-            source={require("../images/robot-removebg-preview.png")}
-            style={[styles.cannon, { transform: [{ rotate: `${cannonAngle}rad` }, { translateY: recoilAnim }] }]}
-          />
+          <Animated.View style={[styles.cannon, { transform: [{ rotate: `${cannonAngle}rad` }, { translateY: recoilAnim }] }]}>
+            <LottieView
+              source={require("../images/Spaceship.json")}
+              autoPlay
+              loop
+              style={{ width: '120%', height: '120%' }}
+            />
+          </Animated.View>
           {showHint && (
             <View style={styles.hintContainer} pointerEvents="none">
               <Text style={styles.hintText}>TOUCH & DRAG TO AIM</Text>
@@ -856,10 +860,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 5,
-    elevation: 8,
   },
   touchCircle: {
     position: 'absolute',
@@ -874,14 +874,9 @@ const styles = StyleSheet.create({
   },
   touchCircleActive: {
     borderColor: '#00E0FF',
-    backgroundColor: 'rgba(0, 224, 255, 0.15)',
+    backgroundColor: 'rgba(0, 224, 255, 0.25)',
     borderStyle: 'solid',
     transform: [{ scale: 1.1 }],
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 10,
   },
   hintContainer: {
     position: 'absolute',
@@ -900,7 +895,6 @@ const styles = StyleSheet.create({
   },
   footer: { position: "absolute", bottom: 60, width: "100%", alignItems: "center" },
   cannon: { width: 150, height: 150, resizeMode: "contain", zIndex: 10 },
-  flash: { position: 'absolute', bottom: 100, width: 60, height: 60, backgroundColor: '#fff', borderRadius: 30, zIndex: 5 },
   muzzleBlast: {
     position: 'absolute',
     width: 100,
@@ -911,6 +905,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 224, 255, 0.2)',
     bottom: 50,
     zIndex: 15,
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
   },
 });
 
