@@ -251,3 +251,9 @@ export const getLevelPattern = (level: number): Pattern => {
     const key = patternOrder[(level - 1) % patternOrder.length];
     return PATTERNS[key];
 };
+
+export const getLevelMoves = (level: number): number => {
+    // Basic progression: Start with 30 moves, decrease slightly for harder levels (or increase if complex)
+    // For now, fixed 30 moves or pattern dependent
+    return 30; // Customize this logic if levels need different moves
+};

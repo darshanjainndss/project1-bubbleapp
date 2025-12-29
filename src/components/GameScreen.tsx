@@ -5,7 +5,7 @@ import {
 import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
 
-import { getLevelPattern, COLORS } from "../data/levelPatterns";
+import { getLevelPattern, getLevelMoves, COLORS } from "../data/levelPatterns";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -13,8 +13,8 @@ const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10);
 const ROW_HEIGHT = BUBBLE_SIZE * 0.86;
 const GRID_COLS = 9;
 const CANNON_SIZE = 95;
-const FOOTER_BOTTOM = 200; // Increased to move shooter assembly up
-const GRID_TOP = 50;
+const FOOTER_BOTTOM = 150; // Increased to move shooter assembly up
+const GRID_TOP = 10;
 
 const COLOR_MAP: Record<string, any> = {
   "#ff3b30": require("../images/red.png"),
@@ -27,37 +27,8 @@ const COLOR_MAP: Record<string, any> = {
 
 // 1. MEMOIZED BUBBLE COMPONENT
 // Optimized Bubble component with reduced complexity for falling bubbles
-const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost, isFalling, rotation }: any) => {
+const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost }: any) => {
   const imageSource = COLOR_MAP[color.toLowerCase()];
-
-  // Simplified rendering for falling bubbles to improve performance
-  if (isFalling) {
-    return (
-      <Animated.View
-        style={[
-          styles.simpleBubble,
-          {
-            backgroundColor: color,
-            transform: [
-              { translateX: x - BUBBLE_SIZE / 2 },
-              { translateY: y - BUBBLE_SIZE / 2 },
-              { rotate: `${rotation || 0}rad` }
-            ],
-          }
-        ]}
-      >
-        {imageSource && (
-          <Image
-            source={imageSource}
-            style={{ width: "100%", height: "100%", resizeMode: "contain" }}
-          />
-        )}
-        <View style={styles.bubbleInner} />
-        <View style={styles.bubbleHighlight} />
-        <View style={styles.bubbleGloss} />
-      </Animated.View>
-    );
-  }
 
   return (
     <Animated.View
@@ -167,17 +138,21 @@ const PulsatingBorder = React.memo(() => {
     dotCount++;
   }
   return <>{dots}</>;
+  return <>{dots}</>;
 });
+
+
 
 
 
 const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, level?: number }) => {
   const [bubbles, setBubbles] = useState<any[]>([]);
-  const [fallingBubbles, setFallingBubbles] = useState<any[]>([]);
+
   const [shootingBubble, setShootingBubble] = useState<any>(null);
   const [cannonAngle, setCannonAngle] = useState(0);
   const [nextColor, setNextColor] = useState(COLORS[0]);
   const [score, setScore] = useState(0);
+  const [moves, setMoves] = useState(30);
   const [aimDots, setAimDots] = useState<any[]>([]);
   const [showHint, setShowHint] = useState(true);
   const [isAimingState, setIsAimingState] = useState(false);
@@ -185,11 +160,13 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const scrollY = useRef(new Animated.Value(-100)).current;
   const currentScrollY = useRef(-100);
   const bubblesRef = useRef<any[]>([]);
-  const fallingRef = useRef<any[]>([]);
+
+  const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
+
   const isProcessing = useRef(false);
   const isAiming = useRef(false);
   const rafRef = useRef<number | null>(null);
-  const fallingRafRef = useRef<number | null>(null);
+
 
   const muzzleFlashAnim = useRef(new Animated.Value(0)).current;
   const muzzleVelocityAnim = useRef(new Animated.Value(0)).current;
@@ -329,11 +306,21 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     setBubbles(gridWithStaticAnims);
     setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
     setScore(0);
+    setMoves(getLevelMoves(level));
+    setGameState('playing');
+
+    // Auto-Scroll to center the pattern securely
+    const maxY = Math.max(...grid.map(b => b.y));
+    const targetY = SCREEN_HEIGHT * 0.45; // Target lowest bubble at 45% of screen height
+    const initialScroll = targetY - maxY;
+
+    scrollY.setValue(centeredRevealScroll);
+    currentScrollY.current = initialScroll;
 
     // 2. Wait 1 second for the player to see the pattern, then slide up to position
     setTimeout(() => {
       Animated.spring(scrollY, {
-        toValue: finalTargetScroll,
+        toValue: initialScroll,
         tension: 10,
         friction: 6,
         useNativeDriver: true,
@@ -344,63 +331,10 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   useEffect(() => { initGame(); }, [initGame]);
 
-  // Falling Animation Loop
-  // Optimized falling animation with batching and throttling
-  useEffect(() => {
-    let lastTime = 0;
-    let frameSkip = 0;
-    const FRAME_SKIP_THRESHOLD = 50; // Skip frames when too many bubbles
 
-    const animateFalling = (time: number) => {
-      // Improved delta time calculation with clamping for smoother animation
-      const dt = lastTime ? Math.min((time - lastTime) / 16.67, 2) : 1;
-      lastTime = time;
-
-      if (fallingRef.current.length > 0) {
-        // Skip frames when there are too many bubbles to prevent lag
-        if (fallingRef.current.length > FRAME_SKIP_THRESHOLD && frameSkip % 2 === 0) {
-          frameSkip++;
-          fallingRafRef.current = requestAnimationFrame(animateFalling);
-          return;
-        }
-        frameSkip++;
-
-        // Batch physics updates for better performance
-        const next = [];
-        for (let i = 0; i < fallingRef.current.length; i++) {
-          const b = fallingRef.current[i];
-          const newVx = (b.vx || 0) * 0.995; // Air resistance
-          const newVy = (b.vy || 0) + 1.5 * dt; // Gravity (Increased for heavier feel)
-          const newY = b.y + newVy * dt;
-
-          // Only keep bubbles that are still visible
-          if (newY < SCREEN_HEIGHT + BUBBLE_SIZE) {
-            next.push({
-              ...b,
-              x: b.x + newVx * dt,
-              y: newY,
-              vx: newVx,
-              vy: newVy,
-              rotation: (b.rotation || 0) + (b.rotationSpeed || 0) * dt,
-            });
-          }
-        }
-
-        // Only update state if there are significant changes
-        if (next.length !== fallingRef.current.length ||
-          (next.length > 0 && Math.abs(next[0].y - fallingRef.current[0].y) > 0.5)) {
-          fallingRef.current = next;
-          setFallingBubbles([...next]); // Create new array reference
-        }
-      }
-      fallingRafRef.current = requestAnimationFrame(animateFalling);
-    };
-    fallingRafRef.current = requestAnimationFrame(animateFalling);
-    return () => cancelAnimationFrame(fallingRafRef.current!);
-  }, []);
 
   const updateAim = (pageX: number, pageY: number) => {
-    if (isProcessing.current || !isAiming.current) return;
+    if (isProcessing.current || !isAiming.current || gameState !== 'playing') return;
     if (showHint) setShowHint(false);
 
     // Origin for tracer - start closer to the cannon, reducing distance between tracer and shooter
@@ -457,7 +391,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   };
 
   const onRelease = () => {
-    if (!isAiming.current || isProcessing.current) return;
+    if (!isAiming.current || isProcessing.current || gameState !== 'playing') return;
     isAiming.current = false;
     setIsAimingState(false);
 
@@ -468,11 +402,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     isProcessing.current = true;
 
     muzzleFlashAnim.setValue(1);
-    muzzleVelocityAnim.setValue(0);
-    Animated.parallel([
-      Animated.timing(muzzleFlashAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-      Animated.timing(muzzleVelocityAnim, { toValue: 1, duration: 250, useNativeDriver: true })
-    ]).start();
+
+    // Quick flash only, no expanding pulse
+    Animated.timing(muzzleFlashAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
 
     Animated.sequence([
       Animated.timing(recoilAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
@@ -581,59 +513,53 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         });
       }
 
-      const newFalling: any[] = [];
-      // Limit the number of falling bubbles to prevent lag
-      const MAX_FALLING_BUBBLES = 30;
-      let fallingCount = 0;
-
-      match.forEach(m => {
-        if (fallingCount < MAX_FALLING_BUBBLES) {
-          // Smoother initial velocities for matched bubbles with slight upward burst
-          newFalling.push({
-            ...m,
-            vx: (Math.random() - 0.5) * 10, // Wider spread
-            vy: -Math.random() * 10 - 5, // Higher upward burst (-5 to -15) for dramatic arc
-            y: m.y + currentScrollY.current,
-            rotation: Math.random() * Math.PI * 2,
-            rotationSpeed: (Math.random() - 0.5) * 0.3
-          });
-          fallingCount++;
-        }
-      });
-
       grid.forEach(b => {
-        if (b.visible && !connected.has(b.id) && fallingCount < MAX_FALLING_BUBBLES) {
-          b.visible = false;
-          // Smoother velocities for disconnected bubbles
-          newFalling.push({
-            ...b,
-            vx: (Math.random() - 0.5) * 4, // Reduced horizontal spread
-            vy: Math.random() * 2, // Gentler initial downward velocity
-            y: b.y + currentScrollY.current,
-            rotation: Math.random() * Math.PI * 2,
-            rotationSpeed: (Math.random() - 0.5) * 0.15
-          });
-          setScore(s => s + 5);
-          fallingCount++;
-        } else if (b.visible && !connected.has(b.id)) {
-          // If we've hit the limit, just make them disappear for performance
+        if (b.visible && !connected.has(b.id)) {
           b.visible = false;
           setScore(s => s + 5);
         }
       });
 
-      fallingRef.current = [...fallingRef.current, ...newFalling];
-      setFallingBubbles(fallingRef.current);
+    }
 
-      currentScrollY.current += ROW_HEIGHT;
-      Animated.spring(scrollY, { toValue: currentScrollY.current, tension: 40, friction: 7, useNativeDriver: true }).start();
+    setMoves(m => Math.max(0, m - 1));
+
+    // DYNAMIC RE-CENTERING LOGIC
+    // Recalculate grid bounds based on visibility
+    const visibleBubbles = grid.filter(b => b.visible);
+    if (visibleBubbles.length > 0) {
+      const maxY = Math.max(...visibleBubbles.map(b => b.y));
+      // Target: Lowest bubble at 45% of screen height
+      const targetScreenY = SCREEN_HEIGHT * 0.45;
+      const targetScrollY = targetScreenY - maxY;
+
+      currentScrollY.current = targetScrollY;
+      Animated.spring(scrollY, {
+        toValue: currentScrollY.current,
+        tension: 40,
+        friction: 7,
+        useNativeDriver: true
+      }).start();
     }
 
     bubblesRef.current = grid;
     setBubbles([...grid]);
     setShootingBubble(null);
     setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
+
+    // Check Win/Loss
+    const remainingBubbles = grid.filter(b => b.visible).length;
+    if (remainingBubbles === 0) {
+      setGameState('won');
+    } else if (moves - 1 <= 0) {
+      setGameState('lost');
+    }
+
     isProcessing.current = false;
+  };
+
+  const restartLevel = () => {
+    initGame();
   };
 
   return (
@@ -641,39 +567,71 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       <StatusBar hidden />
       <SpaceBackground />
 
-      {/* Unified Bottom Command Deck */}
-      <View style={styles.commandDeckContainer}>
-        <View style={styles.commandDeck}>
-
-          {/* Stats Group (Left) */}
-          <View style={styles.deckGroup}>
-            <View style={styles.hudCardCompact}>
-              <Text style={styles.scoreLabel}>SCORE</Text>
-              <Text style={styles.scoreValueSmall}>{score}</Text>
-            </View>
-            <View style={styles.hudCardCompact}>
-              <Text style={styles.nextLabel}>NEXT</Text>
-              <View style={[styles.nextPreviewSmall, { backgroundColor: nextColor }]} />
-            </View>
+      {/* NEW UNIFIED TOP HUD CARD */}
+      <View style={styles.hudTopContainer}>
+        <View style={styles.topCard}>
+          {/* Moves */}
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>MOVES</Text>
+            <Text style={styles.statValue}>{moves}</Text>
           </View>
 
-          {/* Abilities Group (Center) */}
-          <View style={styles.deckGroup}>
-            <TouchableOpacity style={styles.hudIconCardCompact}>
-              <Text style={styles.abilityIconSmall}>⚡</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.hudIconCardCompact}>
-              <Text style={styles.abilityIconSmall}>❄️</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.hudIconCardCompact}>
-              <Text style={styles.abilityIconSmall}>💣</Text>
-            </TouchableOpacity>
+          {/* Vertical Divider */}
+          <View style={styles.verticalDivider} />
+
+          {/* Score */}
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>SCORE</Text>
+            <Text style={styles.statValue}>{score}</Text>
           </View>
 
-          {/* Exit Group (Right) */}
-          <TouchableOpacity style={styles.hudExitCardCompact} onPress={onBackPress}>
-            <Text style={styles.backButtonTextSmall}>EXIT</Text>
+          {/* Vertical Divider */}
+          <View style={styles.verticalDivider} />
+
+          {/* Stars (Progress Based) */}
+          <View style={styles.starContainer}>
+            <Text style={styles.starIcon}>{score > 100 ? '⭐' : '☆'}</Text>
+            <Text style={styles.starIcon}>{score > 500 ? '⭐' : '☆'}</Text>
+            <Text style={styles.starIcon}>{score > 1000 ? '⭐' : '☆'}</Text>
+          </View>
+
+          {/* Exit Button */}
+          <TouchableOpacity style={styles.topExitBtn} onPress={onBackPress}>
+            <Text style={styles.iconText}>❌</Text>
           </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Bottom Center: U-Shape Command Card */}
+      <View style={styles.hudBottomContainer}>
+        <View style={styles.uCard}>
+
+          {/* Left Wing: Abilities */}
+          <View style={styles.uWingLeft}>
+            <TouchableOpacity style={styles.abilityBtn}>
+              <Text style={styles.abilityText}>⚡</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.abilityBtn}>
+              <Text style={styles.abilityText}>❄️</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Center: Ammo (The Core) */}
+          <View style={styles.uCenterAmmo}>
+            <View style={styles.ammoRing}>
+              <View style={[styles.ammoBubble, { backgroundColor: nextColor }]} />
+            </View>
+          </View>
+
+          {/* Right Wing: More Abilities */}
+          <View style={styles.uWingRight}>
+            <TouchableOpacity style={styles.abilityBtn}>
+              <Text style={styles.abilityText}>🔥</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.abilityBtn}>
+              <Text style={styles.abilityText}>💣</Text>
+            </TouchableOpacity>
+          </View>
 
         </View>
       </View>
@@ -719,17 +677,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           />
         )}
 
-        {/* Falling Bubbles - Optimized rendering */}
-        {fallingBubbles.map(b => (
-          <Bubble
-            key={`fall-${b.id}`}
-            x={b.x}
-            y={b.y}
-            color={b.color}
-            isFalling={true}
-            rotation={b.rotation}
-          />
-        ))}
+
 
         {shootingBubble && (
           <Bubble
@@ -772,6 +720,42 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         </View>
       </View>
 
+      {/* Game Over / Win Modal */}
+      {gameState !== 'playing' && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {gameState === 'won' ? 'LEVEL CLEARED!' : 'OUT OF MOVES'}
+            </Text>
+
+            {gameState === 'won' && (
+              <View style={styles.modalStars}>
+                <Text style={{ fontSize: 40 }}>⭐</Text>
+                <Text style={{ fontSize: 50, marginTop: -15 }}>⭐</Text>
+                <Text style={{ fontSize: 40 }}>⭐</Text>
+              </View>
+            )}
+
+            <Text style={styles.modalScore}>SCORE: {score}</Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalBtnSecondary} onPress={onBackPress}>
+                <Text style={{ fontSize: 24 }}>🏠</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
+                <Text style={{ fontSize: 28 }}>🔄</Text>
+              </TouchableOpacity>
+              {gameState === 'won' && (
+                <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
+                  {/* Placeholder for Next Level - currently restarts */}
+                  <Text style={{ fontSize: 28 }}>➡️</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
     </View>
   );
 };
@@ -780,94 +764,150 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
 
   // Command Deck Styles
-  commandDeckContainer: {
+  // NEW HUD STYLES
+  hudTopContainer: {
     position: 'absolute',
-    bottom: 70,
-    left: 10,
-    right: 10,
-    zIndex: 20,
+    top: 50,
+    width: '100%',
+    alignItems: 'center',
+    zIndex: 60,
   },
-  commandDeck: {
+  topCard: {
     flexDirection: 'row',
+    width: '90%',
+    height: 60,
+    backgroundColor: 'rgba(20, 20, 30, 0.9)',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#00E0FF', // Neon Cyan
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    borderRadius: 16,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 20,
     shadowColor: '#00E0FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.5,
     shadowRadius: 10,
+    elevation: 20,
   },
-  deckGroup: {
+  verticalDivider: {
+    width: 1,
+    height: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  starContainer: {
     flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
+    gap: 2,
   },
-  hudCardCompact: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+  starIcon: {
+    fontSize: 16,
+  },
+  topExitBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    minWidth: 55,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
   },
-  hudIconCardCompact: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+
+  hudBottomContainer: {
+    position: 'absolute',
+    bottom: 40, // Lifted slightly
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  uCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-end', // Align items to bottom
+    backgroundColor: 'rgba(20, 20, 30, 0.9)',
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    paddingBottom: 20,
+    borderRadius: 35,
+    borderWidth: 2, // Thicker border for neon effect
+    borderColor: '#00E0FF', // Neon Cyan
+    gap: 15,
+    shadowColor: '#00E0FF', // Neon glow
+    shadowOffset: { width: 0, height: 0 }, // All-around glow
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 20,
+  },
+  uWingLeft: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingBottom: 5,
+  },
+  uWingRight: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingBottom: 5,
+  },
+  uCenterAmmo: {
+    marginBottom: 10, // Push ammo up
+  },
+  ammoRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)', // Slight cyan tint
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#00E0FF', // Neon
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  ammoBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+
+  // Reused text styles
+  statValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+  },
+  iconText: {
+    fontSize: 18,
+    color: '#fff',
+  },
+  abilityBtn: {
     width: 42,
     height: 42,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)', // Slight cyan tint
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#00E0FF', // Neon
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 5,
   },
-  hudExitCardCompact: {
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  abilityIconSmall: {
+  abilityText: {
     fontSize: 20,
   },
-  backButtonTextSmall: {
-    color: '#FF3B30',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  scoreValueSmall: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  nextPreviewSmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#fff',
-  },
-  scoreLabel: {
-    color: '#888',
-    fontSize: 8,
-    fontWeight: 'bold',
-  },
-  nextLabel: {
-    color: '#888',
-    fontSize: 8,
-    fontWeight: 'bold',
-  },
+
   pulsatingDot: {
     position: 'absolute',
     width: 6,
@@ -1036,6 +1076,88 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 15,
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'rgba(30, 30, 40, 0.95)',
+    borderRadius: 24,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  modalTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#fff',
+    marginBottom: 20,
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  modalStars: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalScore: {
+    fontSize: 20,
+    color: '#fbbf24',
+    fontWeight: 'bold',
+    marginBottom: 30,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 20,
+    alignItems: 'center',
+  },
+  modalBtnPrimary: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalBtnSecondary: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  statItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'column',
+    gap: 0,
+  },
+  statLabel: {
+    color: '#aaa',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
 });
 
