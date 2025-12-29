@@ -10,8 +10,7 @@ import {
   Image,
 } from "react-native";
 import GameScreen from './GameScreen';
-import SpaceBackground from "./SpaceBackground";
-import LottieView from 'lottie-react-native';
+import SpaceBackground from "./SpaceBackground.tsx";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -125,11 +124,86 @@ const OrbitalRing = ({ size, color, duration, rotateX = '0deg', rotateY = '0deg'
   );
 };
 
+// GLASS CARD HEADER COMPONENT
+const GlassCardHeader = ({ coins }: { coins: number }) => {
+  const textSlideAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Text entrance animation
+    Animated.timing(textSlideAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  return (
+    <View style={styles.cardContainer}>
+      {/* Glass Card with Hexagonal Shape */}
+      <View style={styles.hexagonalCard}>
+        {/* Left Section: Title */}
+        <Animated.View
+          style={[
+            styles.titleSection,
+            {
+              transform: [
+                {
+                  translateX: textSlideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-50, 0],
+                  }),
+                },
+              ],
+              opacity: textSlideAnim,
+            },
+          ]}
+        >
+          <Text style={styles.cardTitle}>SPACE</Text>
+          <Text style={styles.cardSubtitle}>ADVENTURE</Text>
+        </Animated.View>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Right Section: Stats */}
+        <Animated.View
+          style={[
+            styles.statsSection,
+            {
+              transform: [
+                {
+                  translateX: textSlideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50, 0],
+                  }),
+                },
+              ],
+              opacity: textSlideAnim,
+            },
+          ]}
+        >
+          {/* Coins Stat */}
+          <View style={styles.statItem}>
+            <Text style={styles.coinIcon}>🪙</Text>
+            <Text style={styles.statNumber}>{coins}</Text>
+          </View>
+
+          {/* Stars Stat */}
+          <View style={styles.statItem}>
+            <Text style={styles.starIcon}>⭐</Text>
+            <Text style={styles.statNumber}>48</Text>
+          </View>
+        </Animated.View>
+      </View>
+    </View>
+  );
+};
+
 const Roadmap: React.FC = () => {
   const [showGameScreen, setShowGameScreen] = useState(false);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [score, setScore] = useState(0);
-  const [coins, setCoins] = useState(0);
+  const [coins, setCoins] = useState(1250);
   const [selectedLevel, setSelectedLevel] = useState(1);
 
   const scrollViewRef = useRef<ScrollView>(null);
@@ -267,26 +341,8 @@ const Roadmap: React.FC = () => {
     <View style={styles.container}>
       <SpaceBackground />
 
-      {/* Premium Header - Glassmorphism */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.sectorLabel}>COSMIC SECTOR</Text>
-          <Text style={styles.sectorValue}>Andromeda G-9</Text>
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: `${(currentLevel / 20) * 100}%` }]} />
-          </View>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={styles.statBadge}>
-            <Text style={styles.statIcon}>⭐</Text>
-            <Text style={styles.statValue}>48</Text>
-          </View>
-          <View style={styles.statBadge}>
-            <Text style={styles.statIcon}>🪙</Text>
-            <Text style={styles.statValue}>{coins}</Text>
-          </View>
-        </View>
-      </View>
+      {/* Glass Card Header */}
+      <GlassCardHeader coins={coins} />
 
       <ScrollView
         ref={scrollViewRef}
@@ -410,49 +466,89 @@ const Roadmap: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 25,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+
+  // Glass Card Header Styles
+  cardContainer: {
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     zIndex: 100,
   },
-  headerLeft: { flex: 1 },
-  sectorLabel: { color: '#00E0FF', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
-  sectorValue: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginTop: 2 },
-  progressBarBg: {
-    width: '80%',
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 2,
-    marginTop: 8,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#00FF88',
-    borderRadius: 2,
-  },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  statBadge: {
+  hexagonalCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 224, 255, 0.6)',
+    shadowColor: 'rgba(0, 224, 255, 0.4)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginLeft: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+    minHeight: 70,
+    // Hexagonal approximation using varied corner radii
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 12,
+    borderBottomLeftRadius: 3,
   },
-  statIcon: { fontSize: 14, marginRight: 5 },
-  statValue: { color: '#FFF', fontSize: 14, fontWeight: '900' },
+  titleSection: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    color: '#00E0FF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  cardSubtitle: {
+    color: '#00FF88',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    marginTop: 2,
+  },
+  divider: {
+    width: 1.5,
+    height: 50,
+    backgroundColor: 'rgba(0, 224, 255, 0.3)',
+    marginHorizontal: 10,
+  },
+  statsSection: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 224, 255, 0.1)',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 255, 0.3)',
+  },
+  coinIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  starIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  statNumber: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '900',
+  },
 
+  // Existing Styles
   scrollView: { flex: 1 },
   roadmapContainer: { paddingVertical: 120, minHeight: 4800 },
 

@@ -12,9 +12,9 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10);
 const ROW_HEIGHT = BUBBLE_SIZE * 0.86;
 const GRID_COLS = 9;
-const CANNON_SIZE = 150;
-const FOOTER_BOTTOM = 60;
-const GRID_TOP = 60;
+const CANNON_SIZE = 95;
+const FOOTER_BOTTOM = 200; // Increased to move shooter assembly up
+const GRID_TOP = 50;
 
 const COLOR_MAP: Record<string, any> = {
   "#ff3b30": require("../images/red.png"),
@@ -348,25 +348,25 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     if (isProcessing.current || !isAiming.current) return;
     if (showHint) setShowHint(false);
 
-    // Origin for tracer - exactly at the visual muzzle (top edge of 150px robot)
+    // Origin for tracer - exactly at the visual muzzle (top edge of cannon)
     const startX = cannonPos.x;
     const startY = cannonPos.y;
 
     const dx = pageX - startX;
     const dy = pageY - startY;
 
-    // Boundary check for aiming angle
-    if (pageY > cannonPos.y - 20) return;
+    // Boundary check for aiming angle - only allow touches ABOVE the cannon
+    if (pageY > cannonPos.y) return;
 
     const angle = Math.atan2(dy, dx);
     setCannonAngle(angle + Math.PI / 2);
 
     const dots = [];
     let tx = startX; let ty = startY;
-    let vx = Math.cos(angle) * 22; let vy = Math.sin(angle) * 22;
+    let vx = Math.cos(angle) * 8; let vy = Math.sin(angle) * 8;
     let hitPoint = null;
 
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 200; i++) {
       tx += vx; ty += vy;
       if (tx < BUBBLE_SIZE / 2 || tx > SCREEN_WIDTH - BUBBLE_SIZE / 2) vx *= -1;
 
@@ -376,7 +376,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         hitPoint = { x: tx, y: ty };
         break;
       }
-      dots.push({ x: tx, y: ty, opacity: 1 - i / 25 });
+      dots.push({ x: tx, y: ty, opacity: Math.max(0.3, 1 - i / 300) });
     }
     setAimDots(dots);
 
@@ -554,20 +554,40 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       <StatusBar hidden />
       <SpaceBackground />
 
-      {/* Back Button */}
-      <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
-        <Text style={styles.backButtonText}>← Back</Text>
-      </TouchableOpacity>
+      {/* Unified Bottom Command Deck */}
+      <View style={styles.commandDeckContainer}>
+        <View style={styles.commandDeck}>
 
-      {/* Score and Next on Bottom Left */}
-      <View style={styles.bottomLeftContainer}>
-        <View style={styles.scoreContainer}>
-          <Text style={styles.scoreLabel}>SCORE</Text>
-          <Text style={styles.scoreValue}>{score}</Text>
-        </View>
-        <View style={styles.nextContainer}>
-          <Text style={styles.nextLabel}>NEXT</Text>
-          <View style={[styles.nextPreview, { backgroundColor: nextColor }]} />
+          {/* Stats Group (Left) */}
+          <View style={styles.deckGroup}>
+            <View style={styles.hudCardCompact}>
+              <Text style={styles.scoreLabel}>SCORE</Text>
+              <Text style={styles.scoreValueSmall}>{score}</Text>
+            </View>
+            <View style={styles.hudCardCompact}>
+              <Text style={styles.nextLabel}>NEXT</Text>
+              <View style={[styles.nextPreviewSmall, { backgroundColor: nextColor }]} />
+            </View>
+          </View>
+
+          {/* Abilities Group (Center) */}
+          <View style={styles.deckGroup}>
+            <TouchableOpacity style={styles.hudIconCardCompact}>
+              <Text style={styles.abilityIconSmall}>⚡</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.hudIconCardCompact}>
+              <Text style={styles.abilityIconSmall}>❄️</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.hudIconCardCompact}>
+              <Text style={styles.abilityIconSmall}>💣</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Exit Group (Right) */}
+          <TouchableOpacity style={styles.hudExitCardCompact} onPress={onBackPress}>
+            <Text style={styles.backButtonTextSmall}>EXIT</Text>
+          </TouchableOpacity>
+
         </View>
       </View>
 
@@ -631,9 +651,6 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         )}
 
         <View style={styles.footer}>
-          {/* Circular Touch Border around shooter - Highlighted when active */}
-          <View style={[styles.touchCircle, isAimingState && styles.touchCircleActive]} />
-
           {/* Muzzle Velocity Effect (Blast Wave) */}
           <Animated.View style={[
             styles.muzzleBlast,
@@ -647,12 +664,15 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             }
           ]} />
 
-          <Animated.View style={[styles.cannon, { transform: [{ rotate: `${cannonAngle}rad` }, { translateY: recoilAnim }] }]}>
+          <Animated.View style={[
+            styles.cannon,
+            { transform: [{ translateY: recoilAnim }] }
+          ]}>
             <LottieView
               source={require("../images/Spaceship.json")}
               autoPlay
               loop
-              style={{ width: '120%', height: '120%' }}
+              style={{ width: '100%', height: '100%' }}
             />
           </Animated.View>
           {showHint && (
@@ -662,6 +682,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           )}
         </View>
       </View>
+
     </View>
   );
 };
@@ -669,76 +690,94 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
 
-  // Back Button
-  backButton: {
+  // Command Deck Styles
+  commandDeckContainer: {
     position: 'absolute',
-    top: 50,
-    left: 20,
+    bottom: 70,
+    left: 10,
+    right: 10,
     zIndex: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#fff',
   },
-  backButtonText: {
+  commandDeck: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  deckGroup: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  hudCardCompact: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    minWidth: 55,
+  },
+  hudIconCardCompact: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hudExitCardCompact: {
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  abilityIconSmall: {
+    fontSize: 20,
+  },
+  backButtonTextSmall: {
+    color: '#FF3B30',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  scoreValueSmall: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '900',
   },
-
-  // Bottom Left Score and Next
-  bottomLeftContainer: {
-    position: 'absolute',
-    bottom: 120,
-    left: 20,
-    zIndex: 10,
-  },
-  scoreContainer: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 10,
-    marginBottom: 10,
+  nextPreviewSmall: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginTop: 4,
     borderWidth: 1,
     borderColor: '#fff',
-    alignItems: 'center',
-  },
-  nextContainer: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#fff',
-    alignItems: 'center',
   },
   scoreLabel: {
     color: '#888',
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  scoreValue: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '900',
-    textAlign: 'center',
   },
   nextLabel: {
     color: '#888',
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  nextPreview: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    marginTop: 5,
-    borderWidth: 1,
-    borderColor: '#fff',
   },
   pulsatingDot: {
     position: 'absolute',
@@ -860,27 +899,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-  },
-  touchCircle: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-    borderStyle: 'dashed',
-    bottom: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  touchCircleActive: {
-    borderColor: '#00E0FF',
-    backgroundColor: 'rgba(0, 224, 255, 0.25)',
-    borderStyle: 'solid',
-    transform: [{ scale: 1.1 }],
+    zIndex: 100, // Render ABOVE the cannon/spaceship so dots are visible immediately
   },
   hintContainer: {
     position: 'absolute',
-    bottom: -60,
+    bottom: 150,
     width: SCREEN_WIDTH,
     alignItems: 'center',
   },
@@ -893,8 +916,14 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
-  footer: { position: "absolute", bottom: 60, width: "100%", alignItems: "center" },
-  cannon: { width: 150, height: 150, resizeMode: "contain", zIndex: 10 },
+  footer: { position: "absolute", bottom: FOOTER_BOTTOM, width: "100%", alignItems: "center" },
+  cannon: {
+    width: CANNON_SIZE,
+    height: CANNON_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10
+  },
   muzzleBlast: {
     position: 'absolute',
     width: 100,
