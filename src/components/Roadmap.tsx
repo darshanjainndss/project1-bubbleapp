@@ -1,16 +1,18 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
-  ScrollView,
   TouchableOpacity,
   Animated,
   Image,
+  FlatList,
 } from "react-native";
+import LottieView from 'lottie-react-native';
 import GameScreen from './GameScreen';
 import SpaceBackground from "./SpaceBackground.tsx";
+import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -124,76 +126,47 @@ const OrbitalRing = ({ size, color, duration, rotateX = '0deg', rotateY = '0deg'
   );
 };
 
-// GLASS CARD HEADER COMPONENT
-const GlassCardHeader = ({ coins }: { coins: number }) => {
-  const textSlideAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Text entrance animation
-    Animated.timing(textSlideAnim, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
+// UNIFIED DASHBOARD HEADER COMPONENT
+const RoadmapHeader = ({ coins }: { coins: number }) => {
   return (
-    <View style={styles.cardContainer}>
-      {/* Glass Card with Hexagonal Shape */}
-      <View style={styles.hexagonalCard}>
-        {/* Left Section: Title */}
-        <Animated.View
-          style={[
-            styles.titleSection,
-            {
-              transform: [
-                {
-                  translateX: textSlideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-50, 0],
-                  }),
-                },
-              ],
-              opacity: textSlideAnim,
-            },
-          ]}
-        >
+    <View style={styles.dashboardContainer}>
+      {/* Top Section: Title & Stats */}
+      <View style={styles.dashboardTop}>
+        <View style={styles.titleBlock}>
           <Text style={styles.cardTitle}>SPACE</Text>
           <Text style={styles.cardSubtitle}>ADVENTURE</Text>
-        </Animated.View>
+        </View>
 
-        {/* Divider */}
-        <View style={styles.divider} />
+        <View style={styles.dividerVertical} />
 
-        {/* Right Section: Stats */}
-        <Animated.View
-          style={[
-            styles.statsSection,
-            {
-              transform: [
-                {
-                  translateX: textSlideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [50, 0],
-                  }),
-                },
-              ],
-              opacity: textSlideAnim,
-            },
-          ]}
-        >
-          {/* Coins Stat */}
-          <View style={styles.statItem}>
+        <View style={styles.statsBlock}>
+          <View style={styles.statChip}>
             <Text style={styles.coinIcon}>🪙</Text>
             <Text style={styles.statNumber}>{coins}</Text>
           </View>
-
-          {/* Stars Stat */}
-          <View style={styles.statItem}>
+          <View style={styles.statChip}>
             <Text style={styles.starIcon}>⭐</Text>
             <Text style={styles.statNumber}>48</Text>
           </View>
-        </Animated.View>
+        </View>
+      </View>
+
+      {/* Horizontal Divider Line */}
+      <View style={styles.dashboardDivider} />
+
+      {/* Bottom Section: Action Menu */}
+      <View style={styles.dashboardBottom}>
+        <TouchableOpacity style={styles.actionBtn}>
+          <Text style={[styles.menuIcon, { color: '#FFD60A' }]}>🥇</Text>
+          <Text style={[styles.menuText, { color: '#00E0FF' }]}>LEADERBOARD</Text>
+        </TouchableOpacity>
+
+        <View style={styles.dividerVerticalSmall} />
+
+        <TouchableOpacity style={styles.actionBtn}>
+          <Text style={[styles.menuIcon, { color: '#00E0FF' }]}></Text>
+          <Text style={[styles.menuText, { color: '#00FF88' }]}>PROFILE</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -205,9 +178,11 @@ const Roadmap: React.FC = () => {
   const [score, setScore] = useState(0);
   const [coins, setCoins] = useState(1250);
   const [selectedLevel, setSelectedLevel] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const flatListRef = useRef<FlatList>(null);
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   // Level-specific ring colors for variety
   const RING_COLORS = [
@@ -236,9 +211,9 @@ const Roadmap: React.FC = () => {
     'https://img.icons8.com/fluency/512/saturn-planet.png',
     'https://img.icons8.com/fluency/512/mars-planet.png',
     'https://img.icons8.com/fluency/512/jupiter-planet.png',
-    'https://img.icons8.com/fluency/512/earth-planet.png',
+    // Removed Earth
     'https://img.icons8.com/fluency/512/mercury-planet.png',
-    'https://img.icons8.com/fluency/512/sun.png',
+    // Removed Sun
     'https://img.icons8.com/fluency/512/asteroid.png',
     'https://img.icons8.com/fluency/512/black-hole.png',
     'https://img.icons8.com/fluency/512/uranus-planet.png',
@@ -248,12 +223,30 @@ const Roadmap: React.FC = () => {
     'https://img.icons8.com/fluency/512/shooting-star.png',
   ];
 
-  // Generate levels data (all 20 levels unlocked)
-  const levels = Array.from({ length: 20 }, (_, i) => ({
-    id: i + 1,
-    isLocked: false,
-    stars: Math.floor(Math.random() * 3) + 1,
-  }));
+  // Generate levels data (100 levels) - memoized for performance
+  const levels = useMemo(() => 
+    Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      isLocked: false, // For testing, unlock all. Real game would lock i > solvedMax
+      stars: Math.floor(Math.random() * 3) + 1,
+    })), []
+  );
+
+  // Auto-scroll to current level on mount and when current level changes
+  useEffect(() => {
+    setTimeout(() => {
+      const currentIndex = levels.findIndex(level => level.id === currentLevel);
+      if (currentIndex !== -1) {
+        // Calculate the reversed index since we're showing levels in reverse order
+        const reversedIndex = levels.length - 1 - currentIndex;
+        flatListRef.current?.scrollToIndex({ 
+          index: Math.max(0, reversedIndex - 2), // Show a bit of context above
+          animated: true,
+          viewPosition: 0.5 // Center the item
+        });
+      }
+    }, 100);
+  }, [currentLevel]); // Re-run when current level changes
 
   useEffect(() => {
     Animated.loop(
@@ -264,20 +257,222 @@ const Roadmap: React.FC = () => {
     ).start();
   }, []);
 
+  // Static Spaceship Component using Lottie
+  const StaticSpaceship = ({ size = 120 }: { size?: number }) => {
+    return (
+      <View style={[styles.staticSpaceship, { width: size, height: size }]}>
+        <LottieView
+          source={require('../images/Spaceship.json')}
+          autoPlay
+          loop
+          style={styles.spaceshipLottie}
+        />
+      </View>
+    );
+  };
+
   const handleLevelPress = (level: number, isLocked: boolean) => {
-    if (isLocked) return;
+    if (isLocked || isLoading) return;
+    
+    setIsLoading(true);
     setSelectedLevel(level);
-    setShowGameScreen(true);
+    setCurrentLevel(level);
+    
+    // Preload level data
+    const levelPattern = getLevelPattern(level);
+    const levelMoves = getLevelMoves(level);
+    
+    // Smooth fade out animation
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200, // Faster fade out
+      useNativeDriver: true,
+    }).start(() => {
+      // Small delay to ensure smooth transition
+      setTimeout(() => {
+        setShowGameScreen(true);
+        // Fade back in
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200, // Faster fade in
+          useNativeDriver: true,
+        }).start(() => {
+          setIsLoading(false);
+        });
+      }, 50);
+    });
   };
 
   const handleBackPress = () => {
-    setShowGameScreen(false);
+    setIsLoading(true);
+    
+    // Smooth fade out animation
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200, // Faster transition
+      useNativeDriver: true,
+    }).start(() => {
+      setShowGameScreen(false);
+      
+      // Fade back in and scroll to current level
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200, // Faster transition
+        useNativeDriver: true,
+      }).start(() => {
+        setIsLoading(false);
+        
+        // Scroll to current level when returning from game screen
+        setTimeout(() => {
+          const currentIndex = levels.findIndex(level => level.id === currentLevel);
+          if (currentIndex !== -1) {
+            const reversedIndex = levels.length - 1 - currentIndex;
+            flatListRef.current?.scrollToIndex({ 
+              index: Math.max(0, reversedIndex - 2),
+              animated: true,
+              viewPosition: 0.5
+            });
+          }
+        }, 50); // Faster scroll timing
+      });
+    });
   };
+
+  // Loading Indicator Component
+  const LoadingIndicator = () => (
+    <View style={styles.loadingContainer}>
+      <LottieView
+        source={require('../images/Spaceship.json')}
+        autoPlay
+        loop
+        style={styles.loadingSpaceship}
+      />
+      <Text style={styles.loadingText}>Loading Level {selectedLevel}...</Text>
+    </View>
+  );
+
+  // Individual Level Item Component for better performance
+  const LevelItem = React.memo(({ item, index }: { item: any, index: number }) => {
+    const isCurrent = item.id === currentLevel;
+    const isPassed = item.id < currentLevel;
+    const levelColor = RING_COLORS[index % RING_COLORS.length];
+    const isEven = index % 2 === 0;
+    const x = isEven ? SCREEN_WIDTH * 0.22 : SCREEN_WIDTH * 0.78;
+
+    return (
+      <View style={[styles.levelItemContainer, { marginLeft: x - 75 }]}>
+        <TouchableOpacity 
+          onPress={() => handleLevelPress(item.id, item.isLocked)} 
+          activeOpacity={0.8} 
+          style={styles.ufoTouchable}
+        >
+          {/* Centered Layers Container */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <View style={styles.centeredLayers}>
+              {/* Multi-Ripple Wave Effect */}
+              <WavePulse color={levelColor} duration={2000} size={100} />
+              <WavePulse color={levelColor} duration={2000} delay={1000} size={100} />
+
+              {/* Orbital Rings */}
+              {Array.from({ length: (index % 3) + 1 }).map((_, rIdx) => {
+                let rx = '0deg';
+                let ry = '0deg';
+
+                if (rIdx === 0) rx = '75deg';
+                if (rIdx === 1) ry = '75deg';
+                if (rIdx === 2) { rx = '45deg'; ry = '45deg'; }
+
+                return (
+                  <OrbitalRing
+                    key={`ring-${rIdx}`}
+                    size={135 + (rIdx * 15)}
+                    color={isCurrent ? levelColor : levelColor + '88'}
+                    duration={isCurrent ? 3000 - (rIdx * 500) : 8000 + (rIdx * 2000)}
+                    rotateX={rx}
+                    rotateY={ry}
+                  />
+                );
+              })}
+
+              {isCurrent && (
+                <OrbitalRing
+                  size={110}
+                  color="rgba(255,255,255,0.5)"
+                  duration={4000}
+                />
+              )}
+
+              {/* Add static spaceship for current level */}
+              {isCurrent && (
+                <StaticSpaceship size={100} />
+              )}
+            </View>
+          </View>
+
+          {/* Planet Node */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <View style={[styles.centeredLayers, { zIndex: 1 }]}>
+              {/* zIndex 1 for nodeCore, higher than waves (default 0) */}
+              <View style={[
+                styles.nodeCore,
+                isCurrent && styles.activeNodeCore,
+                {
+                  borderColor: levelColor + '88',
+                  shadowColor: levelColor,
+                  shadowOpacity: isCurrent ? 0.9 : 0.4,
+                  shadowRadius: isCurrent ? 30 : 15,
+                }
+              ]}>
+                <StationInnerGlow color={levelColor} isCurrent={isCurrent} />
+
+                {!(item.id === 6 || item.id === 8) && (
+                  <Image
+                    source={{ uri: ICONS[index % ICONS.length] }}
+                    style={[styles.ufoIcon, { opacity: index <= currentLevel ? 1 : 0.85 }]}
+                    resizeMode="contain"
+                  />
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Station Title */}
+          <View style={styles.titleContainer}>
+            <Text style={[styles.levelTitleText, { color: levelColor }]}>
+              {LEVEL_TITLES[index % LEVEL_TITLES.length]}
+            </Text>
+          </View>
+
+          {/* Level Text */}
+          <View style={styles.levelTextContainer}>
+            <Text style={[styles.levelNumberText, { color: levelColor }]}>LEVEL {item.id}</Text>
+          </View>
+
+          {/* Star Reward Display */}
+          {isPassed && (
+            <View style={styles.starsContainer}>
+              {[1, 2, 3].map(s => (
+                <Text key={s} style={[styles.starMini, { opacity: s <= item.stars ? 1 : 0.2 }]}>⭐</Text>
+              ))}
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  });
 
   const getRoadmapPosition = (index: number) => {
     const isEven = index % 2 === 0;
     const x = isEven ? SCREEN_WIDTH * 0.22 : SCREEN_WIDTH * 0.78;
-    const y = 150 + (index * 220);
+    // INVERTED Y Logic: Level 1 (Index 0) at the BOTTOM
+    // Total Levels = 100.
+    // Index 0 -> Bottom. Index 99 -> Top.
+    const verticalSpacing = 220;
+    const topPadding = 150;
+    const invertedIndex = (levels.length - 1) - index;
+
+    const y = topPadding + (invertedIndex * verticalSpacing);
+
     return { x, y };
   };
 
@@ -334,223 +529,185 @@ const Roadmap: React.FC = () => {
   };
 
   if (showGameScreen) {
-    return <GameScreen onBackPress={handleBackPress} level={selectedLevel} />;
+    return (
+      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+        {isLoading && <LoadingIndicator />}
+        <GameScreen onBackPress={handleBackPress} level={selectedLevel} />
+      </Animated.View>
+    );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      {isLoading && <LoadingIndicator />}
       <SpaceBackground />
 
-      {/* Glass Card Header */}
-      <GlassCardHeader coins={coins} />
+      {/* Unified Dashboard Header */}
+      <RoadmapHeader coins={coins} />
 
-      <ScrollView
-        ref={scrollViewRef}
+      <FlatList
+        ref={flatListRef}
+        data={levels.slice().reverse()} // Reverse to show level 1 at bottom
+        renderItem={({ item, index }) => <LevelItem item={item} index={levels.length - 1 - index} />}
+        keyExtractor={(item) => item.id.toString()}
         style={styles.scrollView}
         contentContainerStyle={styles.roadmapContainer}
         showsVerticalScrollIndicator={false}
-      >
-        {renderConnectingDots()}
-
-        {levels.map((level, index) => {
-          const isCurrent = level.id === currentLevel;
-          const isPassed = level.id < currentLevel;
-          const position = getRoadmapPosition(index);
-          const levelColor = RING_COLORS[index % RING_COLORS.length];
-
-          return (
-            <View key={level.id} style={[styles.ufoLevel, { left: position.x - 75, top: position.y }]}>
-              <TouchableOpacity onPress={() => handleLevelPress(level.id, level.isLocked)} activeOpacity={0.8} style={styles.ufoTouchable}>
-
-                {/* Centered Layers Container - Restored perfect mathematical centering */}
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <View style={styles.centeredLayers}>
-                    {/* Multi-Ripple Wave Effect emitting from the planet edge every 2s */}
-                    <WavePulse color={levelColor} duration={2000} size={100} />
-                    <WavePulse color={levelColor} duration={2000} delay={1000} size={100} />
-
-                    {/* Different number of Orbital Rings per level (1 to 3) with Perpendicular Axis */}
-                    {Array.from({ length: (index % 3) + 1 }).map((_, rIdx) => {
-                      // Determine rotation for perpendicular and tilted orbits
-                      let rx = '0deg';
-                      let ry = '0deg';
-
-                      if (rIdx === 0) rx = '75deg'; // Horizontal/Equatorial
-                      if (rIdx === 1) ry = '75deg'; // Perpendicular/Polar
-                      if (rIdx === 2) { rx = '45deg'; ry = '45deg'; } // Tilted/Diagonal
-
-                      return (
-                        <OrbitalRing
-                          key={`ring-${rIdx}`}
-                          size={135 + (rIdx * 15)}
-                          color={isCurrent ? levelColor : levelColor + '88'}
-                          duration={isCurrent ? 3000 - (rIdx * 500) : 8000 + (rIdx * 2000)}
-                          rotateX={rx}
-                          rotateY={ry}
-                        />
-                      );
-                    })}
-
-                    {isCurrent && (
-                      <OrbitalRing
-                        size={110}
-                        color="rgba(255,255,255,0.5)"
-                        duration={4000}
-                      />
-                    )}
-                  </View>
-                </View>
-
-                {/* Planet Node - Wrapped in absolute center for perfect alignment with rings */}
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <View style={[styles.centeredLayers, { zIndex: 1 }]}> {/* zIndex 1 for nodeCore, higher than waves (default 0) */}
-                    <View style={[
-                      styles.nodeCore,
-                      isCurrent && styles.activeNodeCore,
-                      {
-                        borderColor: levelColor + '88',
-                        shadowColor: levelColor,
-                        shadowOpacity: isCurrent ? 0.9 : 0.4,
-                        shadowRadius: isCurrent ? 30 : 15,
-                      }
-                    ]}>
-                      {/* Internal Glow Layer */}
-                      <StationInnerGlow color={levelColor} isCurrent={isCurrent} />
-
-                      {/* Hide icons for level 6 and 8 as requested */}
-                      {!(level.id === 6 || level.id === 8) && (
-                        <Image
-                          source={{ uri: ICONS[index % ICONS.length] }}
-                          style={[styles.ufoIcon, { opacity: index <= currentLevel ? 1 : 0.85 }]}
-                          resizeMode="contain"
-                        />
-                      )}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Station Title */}
-                <View style={styles.titleContainer}>
-                  <Text style={[styles.levelTitleText, { color: levelColor }]}>
-                    {LEVEL_TITLES[index % LEVEL_TITLES.length]}
-                  </Text>
-                </View>
-
-                {/* Level Badge - Sleek Badge */}
-                <Animated.View style={[
-                  styles.levelBadge,
-                  {
-                    backgroundColor: isCurrent ? '#00FF88' : isPassed ? '#A259FF' : '#333',
-                    transform: [{ scale: isCurrent ? glowAnim.interpolate({ inputRange: [0.3, 1], outputRange: [1, 1.15] }) : 1 }]
-                  }
-                ]}>
-                  <Text style={styles.levelNumberText}>{level.id}</Text>
-                </Animated.View>
-
-                {/* Star Reward Display */}
-                {isPassed && (
-                  <View style={styles.starsContainer}>
-                    {[1, 2, 3].map(s => (
-                      <Text key={s} style={[styles.starMini, { opacity: s <= level.stars ? 1 : 0.2 }]}>⭐</Text>
-                    ))}
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-          );
+        initialNumToRender={10}
+        maxToRenderPerBatch={5}
+        windowSize={10}
+        removeClippedSubviews={true}
+        getItemLayout={(data, index) => ({
+          length: 220, // Height of each level item
+          offset: 220 * index,
+          index,
         })}
-      </ScrollView>
-    </View>
+        inverted={false}
+      />
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
 
-  // Glass Card Header Styles
-  cardContainer: {
-    paddingTop: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    zIndex: 100,
-  },
-  hexagonalCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1.5,
+  // UNIFIED DASHBOARD STYLES
+  dashboardContainer: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 5,
+    backgroundColor: 'rgba(20, 20, 30, 0.95)',
+    // Asymmetric Cyber Shape
+    borderTopLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    borderTopRightRadius: 4,
+    borderBottomLeftRadius: 4,
+    borderWidth: 2,
     borderColor: 'rgba(0, 224, 255, 0.6)',
-    shadowColor: 'rgba(0, 224, 255, 0.4)',
+    shadowColor: '#00E0FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 15,
+    zIndex: 100,
+    overflow: 'hidden',
+  },
+  dashboardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    overflow: 'hidden',
-    minHeight: 70,
-    // Hexagonal approximation using varied corner radii
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 3,
-    borderBottomRightRadius: 12,
-    borderBottomLeftRadius: 3,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  titleSection: {
-    flex: 1,
+  titleBlock: {
     justifyContent: 'center',
   },
+  statsBlock: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  dashboardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: '100%',
+  },
+  dashboardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)', // Slightly darker bottom
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dividerVertical: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  dividerVerticalSmall: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+
+  // Reused Font Styles
   cardTitle: {
     color: '#00E0FF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     letterSpacing: 2,
   },
   cardSubtitle: {
     color: '#00FF88',
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.5,
     marginTop: 2,
   },
-  divider: {
-    width: 1.5,
-    height: 50,
-    backgroundColor: 'rgba(0, 224, 255, 0.3)',
-    marginHorizontal: 10,
-  },
-  statsSection: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 224, 255, 0.1)',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.3)',
-  },
-  coinIcon: {
-    fontSize: 14,
-    marginRight: 4,
-  },
-  starIcon: {
-    fontSize: 14,
-    marginRight: 4,
-  },
-  statNumber: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '900',
-  },
+  coinIcon: { fontSize: 14, marginRight: 4 },
+  starIcon: { fontSize: 14, marginRight: 4 },
+  statNumber: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+  menuIcon: { fontSize: 18, marginRight: 4 },
+  menuText: { fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
 
   // Existing Styles
   scrollView: { flex: 1 },
-  roadmapContainer: { paddingVertical: 120, minHeight: 4800 },
+  roadmapContainer: { paddingVertical: 120, paddingHorizontal: 20 },
+  levelItemContainer: {
+    height: 220,
+    width: '100%',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  staticSpaceship: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5, // Above other elements
+    top: -60, // Position above the planet
+  },
+  spaceshipLottie: {
+    width: '100%',
+    height: '100%',
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingSpaceship: {
+    width: 120,
+    height: 120,
+  },
+  loadingText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 20,
+    textShadowColor: '#000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
 
   connectingDot: {
     position: 'absolute',
@@ -617,25 +774,33 @@ const styles = StyleSheet.create({
   },
   orbitalRing: {
     position: 'absolute',
-    borderWidth: 2,
+    borderWidth: 3, // Increased from 2 for better visibility
+    // borderStyle: 'dashed', // Keep dashed if desired, or make solid for even clearer rings. keeping dashed but thicker.
     borderStyle: 'dashed',
-    opacity: 0.8,
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    opacity: 1, // Full opacity
   },
   ufoIcon: { width: 85, height: 85 },
-  levelBadge: {
+  levelTextContainer: {
     position: 'absolute',
-    top: 0,
-    right: 20,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    bottom: -30, // Position below the planet
+    alignSelf: 'center',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
     zIndex: 10,
   },
-  levelNumberText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
+  levelNumberText: { 
+    fontSize: 16, 
+    fontWeight: '900',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
   starsContainer: {
     position: 'absolute',
     top: -45,

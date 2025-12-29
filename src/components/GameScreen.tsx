@@ -171,6 +171,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const muzzleFlashAnim = useRef(new Animated.Value(0)).current;
   const muzzleVelocityAnim = useRef(new Animated.Value(0)).current;
   const recoilAnim = useRef(new Animated.Value(0)).current;
+  const pulseRingAnim = useRef(new Animated.Value(0)).current;
 
   const cannonPos = { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT - FOOTER_BOTTOM - CANNON_SIZE / 2 };
 
@@ -405,6 +406,14 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     // Quick flash only, no expanding pulse
     Animated.timing(muzzleFlashAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
+
+    // Add pulse ring animation
+    pulseRingAnim.setValue(0);
+    Animated.timing(pulseRingAnim, { 
+      toValue: 1, 
+      duration: 400, 
+      useNativeDriver: true 
+    }).start();
 
     Animated.sequence([
       Animated.timing(recoilAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
@@ -705,6 +714,26 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             styles.cannon,
             { transform: [{ translateY: recoilAnim }] }
           ]}>
+            {/* Pulse Ring around Spaceship */}
+            <Animated.View style={[
+              styles.pulseRing,
+              {
+                borderColor: nextColor,
+                opacity: pulseRingAnim.interpolate({ 
+                  inputRange: [0, 0.3, 1], 
+                  outputRange: [0, 0.8, 0] 
+                }),
+                transform: [
+                  { 
+                    scale: pulseRingAnim.interpolate({ 
+                      inputRange: [0, 1], 
+                      outputRange: [1, 2.5] 
+                    }) 
+                  }
+                ]
+              }
+            ]} />
+            
             <LottieView
               source={require("../images/Spaceship.json")}
               autoPlay
@@ -1061,6 +1090,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: CANNON_SIZE + 20,
+    height: CANNON_SIZE + 20,
+    borderRadius: (CANNON_SIZE + 20) / 2,
+    borderWidth: 3,
+    borderColor: '#fff',
+    backgroundColor: 'transparent',
+    zIndex: 5, // Behind the spaceship but visible
   },
   muzzleBlast: {
     position: 'absolute',
