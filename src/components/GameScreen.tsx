@@ -26,8 +26,38 @@ const COLOR_MAP: Record<string, any> = {
 };
 
 // 1. MEMOIZED BUBBLE COMPONENT
-const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost }: any) => {
+// Optimized Bubble component with reduced complexity for falling bubbles
+const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost, isFalling, rotation }: any) => {
   const imageSource = COLOR_MAP[color.toLowerCase()];
+
+  // Simplified rendering for falling bubbles to improve performance
+  if (isFalling) {
+    return (
+      <Animated.View
+        style={[
+          styles.simpleBubble,
+          {
+            backgroundColor: color,
+            transform: [
+              { translateX: x - BUBBLE_SIZE / 2 },
+              { translateY: y - BUBBLE_SIZE / 2 },
+              { rotate: `${rotation || 0}rad` }
+            ],
+          }
+        ]}
+      >
+        {imageSource && (
+          <Image
+            source={imageSource}
+            style={{ width: "100%", height: "100%", resizeMode: "contain" }}
+          />
+        )}
+        <View style={styles.bubbleInner} />
+        <View style={styles.bubbleHighlight} />
+        <View style={styles.bubbleGloss} />
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View
@@ -315,27 +345,52 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   useEffect(() => { initGame(); }, [initGame]);
 
   // Falling Animation Loop
+  // Optimized falling animation with batching and throttling
   useEffect(() => {
     let lastTime = 0;
+    let frameSkip = 0;
+    const FRAME_SKIP_THRESHOLD = 50; // Skip frames when too many bubbles
+
     const animateFalling = (time: number) => {
-      // Calculate delta time for frame-independent motion
-      const dt = lastTime ? (time - lastTime) / 16.67 : 1;
+      // Improved delta time calculation with clamping for smoother animation
+      const dt = lastTime ? Math.min((time - lastTime) / 16.67, 2) : 1;
       lastTime = time;
 
       if (fallingRef.current.length > 0) {
-        // Use a single map pass to update physics
-        const next = fallingRef.current
-          .map(b => ({
-            ...b,
-            x: b.x + (b.vx || 0) * dt,
-            y: b.y + (b.vy || 0) * dt,
-            vy: (b.vy || 0) + 0.9 * dt, // Slightly stronger gravity for punchier fall
-          }))
-          .filter(b => b.y < SCREEN_HEIGHT + BUBBLE_SIZE);
+        // Skip frames when there are too many bubbles to prevent lag
+        if (fallingRef.current.length > FRAME_SKIP_THRESHOLD && frameSkip % 2 === 0) {
+          frameSkip++;
+          fallingRafRef.current = requestAnimationFrame(animateFalling);
+          return;
+        }
+        frameSkip++;
 
-        if (next.length !== fallingRef.current.length || next.some((b, i) => b.y !== fallingRef.current[i].y)) {
+        // Batch physics updates for better performance
+        const next = [];
+        for (let i = 0; i < fallingRef.current.length; i++) {
+          const b = fallingRef.current[i];
+          const newVx = (b.vx || 0) * 0.995; // Air resistance
+          const newVy = (b.vy || 0) + 1.5 * dt; // Gravity (Increased for heavier feel)
+          const newY = b.y + newVy * dt;
+
+          // Only keep bubbles that are still visible
+          if (newY < SCREEN_HEIGHT + BUBBLE_SIZE) {
+            next.push({
+              ...b,
+              x: b.x + newVx * dt,
+              y: newY,
+              vx: newVx,
+              vy: newVy,
+              rotation: (b.rotation || 0) + (b.rotationSpeed || 0) * dt,
+            });
+          }
+        }
+
+        // Only update state if there are significant changes
+        if (next.length !== fallingRef.current.length ||
+          (next.length > 0 && Math.abs(next[0].y - fallingRef.current[0].y) > 0.5)) {
           fallingRef.current = next;
-          setFallingBubbles(next);
+          setFallingBubbles([...next]); // Create new array reference
         }
       }
       fallingRafRef.current = requestAnimationFrame(animateFalling);
@@ -348,9 +403,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     if (isProcessing.current || !isAiming.current) return;
     if (showHint) setShowHint(false);
 
-    // Origin for tracer - exactly at the visual muzzle (top edge of cannon)
+    // Origin for tracer - start closer to the cannon, reducing distance between tracer and shooter
     const startX = cannonPos.x;
-    const startY = cannonPos.y;
+    const startY = cannonPos.y + 15; // Move tracer start point closer to cannon by 15 pixels
 
     const dx = pageX - startX;
     const dy = pageY - startY;
@@ -376,7 +431,10 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         hitPoint = { x: tx, y: ty };
         break;
       }
-      dots.push({ x: tx, y: ty, opacity: Math.max(0.3, 1 - i / 300) });
+      // Add dots every 3 iterations to increase distance between them
+      if (i % 3 === 0) {
+        dots.push({ x: tx, y: ty, opacity: Math.max(0.3, 1 - i / 300) });
+      }
     }
     setAimDots(dots);
 
@@ -499,7 +557,8 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     while (stack.length > 0) {
       const b = stack.pop()!;
-      const neighbors = grid.filter(g => g.visible && !visited.has(g.id) && g.color === newB.color && Math.sqrt((b.x - g.x) ** 2 + (b.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
+      // Fix case sensitivity issue in color comparison
+      const neighbors = grid.filter(g => g.visible && !visited.has(g.id) && g.color.toLowerCase() === newB.color.toLowerCase() && Math.sqrt((b.x - g.x) ** 2 + (b.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
       neighbors.forEach(n => { visited.add(n.id); match.push(n); stack.push(n); });
     }
 
@@ -523,14 +582,42 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       }
 
       const newFalling: any[] = [];
+      // Limit the number of falling bubbles to prevent lag
+      const MAX_FALLING_BUBBLES = 30;
+      let fallingCount = 0;
+
       match.forEach(m => {
-        newFalling.push({ ...m, vx: (Math.random() - 0.5) * 10, vy: -Math.random() * 10, y: m.y + currentScrollY.current });
+        if (fallingCount < MAX_FALLING_BUBBLES) {
+          // Smoother initial velocities for matched bubbles with slight upward burst
+          newFalling.push({
+            ...m,
+            vx: (Math.random() - 0.5) * 10, // Wider spread
+            vy: -Math.random() * 10 - 5, // Higher upward burst (-5 to -15) for dramatic arc
+            y: m.y + currentScrollY.current,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.3
+          });
+          fallingCount++;
+        }
       });
 
       grid.forEach(b => {
-        if (b.visible && !connected.has(b.id)) {
+        if (b.visible && !connected.has(b.id) && fallingCount < MAX_FALLING_BUBBLES) {
           b.visible = false;
-          newFalling.push({ ...b, vx: (Math.random() - 0.5) * 8, vy: Math.random() * 5, y: b.y + currentScrollY.current });
+          // Smoother velocities for disconnected bubbles
+          newFalling.push({
+            ...b,
+            vx: (Math.random() - 0.5) * 4, // Reduced horizontal spread
+            vy: Math.random() * 2, // Gentler initial downward velocity
+            y: b.y + currentScrollY.current,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.15
+          });
+          setScore(s => s + 5);
+          fallingCount++;
+        } else if (b.visible && !connected.has(b.id)) {
+          // If we've hit the limit, just make them disappear for performance
+          b.visible = false;
           setScore(s => s + 5);
         }
       });
@@ -632,13 +719,15 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           />
         )}
 
-        {/* Falling Bubbles */}
+        {/* Falling Bubbles - Optimized rendering */}
         {fallingBubbles.map(b => (
           <Bubble
-            key={`fall-${b.id}-${b.x}`}
+            key={`fall-${b.id}`}
             x={b.x}
             y={b.y}
             color={b.color}
+            isFalling={true}
+            rotation={b.rotation}
           />
         ))}
 
@@ -892,6 +981,15 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     backgroundColor: 'transparent',
     borderColor: '#fff',
+  },
+  simpleBubble: {
+    position: "absolute",
+    width: BUBBLE_SIZE,
+    height: BUBBLE_SIZE,
+    borderRadius: BUBBLE_SIZE / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Minimal styling for performance
   },
   shine: { position: "absolute", top: "15%", left: "15%", width: "25%", height: "25%", backgroundColor: "rgba(255,255,255,0.4)", borderRadius: 10 },
   dot: {
