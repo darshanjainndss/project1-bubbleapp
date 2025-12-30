@@ -4,6 +4,8 @@ import {
 } from "react-native";
 import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
+import MaterialIcon from "./MaterialIcon";
+import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
 
 import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
 
@@ -27,7 +29,7 @@ const COLOR_MAP: Record<string, any> = {
 
 // 1. MEMOIZED BUBBLE COMPONENT
 // Optimized Bubble component with reduced complexity for falling bubbles
-const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost, hasMetalGrid, hitsRemaining }: any) => {
+const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost, hasMetalGrid, hitsRemaining, hasLightning, hasBomb }: any) => {
   const imageSource = COLOR_MAP[color.toLowerCase()];
   
   // Animation for metal grid effects
@@ -143,6 +145,30 @@ const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost, hasMetalGr
           <View style={styles.metallicShine} />
         </Animated.View>
       )}
+      
+      {/* Lightning Power Effect */}
+      {hasLightning && !isGhost && (
+        <View style={styles.lightningEffect}>
+          <MaterialIcon 
+            name={GAME_ICONS.LIGHTNING.name} 
+            family={GAME_ICONS.LIGHTNING.family}
+            size={ICON_SIZES.SMALL} 
+            color={ICON_COLORS.SECONDARY} 
+          />
+        </View>
+      )}
+      
+      {/* Bomb Power Effect */}
+      {hasBomb && !isGhost && (
+        <View style={styles.bombEffect}>
+          <MaterialIcon 
+            name={GAME_ICONS.BOMB.name} 
+            family={GAME_ICONS.BOMB.family}
+            size={ICON_SIZES.SMALL} 
+            color={ICON_COLORS.WARNING} 
+          />
+        </View>
+      )}
     </Animated.View>
   );
 });
@@ -234,6 +260,12 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
 
+  // Power-up states
+  const [lightningActive, setLightningActive] = useState(false);
+  const [hasLightningPower, setHasLightningPower] = useState(false);
+  const [bombActive, setBombActive] = useState(false);
+  const [hasBombPower, setHasBombPower] = useState(false);
+
   const isProcessing = useRef(false);
   const isAiming = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -245,6 +277,46 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const pulseRingAnim = useRef(new Animated.Value(0)).current;
 
   const cannonPos = { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT - FOOTER_BOTTOM - CANNON_SIZE / 2 };
+
+  // Helper function to get hexagonal neighbors
+  const getHexNeighbors = (row: number, col: number) => {
+    const neighbors = [];
+    if (row % 2 === 0) {
+      // Even row
+      neighbors.push(
+        [row - 1, col - 1], [row - 1, col],     // Top-left, Top-right
+        [row, col - 1], [row, col + 1],         // Left, Right
+        [row + 1, col - 1], [row + 1, col]      // Bottom-left, Bottom-right
+      );
+    } else {
+      // Odd row
+      neighbors.push(
+        [row - 1, col], [row - 1, col + 1],     // Top-left, Top-right
+        [row, col - 1], [row, col + 1],         // Left, Right
+        [row + 1, col], [row + 1, col + 1]      // Bottom-left, Bottom-right
+      );
+    }
+    return neighbors.filter(([r, c]) => {
+      const rowWidth = (r % 2 === 0) ? 9 : 8;
+      return r >= 0 && r < 19 && c >= 0 && c < rowWidth;
+    });
+  };
+
+  // Lightning power-up activation
+  const activateLightning = () => {
+    if (!lightningActive) {
+      setLightningActive(true);
+      setHasLightningPower(true);
+    }
+  };
+
+  // Bomb power-up activation
+  const activateBomb = () => {
+    if (!bombActive) {
+      setBombActive(true);
+      setHasBombPower(true);
+    }
+  };
 
   const getPos = (row: number, col: number) => {
     const rowWidth = (row % 2 === 0) ? 9 : 8;
@@ -530,8 +602,20 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       y: cannonPos.y,
       vx: Math.cos(angle) * velocity,
       vy: Math.sin(angle) * velocity,
-      color: nextColor
+      color: nextColor,
+      hasLightning: hasLightningPower, // Add lightning power to the shot
+      hasBomb: hasBombPower, // Add bomb power to the shot
     };
+
+    // Reset power-ups after use
+    if (hasLightningPower) {
+      setHasLightningPower(false);
+      setLightningActive(false);
+    }
+    if (hasBombPower) {
+      setHasBombPower(false);
+      setBombActive(false);
+    }
 
     const step = () => {
       // 3 sub-steps for rock-solid accuracy at 45px/frame
@@ -557,6 +641,200 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   };
 
   const resolveLanding = (shot: any) => {
+    // Lightning Power: Check if we hit an existing bubble
+    if (shot.hasLightning) {
+      const hitBubble = bubblesRef.current.find(b => 
+        b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
+      );
+      
+      if (hitBubble) {
+        // Destroy the entire row where the bubble was hit, but skip metal grid bubbles
+        const targetRow = hitBubble.row;
+        const grid = [...bubblesRef.current];
+        const bubblesInRow = grid.filter(b => b.visible && b.row === targetRow);
+        
+        // Destroy all bubbles in the hit row, except those with metal grid protection
+        const destroyedBubbles: any[] = [];
+        bubblesInRow.forEach(bubble => {
+          if (!bubble.hasMetalGrid) {
+            // Normal bubble - destroy it
+            bubble.visible = false;
+            destroyedBubbles.push(bubble);
+            // Lightning effect animation
+            if (bubble.anim) {
+              Animated.sequence([
+                Animated.timing(bubble.anim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
+                Animated.timing(bubble.anim, { toValue: 0, duration: 200, useNativeDriver: true })
+              ]).start();
+            }
+          } else {
+            // Metal grid bubble - lightning bounces off, show bounce effect
+            if (bubble.anim) {
+              Animated.sequence([
+                Animated.timing(bubble.anim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
+                Animated.spring(bubble.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
+              ]).start();
+            }
+          }
+        });
+        
+        // Score only for destroyed bubbles (not metal grid ones)
+        setScore(s => s + destroyedBubbles.length * 15); // Higher score for lightning
+        
+        // Check for floating bubbles after row destruction
+        const connected = new Set();
+        const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
+        const cStack = [...topRowBubbles];
+        topRowBubbles.forEach(b => connected.add(b.id));
+
+        while (cStack.length > 0) {
+          const curr = cStack.pop()!;
+          const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
+          neighbors.forEach(n => {
+            connected.add(n.id);
+            cStack.push(n);
+          });
+        }
+
+        grid.forEach(b => {
+          if (b.visible && !connected.has(b.id)) {
+            b.visible = false;
+            setScore(s => s + 5);
+          }
+        });
+        
+        // Update the grid and continue with normal flow
+        bubblesRef.current = grid;
+        setBubbles([...grid]);
+        setShootingBubble(null);
+        setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
+        setMoves(m => Math.max(0, m - 1));
+        
+        // Check Win/Loss
+        const remainingBubbles = grid.filter(b => b.visible).length;
+        if (remainingBubbles === 0) {
+          setGameState('won');
+        } else if (moves - 1 <= 0) {
+          setGameState('lost');
+        }
+        
+        // Re-center view
+        const visibleBubbles = grid.filter(b => b.visible);
+        if (visibleBubbles.length > 0) {
+          const maxY = Math.max(...visibleBubbles.map(b => b.y));
+          const targetScreenY = SCREEN_HEIGHT * 0.45;
+          const targetScrollY = targetScreenY - maxY;
+          currentScrollY.current = targetScrollY;
+          Animated.spring(scrollY, {
+            toValue: currentScrollY.current,
+            tension: 40,
+            friction: 7,
+            useNativeDriver: true
+          }).start();
+        }
+        
+        isProcessing.current = false;
+        return; // Exit early for lightning
+      }
+    }
+
+    // Bomb Power: Check if we hit an existing bubble
+    if (shot.hasBomb) {
+      const hitBubble = bubblesRef.current.find(b => 
+        b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
+      );
+      
+      if (hitBubble) {
+        // Destroy the hit bubble and its hexagonal neighbors, bomb can blast through metal grid
+        const grid = [...bubblesRef.current];
+        const bubblesDestroyed: any[] = [];
+        
+        // Bomb can destroy any bubble, including metal grid ones
+        bubblesDestroyed.push(hitBubble);
+        
+        // Get hexagonal neighbors of the hit bubble
+        const neighbors = getHexNeighbors(hitBubble.row, hitBubble.col);
+        neighbors.forEach(([r, c]) => {
+          const neighborBubble = grid.find(b => b.visible && b.row === r && b.col === c);
+          if (neighborBubble) {
+            // Bomb destroys all neighbors, including metal grid ones
+            bubblesDestroyed.push(neighborBubble);
+          }
+        });
+        
+        // Destroy all affected bubbles (including metal grid ones)
+        bubblesDestroyed.forEach(bubble => {
+          bubble.visible = false;
+          // Bomb explosion animation
+          if (bubble.anim) {
+            Animated.sequence([
+              Animated.timing(bubble.anim, { toValue: 1.5, duration: 150, useNativeDriver: true }),
+              Animated.timing(bubble.anim, { toValue: 0, duration: 250, useNativeDriver: true })
+            ]).start();
+          }
+        });
+        
+        // Score for destroyed bubbles (including metal grid ones)
+        setScore(s => s + bubblesDestroyed.length * 12); // Medium score for bomb
+        
+        // Check for floating bubbles after explosion
+        const connected = new Set();
+        const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
+        const cStack = [...topRowBubbles];
+        topRowBubbles.forEach(b => connected.add(b.id));
+
+        while (cStack.length > 0) {
+          const curr = cStack.pop()!;
+          const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
+          neighbors.forEach(n => {
+            connected.add(n.id);
+            cStack.push(n);
+          });
+        }
+
+        grid.forEach(b => {
+          if (b.visible && !connected.has(b.id)) {
+            b.visible = false;
+            setScore(s => s + 5);
+          }
+        });
+        
+        // Update the grid and continue with normal flow
+        bubblesRef.current = grid;
+        setBubbles([...grid]);
+        setShootingBubble(null);
+        setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
+        setMoves(m => Math.max(0, m - 1));
+        
+        // Check Win/Loss
+        const remainingBubbles = grid.filter(b => b.visible).length;
+        if (remainingBubbles === 0) {
+          setGameState('won');
+        } else if (moves - 1 <= 0) {
+          setGameState('lost');
+        }
+        
+        // Re-center view
+        const visibleBubbles = grid.filter(b => b.visible);
+        if (visibleBubbles.length > 0) {
+          const maxY = Math.max(...visibleBubbles.map(b => b.y));
+          const targetScreenY = SCREEN_HEIGHT * 0.45;
+          const targetScrollY = targetScreenY - maxY;
+          currentScrollY.current = targetScrollY;
+          Animated.spring(scrollY, {
+            toValue: currentScrollY.current,
+            tension: 40,
+            friction: 7,
+            useNativeDriver: true
+          }).start();
+        }
+        
+        isProcessing.current = false;
+        return; // Exit early for bomb
+      }
+    }
+    
+    // Normal landing logic for non-power shots or power shots that don't hit anything
     let best = { r: 0, c: 0, dist: Infinity };
     for (let r = 0; r < 35; r++) {
       const rowWidth = (r % 2 === 0) ? 9 : 8;
@@ -593,10 +871,63 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       useNativeDriver: true
     }).start();
 
-    // 1. FIND MATCHES
-    const match = [newB];
-    const stack = [newB];
-    const visited = new Set([newB.id]);
+    // Bomb Power: Destroy hexagonal neighbors if shot lands with bomb power
+    if (shot.hasBomb) {
+      const bubblesDestroyed = [newB]; // Always destroy the landing bubble
+      
+      // Get hexagonal neighbors of the landing position
+      const neighbors = getHexNeighbors(best.r, best.c);
+      neighbors.forEach(([r, c]) => {
+        const neighborBubble = grid.find(b => b.visible && b.row === r && b.col === c);
+        if (neighborBubble) {
+          // Bomb destroys all neighbors, including metal grid ones
+          bubblesDestroyed.push(neighborBubble);
+        }
+      });
+      
+      // Destroy all affected bubbles (including metal grid ones)
+      bubblesDestroyed.forEach(bubble => {
+        bubble.visible = false;
+        // Bomb explosion animation
+        if (bubble.anim) {
+          Animated.sequence([
+            Animated.timing(bubble.anim, { toValue: 1.5, duration: 150, useNativeDriver: true }),
+            Animated.timing(bubble.anim, { toValue: 0, duration: 250, useNativeDriver: true })
+          ]).start();
+        }
+      });
+      
+      // Score for destroyed bubbles (including metal grid ones)
+      setScore(s => s + bubblesDestroyed.length * 12); // Medium score for bomb
+      
+      // Check for floating bubbles after explosion
+      const connected = new Set();
+      const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
+      const cStack = [...topRowBubbles];
+      topRowBubbles.forEach(b => connected.add(b.id));
+
+      while (cStack.length > 0) {
+        const curr = cStack.pop()!;
+        const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
+        neighbors.forEach(n => {
+          connected.add(n.id);
+          cStack.push(n);
+        });
+      }
+
+      grid.forEach(b => {
+        if (b.visible && !connected.has(b.id)) {
+          b.visible = false;
+          setScore(s => s + 5);
+        }
+      });
+      
+    } else {
+      // Normal bubble matching logic
+      // 1. FIND MATCHES
+      const match = [newB];
+      const stack = [newB];
+      const visited = new Set([newB.id]);
 
     // Impact neighbors - briefly shake them
     const nb = grid.filter(g => g.visible && g.id !== newB.id && Math.sqrt((newB.x - g.x) ** 2 + (newB.y - g.y) ** 2) < BUBBLE_SIZE * 1.5);
@@ -669,6 +1000,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         });
       }
     }
+    } // Close the else block for normal matching logic
 
     setMoves(m => Math.max(0, m - 1));
 
@@ -738,14 +1070,34 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
           {/* Stars (Progress Based) */}
           <View style={styles.starContainer}>
-            <Text style={styles.starIcon}>{score > 100 ? '⭐' : '☆'}</Text>
-            <Text style={styles.starIcon}>{score > 500 ? '⭐' : '☆'}</Text>
-            <Text style={styles.starIcon}>{score > 1000 ? '⭐' : '☆'}</Text>
+            <MaterialIcon 
+              name={score > 100 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name} 
+              family={GAME_ICONS.STAR.family}
+              size={ICON_SIZES.MEDIUM} 
+              color={score > 100 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED} 
+            />
+            <MaterialIcon 
+              name={score > 500 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name} 
+              family={GAME_ICONS.STAR.family}
+              size={ICON_SIZES.MEDIUM} 
+              color={score > 500 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED} 
+            />
+            <MaterialIcon 
+              name={score > 1000 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name} 
+              family={GAME_ICONS.STAR.family}
+              size={ICON_SIZES.MEDIUM} 
+              color={score > 1000 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED} 
+            />
           </View>
 
           {/* Exit Button */}
           <TouchableOpacity style={styles.topExitBtn} onPress={onBackPress}>
-            <Text style={styles.iconText}>❌</Text>
+            <MaterialIcon 
+              name={GAME_ICONS.CLOSE.name} 
+              family={GAME_ICONS.CLOSE.family}
+              size={ICON_SIZES.MEDIUM} 
+              color={ICON_COLORS.ERROR} 
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -756,11 +1108,24 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
           {/* Left Wing: Abilities */}
           <View style={styles.uWingLeft}>
-            <TouchableOpacity style={styles.abilityBtn}>
-              <Text style={styles.abilityText}>⚡</Text>
+            <TouchableOpacity 
+              style={[styles.abilityBtn, lightningActive && styles.abilityBtnActive]} 
+              onPress={activateLightning}
+            >
+              <MaterialIcon 
+                name={GAME_ICONS.LIGHTNING.name} 
+                family={GAME_ICONS.LIGHTNING.family}
+                size={ICON_SIZES.MEDIUM} 
+                color={lightningActive ? ICON_COLORS.SECONDARY : ICON_COLORS.PRIMARY} 
+              />
             </TouchableOpacity>
             <TouchableOpacity style={styles.abilityBtn}>
-              <Text style={styles.abilityText}>❄️</Text>
+              <MaterialIcon 
+                name={GAME_ICONS.FREEZE.name} 
+                family={GAME_ICONS.FREEZE.family}
+                size={ICON_SIZES.MEDIUM} 
+                color={ICON_COLORS.INFO} 
+              />
             </TouchableOpacity>
           </View>
 
@@ -774,10 +1139,23 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           {/* Right Wing: More Abilities */}
           <View style={styles.uWingRight}>
             <TouchableOpacity style={styles.abilityBtn}>
-              <Text style={styles.abilityText}>🔥</Text>
+              <MaterialIcon 
+                name={GAME_ICONS.FIRE.name} 
+                family={GAME_ICONS.FIRE.family}
+                size={ICON_SIZES.MEDIUM} 
+                color={ICON_COLORS.ERROR} 
+              />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.abilityBtn}>
-              <Text style={styles.abilityText}>💣</Text>
+            <TouchableOpacity 
+              style={[styles.abilityBtn, bombActive && styles.abilityBtnActive]} 
+              onPress={activateBomb}
+            >
+              <MaterialIcon 
+                name={GAME_ICONS.BOMB.name} 
+                family={GAME_ICONS.BOMB.family}
+                size={ICON_SIZES.MEDIUM} 
+                color={bombActive ? ICON_COLORS.SECONDARY : ICON_COLORS.WARNING} 
+              />
             </TouchableOpacity>
           </View>
 
@@ -832,6 +1210,8 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             x={shootingBubble.x}
             y={shootingBubble.y}
             color={shootingBubble.color}
+            hasLightning={shootingBubble.hasLightning}
+            hasBomb={shootingBubble.hasBomb}
           />
         )}
 
@@ -898,9 +1278,24 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
             {gameState === 'won' && (
               <View style={styles.modalStars}>
-                <Text style={{ fontSize: 40 }}>⭐</Text>
-                <Text style={{ fontSize: 50, marginTop: -15 }}>⭐</Text>
-                <Text style={{ fontSize: 40 }}>⭐</Text>
+                <MaterialIcon 
+                  name={score > 100 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name} 
+                  family={GAME_ICONS.STAR.family}
+                  size={40} 
+                  color={score > 100 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED} 
+                />
+                <MaterialIcon 
+                  name={score > 500 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name} 
+                  family={GAME_ICONS.STAR.family}
+                  size={50} 
+                  color={score > 500 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED} 
+                />
+                <MaterialIcon 
+                  name={score > 1000 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name} 
+                  family={GAME_ICONS.STAR.family}
+                  size={40} 
+                  color={score > 1000 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED} 
+                />
               </View>
             )}
 
@@ -908,15 +1303,30 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.modalBtnSecondary} onPress={onBackPress}>
-                <Text style={{ fontSize: 24 }}>🏠</Text>
+                <MaterialIcon 
+                  name={GAME_ICONS.HOME.name} 
+                  family={GAME_ICONS.HOME.family}
+                  size={ICON_SIZES.LARGE} 
+                  color={ICON_COLORS.WHITE} 
+                />
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
-                <Text style={{ fontSize: 28 }}>🔄</Text>
+                <MaterialIcon 
+                  name={GAME_ICONS.RESTART.name} 
+                  family={GAME_ICONS.RESTART.family}
+                  size={ICON_SIZES.LARGE} 
+                  color={ICON_COLORS.WHITE} 
+                />
               </TouchableOpacity>
               {gameState === 'won' && (
                 <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
                   {/* Placeholder for Next Level - currently restarts */}
-                  <Text style={{ fontSize: 28 }}>➡️</Text>
+                  <MaterialIcon 
+                    name={GAME_ICONS.NEXT.name} 
+                    family={GAME_ICONS.NEXT.family}
+                    size={ICON_SIZES.LARGE} 
+                    color={ICON_COLORS.WHITE} 
+                  />
                 </TouchableOpacity>
               )}
             </View>
@@ -1066,11 +1476,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#00E0FF', // Neon
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 5,
-    elevation: 5,
+  },
+  abilityBtnActive: {
+    backgroundColor: 'rgba(255, 214, 10, 0.3)', // Yellow tint when active
+    borderColor: '#FFD60A', // Yellow border when active
   },
   abilityText: {
     fontSize: 20,
@@ -1464,6 +1873,46 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     transform: [{ rotate: '-30deg' }],
     opacity: 0.5,
+  },
+  
+  // Lightning effect overlay
+  lightningEffect: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 214, 10, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFD60A',
+    shadowColor: '#FFD60A',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    zIndex: 20,
+  },
+  
+  // Bomb effect overlay
+  bombEffect: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 149, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF9500',
+    shadowColor: '#FF9500',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    zIndex: 20,
   },
 });
 

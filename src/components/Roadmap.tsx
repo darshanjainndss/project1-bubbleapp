@@ -12,6 +12,8 @@ import {
 import LottieView from 'lottie-react-native';
 import GameScreen from './GameScreen';
 import SpaceBackground from "./SpaceBackground.tsx";
+import MaterialIcon from './MaterialIcon';
+import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -127,7 +129,7 @@ const OrbitalRing = ({ size, color, duration, rotateX = '0deg', rotateY = '0deg'
 };
 
 // UNIFIED DASHBOARD HEADER COMPONENT
-const RoadmapHeader = ({ coins }: { coins: number }) => {
+const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () => void }) => {
   return (
     <View style={styles.dashboardContainer}>
       {/* Top Section: Title & Stats */}
@@ -141,11 +143,21 @@ const RoadmapHeader = ({ coins }: { coins: number }) => {
 
         <View style={styles.statsBlock}>
           <View style={styles.statChip}>
-            <Text style={styles.coinIcon}>🪙</Text>
+            <MaterialIcon 
+              name={GAME_ICONS.COIN.name} 
+              family={GAME_ICONS.COIN.family}
+              size={ICON_SIZES.MEDIUM} 
+              color={ICON_COLORS.GOLD} 
+            />
             <Text style={styles.statNumber}>{coins}</Text>
           </View>
           <View style={styles.statChip}>
-            <Text style={styles.starIcon}>⭐</Text>
+            <MaterialIcon 
+              name={GAME_ICONS.STAR.name} 
+              family={GAME_ICONS.STAR.family}
+              size={ICON_SIZES.MEDIUM} 
+              color={ICON_COLORS.GOLD} 
+            />
             <Text style={styles.statNumber}>48</Text>
           </View>
         </View>
@@ -157,15 +169,37 @@ const RoadmapHeader = ({ coins }: { coins: number }) => {
       {/* Bottom Section: Action Menu */}
       <View style={styles.dashboardBottom}>
         <TouchableOpacity style={styles.actionBtn}>
-          <Text style={[styles.menuIcon, { color: '#FFD60A' }]}>🥇</Text>
+          <MaterialIcon 
+            name={GAME_ICONS.LEADERBOARD.name} 
+            family={GAME_ICONS.LEADERBOARD.family}
+            size={ICON_SIZES.MEDIUM} 
+            color={ICON_COLORS.SECONDARY} 
+          />
           <Text style={[styles.menuText, { color: '#00E0FF' }]}>LEADERBOARD</Text>
         </TouchableOpacity>
 
         <View style={styles.dividerVerticalSmall} />
 
+        <TouchableOpacity style={styles.actionBtn} onPress={onShopPress}>
+          <MaterialIcon 
+            name={GAME_ICONS.SHOP.name} 
+            family={GAME_ICONS.SHOP.family}
+            size={ICON_SIZES.MEDIUM} 
+            color={ICON_COLORS.SUCCESS} 
+          />
+          <Text style={[styles.menuText, { color: '#00FF88' }]}>SHOP</Text>
+        </TouchableOpacity>
+
+        <View style={styles.dividerVerticalSmall} />
+
         <TouchableOpacity style={styles.actionBtn}>
-          <Text style={[styles.menuIcon, { color: '#00E0FF' }]}></Text>
-          <Text style={[styles.menuText, { color: '#00FF88' }]}>PROFILE</Text>
+          <MaterialIcon 
+            name={GAME_ICONS.PERSON.name} 
+            family={GAME_ICONS.PERSON.family}
+            size={ICON_SIZES.MEDIUM} 
+            color={ICON_COLORS.PRIMARY} 
+          />
+          <Text style={[styles.menuText, { color: '#00E0FF' }]}>PROFILE</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -179,6 +213,15 @@ const Roadmap: React.FC = () => {
   const [coins, setCoins] = useState(1250);
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [showShop, setShowShop] = useState(false);
+  
+  // Ability inventory
+  const [abilityInventory, setAbilityInventory] = useState({
+    lightning: 0,
+    bomb: 0,
+    fire: 0,
+    freeze: 0,
+  });
 
   const flatListRef = useRef<FlatList>(null);
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -197,6 +240,53 @@ const Roadmap: React.FC = () => {
     '#AF52DE', // Purple
     '#007AFF', // Blue
   ];
+
+  // Shop items configuration
+  const SHOP_ITEMS = [
+    {
+      id: 'lightning',
+      name: 'Lightning',
+      icon: GAME_ICONS.LIGHTNING,
+      price: 2,
+      description: 'Destroys entire row',
+      color: ICON_COLORS.PRIMARY,
+    },
+    {
+      id: 'bomb',
+      name: 'Bomb',
+      icon: GAME_ICONS.BOMB,
+      price: 2,
+      description: 'Destroys 6 hex neighbors',
+      color: ICON_COLORS.WARNING,
+    },
+    {
+      id: 'fire',
+      name: 'Fire',
+      icon: GAME_ICONS.FIRE,
+      price: 3,
+      description: 'Coming soon...',
+      color: ICON_COLORS.ERROR,
+    },
+    {
+      id: 'freeze',
+      name: 'Freeze',
+      icon: GAME_ICONS.FREEZE,
+      price: 3,
+      description: 'Coming soon...',
+      color: ICON_COLORS.INFO,
+    },
+  ];
+
+  // Purchase ability function
+  const purchaseAbility = (abilityId: string, price: number) => {
+    if (coins >= price) {
+      setCoins(coins - price);
+      setAbilityInventory(prev => ({
+        ...prev,
+        [abilityId]: prev[abilityId as keyof typeof prev] + 1
+      }));
+    }
+  };
 
   const LEVEL_TITLES = [
     "CYPRUS SECTOR", "NEON VOID", "PLASMA CORE", "FROST MOON",
@@ -427,7 +517,14 @@ const Roadmap: React.FC = () => {
           {isPassed && (
             <View style={styles.starsContainer}>
               {[1, 2, 3].map(s => (
-                <Text key={s} style={[styles.starMini, { opacity: s <= item.stars ? 1 : 0.2 }]}>⭐</Text>
+                <MaterialIcon 
+                  key={s}
+                  name={s <= item.stars ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name} 
+                  family={GAME_ICONS.STAR.family}
+                  size={12} 
+                  color={s <= item.stars ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED} 
+                  style={{ opacity: s <= item.stars ? 1 : 0.3 }}
+                />
               ))}
             </View>
           )}
@@ -514,8 +611,95 @@ const Roadmap: React.FC = () => {
         <View style={{ flex: 1 }}>
           <SpaceBackground />
 
+          {/* Shop Modal */}
+          {showShop && (
+            <View style={styles.shopOverlay}>
+              <View style={styles.shopModal}>
+                <View style={styles.shopHeader}>
+                  <Text style={styles.shopTitle}>ABILITY SHOP</Text>
+                  <TouchableOpacity 
+                    style={styles.shopCloseBtn} 
+                    onPress={() => setShowShop(false)}
+                  >
+                    <MaterialIcon 
+                      name={GAME_ICONS.CLOSE.name} 
+                      family={GAME_ICONS.CLOSE.family}
+                      size={ICON_SIZES.MEDIUM} 
+                      color={ICON_COLORS.WHITE} 
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.shopCoins}>
+                  <MaterialIcon 
+                    name={GAME_ICONS.COIN.name} 
+                    family={GAME_ICONS.COIN.family}
+                    size={ICON_SIZES.LARGE} 
+                    color={ICON_COLORS.GOLD} 
+                  />
+                  <Text style={styles.shopCoinsText}>{coins}</Text>
+                </View>
+
+                <View style={styles.shopGrid}>
+                  {SHOP_ITEMS.map((item) => (
+                    <View key={item.id} style={styles.shopItem}>
+                      <View style={styles.shopItemIcon}>
+                        <MaterialIcon 
+                          name={item.icon.name} 
+                          family={item.icon.family}
+                          size={ICON_SIZES.XLARGE} 
+                          color={item.color} 
+                        />
+                      </View>
+                      
+                      <Text style={styles.shopItemName}>{item.name}</Text>
+                      <Text style={styles.shopItemDesc}>{item.description}</Text>
+                      
+                      <View style={styles.shopItemFooter}>
+                        <View style={styles.shopItemPrice}>
+                          <MaterialIcon 
+                            name={GAME_ICONS.COIN.name} 
+                            family={GAME_ICONS.COIN.family}
+                            size={ICON_SIZES.SMALL} 
+                            color={ICON_COLORS.GOLD} 
+                          />
+                          <Text style={styles.shopPriceText}>{item.price}</Text>
+                        </View>
+                        
+                        <TouchableOpacity 
+                          style={[
+                            styles.shopBuyBtn, 
+                            coins < item.price && styles.shopBuyBtnDisabled
+                          ]}
+                          onPress={() => purchaseAbility(item.id, item.price)}
+                          disabled={coins < item.price}
+                        >
+                          <MaterialIcon 
+                            name={GAME_ICONS.BUY.name} 
+                            family={GAME_ICONS.BUY.family}
+                            size={ICON_SIZES.SMALL} 
+                            color={coins >= item.price ? ICON_COLORS.WHITE : ICON_COLORS.DISABLED} 
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Inventory count */}
+                      {abilityInventory[item.id as keyof typeof abilityInventory] > 0 && (
+                        <View style={styles.shopInventoryBadge}>
+                          <Text style={styles.shopInventoryText}>
+                            {abilityInventory[item.id as keyof typeof abilityInventory]}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Unified Dashboard Header */}
-          <RoadmapHeader coins={coins} />
+          <RoadmapHeader coins={coins} onShopPress={() => setShowShop(true)} />
 
           <FlatList
             ref={flatListRef}
@@ -790,6 +974,146 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   starMini: { fontSize: 13, marginHorizontal: 1 },
+  
+  // Shop Modal Styles
+  shopOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  shopModal: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: 'rgba(20, 20, 30, 0.95)',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#00E0FF',
+    padding: 20,
+  },
+  shopHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  shopTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 1,
+  },
+  shopCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.5)',
+  },
+  shopCoins: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    padding: 10,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  shopCoinsText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFD700',
+    marginLeft: 8,
+  },
+  shopGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  shopItem: {
+    width: '48%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  shopItemIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  shopItemName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5,
+  },
+  shopItemDesc: {
+    fontSize: 12,
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  shopItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  shopItemPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  shopPriceText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFD700',
+    marginLeft: 5,
+  },
+  shopBuyBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#00E0FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shopBuyBtnDisabled: {
+    backgroundColor: 'rgba(142, 142, 147, 0.3)',
+  },
+  shopInventoryBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#00FF88',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shopInventoryText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
 });
 
 export default Roadmap;
