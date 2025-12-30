@@ -4,6 +4,7 @@ import {
 } from "react-native";
 import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
+import LaserTracer from "./LaserTracer"; // Import LaserTracer
 import MaterialIcon from "./MaterialIcon";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
 
@@ -314,6 +315,8 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const muzzleVelocityAnim = useRef(new Animated.Value(0)).current;
   const recoilAnim = useRef(new Animated.Value(0)).current;
   const pulseRingAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current; // For Screen Shake
+  const bloomAnim = useRef(new Animated.Value(0)).current; // For Light Bloom
 
   const cannonPos = { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT - FOOTER_BOTTOM - CANNON_SIZE / 2 };
 
@@ -594,27 +597,47 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     const angle = Math.atan2(dy, dx);
     setCannonAngle(angle + Math.PI / 2);
 
-    const dots = [];
+    const segments = [];
     let tx = startX; let ty = startY;
     let vx = Math.cos(angle) * 8; let vy = Math.sin(angle) * 8;
     let hitPoint = null;
+    let segStartX = tx;
+    let segStartY = ty;
 
     for (let i = 0; i < 200; i++) {
       tx += vx; ty += vy;
-      if (tx < BUBBLE_SIZE / 2 || tx > SCREEN_WIDTH - BUBBLE_SIZE / 2) vx *= -1;
+      let bounced = false;
+
+      if (tx < BUBBLE_SIZE / 2 || tx > SCREEN_WIDTH - BUBBLE_SIZE / 2) {
+        vx *= -1;
+        bounced = true;
+      }
 
       const hitIdx = bubblesRef.current.findIndex(b => b.visible && Math.sqrt((tx - b.x) ** 2 + (ty - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.85);
 
       if (hitIdx !== -1 || ty < GRID_TOP) {
         hitPoint = { x: tx, y: ty };
+        // End final segment
+        segments.push({
+          x1: segStartX, y1: segStartY,
+          x2: tx, y2: ty,
+          opacity: 1 - i / 300
+        });
         break;
       }
-      // Add dots every 3 iterations to increase distance between them
-      if (i % 3 === 0) {
-        dots.push({ x: tx, y: ty, opacity: Math.max(0.3, 1 - i / 300) });
+
+      if (bounced) {
+        // End current segment at bounce point
+        segments.push({
+          x1: segStartX, y1: segStartY,
+          x2: tx, y2: ty,
+          opacity: 1 - i / 300
+        });
+        segStartX = tx;
+        segStartY = ty;
       }
     }
-    setAimDots(dots);
+    setAimDots(segments);
 
     if (hitPoint) {
       let best = { r: 0, c: 0, dist: Infinity };
@@ -649,6 +672,21 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     // Quick flash only, no expanding pulse
     Animated.timing(muzzleFlashAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
+
+    // Trigger Screen Shake
+    shakeAnim.setValue(0);
+    Animated.timing(shakeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => shakeAnim.setValue(0));
+
+    // Trigger Light Bloom
+    bloomAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(bloomAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
+      Animated.timing(bloomAnim, { toValue: 0, duration: 300, useNativeDriver: true })
+    ]).start();
 
     // Add pulse ring animation
     pulseRingAnim.setValue(0);
@@ -740,7 +778,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             // Normal bubble - destroy it
             bubble.visible = false;
             destroyedBubbles.push(bubble);
-            // Lightning effect animation
+            // Lightning effect animation (still keep original scaling anim for backup/feel)
             if (bubble.anim) {
               Animated.sequence([
                 Animated.timing(bubble.anim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
@@ -979,6 +1017,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           // Normal Fire behavior - maybe destroy radius 1? (Mini Bomb)
           // For now, let's make it act like a strong hit - destroy hit bubble even if metal?
           // Or just standard destruction.
+          // Or just standard destruction.
           hitBubble.visible = false;
           setScore(s => s + 10);
         }
@@ -1198,6 +1237,12 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           grid.forEach(b => {
             if (b.visible && !connected.has(b.id)) {
               b.visible = false;
+              // Add a slight delay for falling bubbles blast? Or falling animation?
+              // The user wants "falling", so usually no immediate blast.
+              // BUT if we want them to pop when they hit bottom, that's different.
+              // For now, let's trigger a quieter blast or no blast, OR relying on current falling logic?
+              // Existing logic just makes them vanish currently (visible=false).
+              // Let's add a "Poof" effect for them too but maybe just smaller.
               setScore(s => s + 5);
             }
           });
@@ -1381,26 +1426,56 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         onResponderMove={(e) => updateAim(e.nativeEvent.pageX, e.nativeEvent.pageY)}
         onResponderRelease={onRelease}>
 
-        <Animated.View style={{ transform: [{ translateY: scrollY }] }}>
+        {/* Wrap Game Area with Shake Animation */}
+        <Animated.View style={{
+          transform: [
+            { translateY: scrollY },
+            { translateX: shakeAnim.interpolate({ inputRange: [0, 0.2, 0.4, 0.6, 0.8, 1], outputRange: [0, -8, 8, -6, 6, 0] }) },
+            { translateY: shakeAnim.interpolate({ inputRange: [0, 0.2, 0.5, 1], outputRange: [0, 5, -5, 0] }) }
+          ]
+        }}>
           <PulsatingBorder />
           <BubbleGrid bubbles={bubbles} />
         </Animated.View>
 
-        {aimDots.map((d, i) => (
-          <View
-            key={`dot-${i}`}
-            style={[
-              styles.dot,
-              {
-                left: d.x - 3,
-                top: d.y - 3,
-                opacity: d.opacity,
+        {aimDots.map((seg, i) => {
+          const dx = seg.x2 - seg.x1;
+          const dy = seg.y2 - seg.y1;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx);
+
+          return (
+            <View
+              key={`seg-${i}`}
+              style={{
+                position: 'absolute',
+                left: (seg.x1 + seg.x2) / 2 - length / 2,
+                top: (seg.y1 + seg.y2) / 2 - 2,
+                width: length,
+                height: 4, // Continuous beam thickness
                 backgroundColor: nextColor,
+                opacity: Math.max(0.4, seg.opacity),
+                transform: [{ rotate: `${angle}rad` }],
+                borderRadius: 2,
                 shadowColor: nextColor,
-              },
-            ]}
-          />
-        ))}
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 1,
+                shadowRadius: 6,
+                elevation: 10,
+                zIndex: 99,
+              }}
+            >
+              {/* Inner brighter core */}
+              <View style={{
+                width: '100%',
+                height: 1.5,
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                marginTop: 1.25,
+                borderRadius: 1
+              }} />
+            </View>
+          );
+        })}
 
         {/* Ghost Prediction Bubble */}
         {targetSlot && (
@@ -1415,16 +1490,17 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
 
         {shootingBubble && (
-          <Bubble
-            x={shootingBubble.x}
-            y={shootingBubble.y}
-            color={shootingBubble.color}
-            hasLightning={shootingBubble.hasLightning}
-            hasBomb={shootingBubble.hasBomb}
-            hasFreeze={shootingBubble.hasFreeze}
-            hasFire={shootingBubble.hasFire}
-            isFrozen={false} // Shooting bubble itself isn't frozen usually
-          />
+          <View pointerEvents="none" style={{
+            position: 'absolute',
+            left: shootingBubble.x - 30, // Center the 60px wide tracer
+            top: shootingBubble.y - 10,  // Center the 20px high tracer
+            zIndex: 100
+          }}>
+            <LaserTracer
+              color={shootingBubble.color}
+              angle={Math.atan2(shootingBubble.vy, shootingBubble.vx)}
+            />
+          </View>
         )}
 
         <View style={styles.footer}>
@@ -1479,6 +1555,19 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           )}
         </View>
       </View>
+
+      {/* Light Bloom Overlay */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: 'rgba(255, 255, 255, 0.4)',
+            opacity: bloomAnim,
+            zIndex: 9999,
+          }
+        ]}
+      />
 
       {/* Game Over / Win Modal */}
       {gameState !== 'playing' && (
@@ -1821,6 +1910,17 @@ const styles = StyleSheet.create({
     // Minimal styling for performance
   },
   shine: { position: "absolute", top: "15%", left: "15%", width: "25%", height: "25%", backgroundColor: "rgba(255,255,255,0.4)", borderRadius: 10 },
+  laserDot: {
+    position: "absolute",
+    width: 12,
+    height: 3,
+    borderRadius: 1.5,
+    zIndex: 100,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 4,
+    elevation: 8,
+  },
   dot: {
     position: "absolute",
     width: 6,
