@@ -5,6 +5,7 @@ import {
 import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
 import LaserTracer from "./LaserTracer"; // Import LaserTracer
+import BubbleBlast from "./BubbleBlast"; // Import BubbleBlast animation
 import MaterialIcon from "./MaterialIcon";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
 
@@ -280,6 +281,7 @@ const PulsatingBorder = React.memo(() => {
 
 const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, level?: number }) => {
   const [bubbles, setBubbles] = useState<any[]>([]);
+  const [blasts, setBlasts] = useState<any[]>([]); // State for explosion effects
 
   const [shootingBubble, setShootingBubble] = useState<any>(null);
   const [cannonAngle, setCannonAngle] = useState(0);
@@ -342,6 +344,10 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       const rowWidth = (r % 2 === 0) ? 9 : 8;
       return r >= 0 && r < 19 && c >= 0 && c < rowWidth;
     });
+  };
+
+  const removeBlast = (id: string) => {
+    setBlasts(prev => prev.filter(b => b.id !== id));
   };
 
   // Lightning power-up activation
@@ -510,7 +516,8 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         };
 
         // Collect bubbles of the target color for metal grid assignment
-        if (metalGridConfig.color && color.toLowerCase() === metalGridConfig.color.toLowerCase()) {
+        // User Request: "make yellow balls also in metal grid"
+        if ((metalGridConfig.color && color.toLowerCase() === metalGridConfig.color.toLowerCase()) || color.toLowerCase() === "#ffd60a") {
           bubblesOfTargetColor.push(bubble);
         }
 
@@ -681,13 +688,6 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       useNativeDriver: true
     }).start(() => shakeAnim.setValue(0));
 
-    // Trigger Light Bloom
-    bloomAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(bloomAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
-      Animated.timing(bloomAnim, { toValue: 0, duration: 300, useNativeDriver: true })
-    ]).start();
-
     // Add pulse ring animation
     pulseRingAnim.setValue(0);
     Animated.timing(pulseRingAnim, {
@@ -799,6 +799,16 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         // Score only for destroyed bubbles (not metal grid ones)
         setScore(s => s + destroyedBubbles.length * 15); // Higher score for lightning
 
+        // Trigger Blasts for Lightning (Rapid chain)
+        const newBlasts = destroyedBubbles.map((b, i) => ({
+          id: `blast-${b.id}-${Date.now()}`,
+          x: b.x,
+          y: b.y,
+          color: b.color,
+          delay: i * 120 // Slower ripple
+        }));
+        if (newBlasts.length > 0) setBlasts(prev => [...prev, ...newBlasts]);
+
         // Check for floating bubbles after row destruction
         const connected = new Set();
         const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
@@ -814,12 +824,26 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           });
         }
 
+        const newlyFloatingLightning: any[] = [];
         grid.forEach(b => {
-          if (b.visible && !connected.has(b.id)) {
+          if (b.visible && !connected.has(b.id) && bubblesInRow.indexOf(b) === -1) {
             b.visible = false;
             setScore(s => s + 5);
+            newlyFloatingLightning.push(b);
           }
         });
+
+        // Trigger Blasts for Floating Bubbles (Lightning)
+        if (newlyFloatingLightning.length > 0) {
+          const floatBlasts = newlyFloatingLightning.map((b, i) => ({
+            id: `blast-float-${b.id}-${Date.now()}`,
+            x: b.x,
+            y: b.y,
+            color: b.color,
+            delay: (newBlasts.length * 120) + (i * 100)
+          }));
+          setBlasts(prev => [...prev, ...floatBlasts]);
+        }
 
         // Update the grid and continue with normal flow
         bubblesRef.current = grid;
@@ -895,6 +919,16 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         // Score for destroyed bubbles (including metal grid ones)
         setScore(s => s + bubblesDestroyed.length * 12); // Medium score for bomb
 
+        // Trigger Blasts for Bomb (Simultaneous/Fast)
+        const newBlasts = bubblesDestroyed.map((b, i) => ({
+          id: `blast-${b.id}-${Date.now()}`,
+          x: b.x,
+          y: b.y,
+          color: b.color,
+          delay: i * 20 // Almost instant but slightly staggered
+        }));
+        if (newBlasts.length > 0) setBlasts(prev => [...prev, ...newBlasts]);
+
         // Check for floating bubbles after explosion
         const connected = new Set();
         const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
@@ -910,12 +944,26 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           });
         }
 
+        const newlyFloatingBomb: any[] = [];
         grid.forEach(b => {
-          if (b.visible && !connected.has(b.id)) {
+          if (b.visible && !connected.has(b.id) && bubblesDestroyed.indexOf(b) === -1) {
             b.visible = false;
             setScore(s => s + 5);
+            newlyFloatingBomb.push(b);
           }
         });
+
+        // Trigger Blasts for Floating Bubbles (Bomb)
+        if (newlyFloatingBomb.length > 0) {
+          const floatBlasts = newlyFloatingBomb.map((b, i) => ({
+            id: `blast-float-${b.id}-${Date.now()}`,
+            x: b.x,
+            y: b.y,
+            color: b.color,
+            delay: ((newBlasts ? newBlasts.length : 0) * 100) + (i * 120)
+          }));
+          setBlasts(prev => [...prev, ...floatBlasts]);
+        }
 
         // Update the grid and continue with normal flow
         bubblesRef.current = grid;
@@ -998,13 +1046,29 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       );
 
       if (hitBubble) {
+        // Fire does NOT blast metal grid balls
+        if (hitBubble.hasMetalGrid) {
+          // Bounce off metal grid
+          if (hitBubble.anim) {
+            Animated.sequence([
+              Animated.timing(hitBubble.anim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
+              Animated.spring(hitBubble.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
+            ]).start();
+          }
+          setShootingBubble(null);
+          isProcessing.current = false;
+          return;
+        }
+
         const grid = [...bubblesRef.current];
 
         if (hitBubble.isFrozen) {
           // ICE SMASH! Destroy frozen bubbles in this column
+          // ICE SMASH! Destroy frozen bubbles in this column, IGNORING metal grid bubbles
           const xThreshold = BUBBLE_SIZE * 0.3;
           const frozenInColumn = grid.filter(b =>
             b.visible && b.isFrozen &&
+            !b.hasMetalGrid && // Fire cannot destroy metal grid
             Math.abs(b.x - hitBubble.x) < xThreshold
           );
 
@@ -1013,13 +1077,26 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             // Explosion effect? 
           });
           setScore(s => s + frozenInColumn.length * 20); // Bonus for Ice Smash
+
+          // Trigger Blasts for Ice Smash (Top to down logic usually, but here just fast)
+          const newBlasts = frozenInColumn.map((b, i) => ({
+            id: `blast-${b.id}-${Date.now()}`,
+            x: b.x,
+            y: b.y,
+            color: b.color,
+            delay: i * 120
+          }));
+          if (newBlasts.length > 0) setBlasts(prev => [...prev, ...newBlasts]);
         } else {
-          // Normal Fire behavior - maybe destroy radius 1? (Mini Bomb)
-          // For now, let's make it act like a strong hit - destroy hit bubble even if metal?
-          // Or just standard destruction.
-          // Or just standard destruction.
+          // Normal Fire behavior - destroy hit bubble
           hitBubble.visible = false;
           setScore(s => s + 10);
+          setBlasts(prev => [...prev, {
+            id: `blast-${hitBubble.id}-${Date.now()}`,
+            x: hitBubble.x,
+            y: hitBubble.y,
+            color: hitBubble.color
+          }]);
         }
 
         // Check floating
@@ -1037,12 +1114,25 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           });
         }
 
+        const newlyFloatingFire: any[] = [];
         grid.forEach(b => {
-          if (b.visible && !connected.has(b.id)) {
+          if (b.visible && !connected.has(b.id) && b.id !== hitBubble.id) {
             b.visible = false;
             setScore(s => s + 5);
+            newlyFloatingFire.push(b);
           }
         });
+
+        if (newlyFloatingFire.length > 0) {
+          const floatBlasts = newlyFloatingFire.map((b, i) => ({
+            id: `blast-float-${b.id}-${Date.now()}`,
+            x: b.x,
+            y: b.y,
+            color: b.color,
+            delay: 300 + (i * 120)
+          }));
+          setBlasts(prev => [...prev, ...floatBlasts]);
+        }
 
         bubblesRef.current = grid;
         setBubbles([...grid]);
@@ -1157,12 +1247,38 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         });
       }
 
+      const newlyFloatingBombLanding: any[] = [];
       grid.forEach(b => {
         if (b.visible && !connected.has(b.id)) {
           b.visible = false;
           setScore(s => s + 5);
+          newlyFloatingBombLanding.push(b);
         }
       });
+
+      // Trigger Blasts for Floating Bubbles (Bomb Landing)
+      if (newlyFloatingBombLanding.length > 0) {
+        const floatBlasts = newlyFloatingBombLanding.map((b, i) => ({
+          id: `blast-float-${b.id}-${Date.now()}`,
+          x: b.x,
+          y: b.y,
+          color: b.color,
+          delay: (bubblesDestroyed.length * 100) + (i * 120)
+        }));
+        setBlasts(prev => [...prev, ...floatBlasts]);
+      }
+
+      // Also trigger blasts for the bomb's main destruction
+      if (bubblesDestroyed.length > 0) {
+        const mainBlasts = bubblesDestroyed.map((b, i) => ({
+          id: `blast-bomb-${b.id}-${Date.now()}`,
+          x: b.x,
+          y: b.y,
+          color: b.color,
+          delay: i * 100
+        }));
+        setBlasts(prev => [...prev, ...mainBlasts]);
+      }
 
     } else {
       // Normal bubble matching logic
@@ -1218,6 +1334,18 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         // Score only for destroyed bubbles
         setScore(s => s + bubblesDestroyed.length * 10);
 
+        // Trigger Blasts for Standard Match (Satisfying ripple)
+        if (bubblesDestroyed.length > 0) {
+          const newBlasts = bubblesDestroyed.map((b, i) => ({
+            id: `blast-${b.id}-${Date.now()}`,
+            x: b.x,
+            y: b.y,
+            color: b.color,
+            delay: i * 150 // Clear one-by-one pop
+          }));
+          setBlasts(prev => [...prev, ...newBlasts]);
+        }
+
         // 2. FLOATING LOGIC - only check if any bubbles were actually destroyed
         if (bubblesDestroyed.length > 0) {
           const connected = new Set();
@@ -1234,18 +1362,28 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             });
           }
 
+          const newlyFloatingMatch: any[] = [];
           grid.forEach(b => {
             if (b.visible && !connected.has(b.id)) {
               b.visible = false;
-              // Add a slight delay for falling bubbles blast? Or falling animation?
-              // The user wants "falling", so usually no immediate blast.
-              // BUT if we want them to pop when they hit bottom, that's different.
-              // For now, let's trigger a quieter blast or no blast, OR relying on current falling logic?
-              // Existing logic just makes them vanish currently (visible=false).
-              // Let's add a "Poof" effect for them too but maybe just smaller.
               setScore(s => s + 5);
+              newlyFloatingMatch.push(b);
             }
           });
+
+          // Trigger Blasts for Floating Bubbles (Standard)
+          if (newlyFloatingMatch.length > 0) {
+            const floatBlasts = newlyFloatingMatch.map((b, i) => ({
+              id: `blast-float-${b.id}-${Date.now()}`,
+              x: b.x,
+              y: b.y,
+              color: b.color,
+              delay: (bubblesDestroyed.length * 150) + (i * 120)
+            }));
+            setBlasts(prev => [...prev, ...floatBlasts]);
+          }
+
+
         }
       }
     } // Close the else block for normal matching logic
@@ -1436,6 +1574,17 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         }}>
           <PulsatingBorder />
           <BubbleGrid bubbles={bubbles} />
+          {/* Render Blasts INSIDE moving container */}
+          {blasts.map(blast => (
+            <BubbleBlast
+              key={blast.id}
+              x={blast.x}
+              y={blast.y}
+              color={blast.color}
+              delay={blast.delay}
+              onComplete={() => removeBlast(blast.id)}
+            />
+          ))}
         </Animated.View>
 
         {aimDots.map((seg, i) => {
@@ -1503,6 +1652,8 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           </View>
         )}
 
+
+
         <View style={styles.footer}>
           {/* Muzzle Velocity Effect (Blast Wave) */}
           <Animated.View style={[
@@ -1556,18 +1707,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         </View>
       </View>
 
-      {/* Light Bloom Overlay */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: 'rgba(255, 255, 255, 0.4)',
-            opacity: bloomAnim,
-            zIndex: 9999,
-          }
-        ]}
-      />
+
 
       {/* Game Over / Win Modal */}
       {gameState !== 'playing' && (

@@ -1,180 +1,188 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Easing } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, Image, Dimensions, Animated, Easing } from 'react-native';
+import LottieView from 'lottie-react-native';
 
 interface BubbleBlastProps {
     x: number;
     y: number;
     color: string;
+    delay?: number;
     onComplete: () => void;
 }
 
-const PARTICLE_COUNT = 12; // Shards
-const LIQUID_COUNT = 6;    // Liquid blobs
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10);
+const SPARKLE_COUNT = 5;
 
-const BubbleBlast = ({ x, y, color, onComplete }: BubbleBlastProps) => {
-    // 1. Flash Animation
-    const flashOpacity = useRef(new Animated.Value(1)).current;
-    const flashScale = useRef(new Animated.Value(0.5)).current;
+/* Replicate Color Map */
+const COLOR_MAP: Record<string, any> = {
+    "#ff3b30": require("../images/red.png"),
+    "#ff9500": require("../images/orange.png"),
+    "#ffd60a": require("../images/yellow.png"),
+    "#34c759": require("../images/green.png"),
+    "#007aff": require("../images/blue.png"),
+    "#af52de": require("../images/purple.png"),
+};
 
-    // 2. Shockwave Ring
-    const ringScale = useRef(new Animated.Value(0.5)).current;
-    const ringOpacity = useRef(new Animated.Value(1)).current;
+const BubbleBlast = React.memo(({ x, y, color, delay = 0, onComplete }: BubbleBlastProps) => {
+    const [showBlast, setShowBlast] = useState(false);
 
-    // 3. Particles
-    const particles = useRef([...Array(PARTICLE_COUNT)].map(() => ({
+    // Animation Values
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+    const opacityAnim = useRef(new Animated.Value(1)).current;
+    const ringScale = useRef(new Animated.Value(0)).current;
+    const ringOpacity = useRef(new Animated.Value(0.8)).current;
+
+    const sparkles = useRef([...Array(SPARKLE_COUNT)].map(() => ({
         dist: new Animated.Value(0),
-        opacity: new Animated.Value(1),
-        angle: Math.random() * Math.PI * 2,
-        speed: Math.random() * 0.8 + 0.5,
-        size: Math.random() * 6 + 3,
-    }))).current;
-
-    // 4. Liquid Blobs
-    const liquids = useRef([...Array(LIQUID_COUNT)].map(() => ({
-        dist: new Animated.Value(0),
-        opacity: new Animated.Value(1),
         scale: new Animated.Value(1),
+        opacity: new Animated.Value(1),
         angle: Math.random() * Math.PI * 2,
-        speed: Math.random() * 0.4 + 0.2, // Slower moving
     }))).current;
+
+    const colorKey = color ? color.toLowerCase() : "";
+    const bubbleImage = COLOR_MAP[colorKey];
 
     useEffect(() => {
-        // Run all animations
+        let timer: any;
+        const trigger = () => {
+            setShowBlast(true);
+            runPopAnimation();
+        };
+
+        if (delay > 0) {
+            timer = setTimeout(trigger, delay);
+        } else {
+            trigger();
+        }
+        return () => clearTimeout(timer);
+    }, [delay]);
+
+    const runPopAnimation = () => {
         Animated.parallel([
-            // Flash: Quick burst
+            // 1. Bubble "Pop" (Scale Up -> Shrink & Fade)
             Animated.sequence([
+                Animated.timing(scaleAnim, {
+                    toValue: 1.3,
+                    duration: 100,
+                    easing: Easing.out(Easing.quad),
+                    useNativeDriver: true
+                }),
                 Animated.parallel([
-                    Animated.timing(flashScale, { toValue: 2, duration: 150, useNativeDriver: true }),
-                    Animated.timing(flashOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+                    Animated.timing(scaleAnim, {
+                        toValue: 0.1,
+                        duration: 150,
+                        useNativeDriver: true
+                    }),
+                    Animated.timing(opacityAnim, {
+                        toValue: 0,
+                        duration: 150,
+                        useNativeDriver: true
+                    })
                 ])
             ]),
 
-            // Ring: Expanding wave
+            // 2. Shockwave Ring (Expand & Fade)
             Animated.parallel([
                 Animated.timing(ringScale, {
-                    toValue: 2.5,
-                    duration: 400,
-                    easing: Easing.out(Easing.cubic),
+                    toValue: 2.0,
+                    duration: 250,
+                    easing: Easing.out(Easing.quad),
                     useNativeDriver: true
                 }),
                 Animated.timing(ringOpacity, {
                     toValue: 0,
-                    duration: 400,
+                    duration: 250,
                     useNativeDriver: true
                 })
             ]),
 
-            // Particles: "Explosion with subtle slow-down" (easeOut)
-            ...particles.map(p =>
+            // 3. Sparkles (Fly Out & Vanish)
+            ...sparkles.map(s =>
                 Animated.parallel([
-                    Animated.timing(p.dist, {
-                        toValue: 80 * p.speed, // Travel distance based on speed
-                        duration: 500,
-                        easing: Easing.out(Easing.exp), // Fast start, slow end
-                        useNativeDriver: true
-                    }),
-                    Animated.timing(p.opacity, {
-                        toValue: 0,
-                        duration: 500,
-                        delay: 100, // Slight delay before fading
-                        useNativeDriver: true
-                    })
-                ])
-            ),
-
-            // Liquid Blobs: Slower, viscous feel
-            ...liquids.map(l =>
-                Animated.parallel([
-                    Animated.timing(l.dist, {
-                        toValue: 50 * l.speed,
-                        duration: 700,
+                    Animated.timing(s.dist, {
+                        toValue: BUBBLE_SIZE * 1.5,
+                        duration: 300,
                         easing: Easing.out(Easing.quad),
                         useNativeDriver: true
                     }),
-                    Animated.sequence([
-                        Animated.delay(200),
-                        Animated.timing(l.opacity, { toValue: 0, duration: 500, useNativeDriver: true })
-                    ]),
-                    Animated.timing(l.scale, {
+                    Animated.timing(s.scale, {
                         toValue: 0,
-                        duration: 700,
+                        duration: 300,
                         useNativeDriver: true
                     })
                 ])
             )
-
         ]).start(({ finished }) => {
-            if (finished) {
-                onComplete();
-            }
+            // We let the Lottie finish naturally or just use the sync fallback
+            // but we'll use a timer for safety if onComplete isn't triggered by Lottie
+            setTimeout(onComplete, 500);
         });
-    }, []);
+    };
+
+    if (!showBlast) {
+        return (
+            <View style={[styles.container, { left: x, top: y }]} pointerEvents="none">
+                <View style={styles.fakeBubbleContainer}>
+                    {bubbleImage ? (
+                        <Image source={bubbleImage} style={styles.fakeBubbleImage} />
+                    ) : (
+                        <View style={[styles.fakeBubbleFallback, { backgroundColor: color }]} />
+                    )}
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={[styles.container, { left: x, top: y }]} pointerEvents="none">
+            {/* Red Lightning Lottie Background */}
+            <LottieView
+                source={require("../images/Spark.json")}
+                autoPlay
+                loop={false}
+                style={styles.lottie}
+            />
 
-            {/* 2. Expanding Ring */}
-            <Animated.View style={[
-                styles.ring,
-                {
-                    borderColor: color,
-                    opacity: ringOpacity,
-                    transform: [{ scale: ringScale }]
-                }
-            ]} />
+            {/* Main Bubble Pop Effect */}
+            <Animated.View style={[styles.fakeBubbleContainer, {
+                opacity: opacityAnim,
+                transform: [{ scale: scaleAnim }]
+            }]}>
+                {bubbleImage ? (
+                    <Image source={bubbleImage} style={styles.fakeBubbleImage} />
+                ) : (
+                    <View style={[styles.fakeBubbleFallback, { backgroundColor: color }]} />
+                )}
+            </Animated.View>
 
-            {/* 3. Particles (Shards) */}
-            {particles.map((p, i) => (
+            {/* Shockwave Ring */}
+            <Animated.View style={[styles.ring, {
+                borderColor: color || '#fff',
+                opacity: ringOpacity,
+                transform: [{ scale: ringScale }]
+            }]} />
+
+            {/* Sparkles */}
+            {sparkles.map((s, i) => (
                 <Animated.View
-                    key={`p-${i}`}
+                    key={i}
                     style={[
-                        styles.particle,
+                        styles.sparkle,
                         {
-                            backgroundColor: color,
-                            width: p.size,
-                            height: p.size,
-                            opacity: p.opacity,
+                            backgroundColor: color || '#fff',
                             transform: [
-                                { translateX: Animated.multiply(p.dist, Math.cos(p.angle)) },
-                                { translateY: Animated.multiply(p.dist, Math.sin(p.angle)) },
-                                { rotate: `${p.angle}rad` } // Face direction of travel roughly
+                                { translateX: Animated.multiply(s.dist, Math.cos(s.angle)) },
+                                { translateY: Animated.multiply(s.dist, Math.sin(s.angle)) },
+                                { scale: s.scale }
                             ]
                         }
                     ]}
                 />
             ))}
-
-            {/* 4. Liquid Fragments */}
-            {liquids.map((l, i) => (
-                <Animated.View
-                    key={`l-${i}`}
-                    style={[
-                        styles.liquid,
-                        {
-                            backgroundColor: color,
-                            opacity: l.opacity,
-                            transform: [
-                                { translateX: Animated.multiply(l.dist, Math.cos(l.angle)) },
-                                { translateY: Animated.multiply(l.dist, Math.sin(l.angle)) },
-                                { scale: l.scale }
-                            ]
-                        }
-                    ]}
-                />
-            ))}
-
-            {/* 1. Central Flash (On top of particles to obscure start) */}
-            <Animated.View style={[
-                styles.flash,
-                {
-                    opacity: flashOpacity,
-                    transform: [{ scale: flashScale }]
-                }
-            ]} />
-
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
@@ -183,38 +191,44 @@ const styles = StyleSheet.create({
         height: 0,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 999, // High z-index to be above grid
+        zIndex: 999,
     },
-    flash: {
+    lottie: {
+        width: BUBBLE_SIZE * 2.5,
+        height: BUBBLE_SIZE * 2.5,
         position: 'absolute',
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: '#fff',
-        shadowColor: '#fff',
-        shadowOpacity: 1,
-        shadowRadius: 15,
-        elevation: 10,
+    },
+    fakeBubbleContainer: {
+        width: BUBBLE_SIZE,
+        height: BUBBLE_SIZE,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    fakeBubbleImage: {
+        width: "120%",
+        height: "120%",
+        resizeMode: "contain"
+    },
+    fakeBubbleFallback: {
+        width: BUBBLE_SIZE,
+        height: BUBBLE_SIZE,
+        borderRadius: BUBBLE_SIZE / 2,
+        backgroundColor: 'red'
     },
     ring: {
         position: 'absolute',
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        borderWidth: 4,
-        shadowColor: '#fff',
-        shadowOpacity: 0.5,
-        shadowRadius: 5,
+        width: BUBBLE_SIZE,
+        height: BUBBLE_SIZE,
+        borderRadius: BUBBLE_SIZE / 2,
+        borderWidth: 3,
+        borderColor: '#fff',
     },
-    particle: {
+    sparkle: {
         position: 'absolute',
-        borderRadius: 2, // Slightly rounded squares
-    },
-    liquid: {
-        position: 'absolute',
-        width: 14,
-        height: 14,
-        borderRadius: 7, // Circles
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#fff',
     }
 });
 
