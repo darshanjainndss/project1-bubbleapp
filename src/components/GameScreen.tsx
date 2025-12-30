@@ -5,7 +5,7 @@ import {
 import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
 
-import { getLevelPattern, getLevelMoves, COLORS } from "../data/levelPatterns";
+import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -27,8 +27,46 @@ const COLOR_MAP: Record<string, any> = {
 
 // 1. MEMOIZED BUBBLE COMPONENT
 // Optimized Bubble component with reduced complexity for falling bubbles
-const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost }: any) => {
+const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost, hasMetalGrid, hitsRemaining }: any) => {
   const imageSource = COLOR_MAP[color.toLowerCase()];
+  
+  // Animation for metal grid effects
+  const metalPulseAnim = useRef(new Animated.Value(1)).current;
+  const metalRotateAnim = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    if (hasMetalGrid && !isGhost) {
+      // Create pulsing animation for metal grid
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(metalPulseAnim, {
+            toValue: 1.05,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(metalPulseAnim, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+      
+      // Create slow rotation animation for the cross pattern
+      Animated.loop(
+        Animated.timing(metalRotateAnim, {
+          toValue: 1,
+          duration: 8000,
+          useNativeDriver: true,
+        })
+      ).start();
+    }
+  }, [hasMetalGrid, isGhost, metalPulseAnim, metalRotateAnim]);
+
+  const rotateInterpolate = metalRotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
     <Animated.View
@@ -74,6 +112,37 @@ const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost }: any) => 
           <View style={styles.bubbleGloss} />
         </>
       )}
+      
+      {/* Metal Grid Overlay - Circular Design */}
+      {hasMetalGrid && !isGhost && (
+        <Animated.View style={[styles.metalGridOverlay, { transform: [{ scale: metalPulseAnim }] }]}>
+          {/* Outer Metal Ring */}
+          <View style={styles.metalOuterRing} />
+          
+          {/* Inner Metal Ring */}
+          <View style={styles.metalInnerRing} />
+          
+          {/* Rotating Cross Pattern Container */}
+          <Animated.View style={[styles.metalCrossContainer, { transform: [{ rotate: rotateInterpolate }] }]}>
+            {/* Cross Pattern */}
+            <View style={styles.metalCrossHorizontal} />
+            <View style={styles.metalCrossVertical} />
+            
+            {/* Diagonal Cross Pattern */}
+            <View style={styles.metalDiagonal1} />
+            <View style={styles.metalDiagonal2} />
+          </Animated.View>
+          
+          {/* Corner Bolts */}
+          <View style={[styles.metalBolt, { top: '15%', left: '15%' }]} />
+          <View style={[styles.metalBolt, { top: '15%', right: '15%' }]} />
+          <View style={[styles.metalBolt, { bottom: '15%', left: '15%' }]} />
+          <View style={[styles.metalBolt, { bottom: '15%', right: '15%' }]} />
+          
+          {/* Metallic shine effect */}
+          <View style={styles.metallicShine} />
+        </Animated.View>
+      )}
     </Animated.View>
   );
 });
@@ -90,6 +159,8 @@ const BubbleGrid = React.memo(({ bubbles }: { bubbles: any[] }) => {
           color={b.color}
           anim={b.anim}
           entryOffset={b.entryOffset}
+          hasMetalGrid={b.hasMetalGrid}
+          hitsRemaining={b.hitsRemaining}
         />
       ))}
     </>
@@ -187,9 +258,11 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const initGame = useCallback(() => {
     const grid: any[] = [];
     const pattern = getLevelPattern(level);
+    const metalGridConfig = getLevelMetalGridConfig(level);
     const patternHeight = pattern.length;
     let startRow = Math.floor((19 - patternHeight) / 2);
     if (startRow % 2 !== 0) startRow--;
+    
     // 1. Map out which cells are "pattern" vs "empty"
     const distMap: number[][] = Array.from({ length: 35 }, () => Array(9).fill(Infinity));
     const queue: [number, number][] = [];
@@ -234,6 +307,8 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     // 3. Build the grid using distances for color layers
     const bgColors = COLORS;
+    const bubblesOfTargetColor: any[] = [];
+    
     for (let r = 0; r < 19; r++) {
       const rowWidth = (r % 2 === 0) ? 9 : 8;
       const pRow = (r >= startRow && r < startRow + patternHeight) ? pattern[r - startRow] : null;
@@ -279,13 +354,33 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           }
         }
 
-        grid.push({
+        const bubble = {
           id: `b-${r}-${c}-${Date.now()}`,
           row: r, col: c, x, y,
           color,
-          visible: true
-        });
+          visible: true,
+          hasMetalGrid: false,
+          hitsRemaining: 1,
+          maxHits: 1
+        };
+
+        // Collect bubbles of the target color for metal grid assignment
+        if (metalGridConfig.color && color.toLowerCase() === metalGridConfig.color.toLowerCase()) {
+          bubblesOfTargetColor.push(bubble);
+        }
+
+        grid.push(bubble);
       }
+    }
+
+    // 4. Assign metal grid protection to ALL bubbles of the target color
+    if (metalGridConfig.color && bubblesOfTargetColor.length > 0) {
+      // Protect ALL bubbles of the target color (100%)
+      bubblesOfTargetColor.forEach(bubble => {
+        bubble.hasMetalGrid = true;
+        bubble.hitsRemaining = 2;
+        bubble.maxHits = 2;
+      });
     }
 
     const finalTargetScroll = -10 * ROW_HEIGHT;
@@ -475,7 +570,19 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     const { x, y } = getPos(best.r, best.c);
     const hitAnim = new Animated.Value(0.7); // Start slightly smaller for "impact" feel
-    const newB = { id: `b-${Date.now()}`, row: best.r, col: best.c, x, y, color: shot.color, visible: true, anim: hitAnim };
+    const newB = { 
+      id: `b-${Date.now()}`, 
+      row: best.r, 
+      col: best.c, 
+      x, 
+      y, 
+      color: shot.color, 
+      visible: true, 
+      anim: hitAnim,
+      hasMetalGrid: false,
+      hitsRemaining: 1,
+      maxHits: 1
+    };
     const grid = [...bubblesRef.current, newB];
 
     // Trigger Impact Animation for the landed bubble
@@ -510,31 +617,57 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     }
 
     if (match.length >= 3) {
-      match.forEach(m => m.visible = false);
-      setScore(s => s + match.length * 10);
-
-      // 2. FLOATING LOGIC
-      const connected = new Set();
-      const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
-      const cStack = [...topRowBubbles];
-      topRowBubbles.forEach(b => connected.add(b.id));
-
-      while (cStack.length > 0) {
-        const curr = cStack.pop()!;
-        const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
-        neighbors.forEach(n => {
-          connected.add(n.id);
-          cStack.push(n);
-        });
-      }
-
-      grid.forEach(b => {
-        if (b.visible && !connected.has(b.id)) {
-          b.visible = false;
-          setScore(s => s + 5);
+      // Handle metal grid protection - reduce hits instead of immediate destruction
+      const bubblesDestroyed: any[] = [];
+      const bubblesHit: any[] = [];
+      
+      match.forEach(m => {
+        if (m.hasMetalGrid && m.hitsRemaining > 1) {
+          // Metal grid bubble hit - remove the metal grid and reduce hits
+          m.hitsRemaining -= 1;
+          m.hasMetalGrid = false; // Remove metal grid after first hit
+          bubblesHit.push(m);
+          
+          // Visual feedback for metal grid removal
+          if (m.anim) {
+            Animated.sequence([
+              Animated.timing(m.anim, { toValue: 0.8, duration: 100, useNativeDriver: true }),
+              Animated.spring(m.anim, { toValue: 1, tension: 150, friction: 6, useNativeDriver: true })
+            ]).start();
+          }
+        } else {
+          // Normal bubble or metal grid bubble with 1 hit remaining - destroy it
+          m.visible = false;
+          bubblesDestroyed.push(m);
         }
       });
+      
+      // Score only for destroyed bubbles
+      setScore(s => s + bubblesDestroyed.length * 10);
 
+      // 2. FLOATING LOGIC - only check if any bubbles were actually destroyed
+      if (bubblesDestroyed.length > 0) {
+        const connected = new Set();
+        const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
+        const cStack = [...topRowBubbles];
+        topRowBubbles.forEach(b => connected.add(b.id));
+
+        while (cStack.length > 0) {
+          const curr = cStack.pop()!;
+          const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
+          neighbors.forEach(n => {
+            connected.add(n.id);
+            cStack.push(n);
+          });
+        }
+
+        grid.forEach(b => {
+          if (b.visible && !connected.has(b.id)) {
+            b.visible = false;
+            setScore(s => s + 5);
+          }
+        });
+      }
     }
 
     setMoves(m => Math.max(0, m - 1));
@@ -1203,6 +1336,134 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
+  },
+  
+  // Metal Grid Overlay Styles - Circular Design
+  metalGridOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderRadius: BUBBLE_SIZE / 2,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)', // Very subtle dark overlay to show metal effect
+  },
+  
+  // Outer metal ring
+  metalOuterRing: {
+    position: 'absolute',
+    width: '95%',
+    height: '95%',
+    borderRadius: BUBBLE_SIZE / 2,
+    borderWidth: 2,
+    borderColor: 'rgba(139, 139, 139, 0.8)', // Semi-transparent silver
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 3,
+  },
+  
+  // Inner metal ring
+  metalInnerRing: {
+    position: 'absolute',
+    width: '75%',
+    height: '75%',
+    borderRadius: BUBBLE_SIZE / 2,
+    borderWidth: 1.5,
+    borderColor: 'rgba(168, 168, 168, 0.7)', // Semi-transparent lighter silver
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
+  },
+  
+  // Container for rotating cross pattern
+  metalCrossContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  // Cross pattern - horizontal
+  metalCrossHorizontal: {
+    position: 'absolute',
+    width: '60%',
+    height: 2,
+    backgroundColor: 'rgba(144, 144, 144, 0.7)', // Semi-transparent
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.5,
+    shadowRadius: 1,
+  },
+  
+  // Cross pattern - vertical
+  metalCrossVertical: {
+    position: 'absolute',
+    width: 2,
+    height: '60%',
+    backgroundColor: 'rgba(144, 144, 144, 0.7)', // Semi-transparent
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 1,
+  },
+  
+  // Diagonal cross 1
+  metalDiagonal1: {
+    position: 'absolute',
+    width: '50%',
+    height: 1.5,
+    backgroundColor: 'rgba(122, 122, 122, 0.6)', // Semi-transparent
+    transform: [{ rotate: '45deg' }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 1,
+  },
+  
+  // Diagonal cross 2
+  metalDiagonal2: {
+    position: 'absolute',
+    width: '50%',
+    height: 1.5,
+    backgroundColor: 'rgba(122, 122, 122, 0.6)', // Semi-transparent
+    transform: [{ rotate: '-45deg' }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 1,
+  },
+  
+  // Metal bolts at corners
+  metalBolt: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(107, 107, 107, 0.8)', // Semi-transparent
+    borderWidth: 0.5,
+    borderColor: 'rgba(74, 74, 74, 0.8)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.6,
+    shadowRadius: 1,
+  },
+  
+  // Metallic shine effect
+  metallicShine: {
+    position: 'absolute',
+    top: '10%',
+    left: '20%',
+    width: '25%',
+    height: '15%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // More subtle shine
+    borderRadius: 10,
+    transform: [{ rotate: '-30deg' }],
+    opacity: 0.5,
   },
 });
 

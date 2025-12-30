@@ -2,6 +2,13 @@ export const COLORS = ["#FF3B30", "#FF9500", "#FFD60A", "#34C759", "#007AFF", "#
 
 export type Pattern = string[];
 
+// Metal grid protection configuration
+export interface BubbleConfig {
+  color: string;
+  hasMetalGrid?: boolean;
+  hitsToDestroy?: number;
+}
+
 /**
  * TRUE HEXAGONAL SYMMETRY REGISTRY
  */
@@ -225,31 +232,27 @@ export const PATTERNS: Record<string, Pattern> = {
 };
 
 export const getLevelPattern = (level: number): Pattern => {
-    const patternOrder = [
-        "DIAMOND",           // 1
-        "RHOMBUS_V",         // 2
-        "STAR",              // 3
-        "HEART",             // 4
-        "SKULL",             // 5
-        "CROWN",             // 6
-        "HEXAGON",           // 7
-        "CIRCLE",            // 8
-        "EYE",               // 9
-        "FISH_VERTICAL",     // 10
-        "SPIDER",            // 11
-        "CHALICE",           // 12
-        "FLOWER",            // 13
-        "TREE",              // 14
-        "UFO",               // 15
-        "ARROW",             // 16
-        "DIAMOND_SMALL",     // 17
-        "MINI_GEM",          // 18
-        "JOKER_FACE",        // 19
-        "FROG_FACE",         // 20
-    ];
+    const patternNames = Object.keys(PATTERNS);
+    const patternIndex = (level - 1) % patternNames.length;
+    const patternName = patternNames[patternIndex];
+    return PATTERNS[patternName];
+};
 
-    const key = patternOrder[(level - 1) % patternOrder.length];
-    return PATTERNS[key];
+/**
+ * Level configuration with metal grid protection
+ * Every level from 1-100 has a random color that gets metal grid protection
+ * All bubbles of that color will be locked (require 2 hits)
+ */
+export const getLevelMetalGridConfig = (level: number): { color: string; percentage: number } => {
+    // Use level as seed for consistent random color selection per level
+    const colors = COLORS;
+    const colorIndex = (level - 1) % colors.length;
+    
+    // Every level has metal grid protection on one random color
+    return {
+        color: colors[colorIndex],
+        percentage: 100 // 100% of that color gets metal grid protection
+    };
 };
 
 export const getLevelMoves = (level: number): number => {
