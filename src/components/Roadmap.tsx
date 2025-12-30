@@ -224,7 +224,7 @@ const Roadmap: React.FC = () => {
   ];
 
   // Generate levels data (100 levels) - memoized for performance
-  const levels = useMemo(() => 
+  const levels = useMemo(() =>
     Array.from({ length: 100 }, (_, i) => ({
       id: i + 1,
       isLocked: false, // For testing, unlock all. Real game would lock i > solvedMax
@@ -239,7 +239,7 @@ const Roadmap: React.FC = () => {
       if (currentIndex !== -1) {
         // Calculate the reversed index since we're showing levels in reverse order
         const reversedIndex = levels.length - 1 - currentIndex;
-        flatListRef.current?.scrollToIndex({ 
+        flatListRef.current?.scrollToIndex({
           index: Math.max(0, reversedIndex - 2), // Show a bit of context above
           animated: true,
           viewPosition: 0.5 // Center the item
@@ -273,72 +273,45 @@ const Roadmap: React.FC = () => {
 
   const handleLevelPress = (level: number, isLocked: boolean) => {
     if (isLocked || isLoading) return;
-    
+
     setIsLoading(true);
     setSelectedLevel(level);
     setCurrentLevel(level);
-    
-    // Preload level data
-    const levelPattern = getLevelPattern(level);
-    const levelMoves = getLevelMoves(level);
-    
-    // Smooth fade out animation
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200, // Faster fade out
-      useNativeDriver: true,
-    }).start(() => {
-      // Small delay to ensure smooth transition
+
+    // Wait for loading screen to appear before switching
+    setTimeout(() => {
+      setShowGameScreen(true);
+      // Wait for GameScreen to initialize
       setTimeout(() => {
-        setShowGameScreen(true);
-        // Fade back in
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 200, // Faster fade in
-          useNativeDriver: true,
-        }).start(() => {
-          setIsLoading(false);
-        });
-      }, 50);
-    });
+        setIsLoading(false);
+      }, 500);
+    }, 100);
   };
 
   const handleBackPress = () => {
     setIsLoading(true);
-    
-    // Smooth fade out animation
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 200, // Faster transition
-      useNativeDriver: true,
-    }).start(() => {
+
+    // Wait for loading screen to appear before switching
+    setTimeout(() => {
       setShowGameScreen(false);
-      
-      // Fade back in and scroll to current level
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200, // Faster transition
-        useNativeDriver: true,
-      }).start(() => {
+
+      // Scroll to current level when returning
+      setTimeout(() => {
+        const currentIndex = levels.findIndex(level => level.id === currentLevel);
+        if (currentIndex !== -1) {
+          const reversedIndex = levels.length - 1 - currentIndex;
+          flatListRef.current?.scrollToIndex({
+            index: Math.max(0, reversedIndex - 2),
+            animated: false, // Instant scroll while hidden
+            viewPosition: 0.5
+          });
+        }
         setIsLoading(false);
-        
-        // Scroll to current level when returning from game screen
-        setTimeout(() => {
-          const currentIndex = levels.findIndex(level => level.id === currentLevel);
-          if (currentIndex !== -1) {
-            const reversedIndex = levels.length - 1 - currentIndex;
-            flatListRef.current?.scrollToIndex({ 
-              index: Math.max(0, reversedIndex - 2),
-              animated: true,
-              viewPosition: 0.5
-            });
-          }
-        }, 50); // Faster scroll timing
-      });
-    });
+      }, 100);
+    }, 100);
   };
 
-  // Loading Indicator Component
+  // Loading Indicator Component - Full Screen Overlay
   const LoadingIndicator = () => (
     <View style={styles.loadingContainer}>
       <LottieView
@@ -347,7 +320,9 @@ const Roadmap: React.FC = () => {
         loop
         style={styles.loadingSpaceship}
       />
-      <Text style={styles.loadingText}>Loading Level {selectedLevel}...</Text>
+      <Text style={styles.loadingText}>
+        {showGameScreen ? 'Returning to Base...' : `Travel to Level ${selectedLevel}...`}
+      </Text>
     </View>
   );
 
@@ -361,9 +336,9 @@ const Roadmap: React.FC = () => {
 
     return (
       <View style={[styles.levelItemContainer, { marginLeft: x - 75 }]}>
-        <TouchableOpacity 
-          onPress={() => handleLevelPress(item.id, item.isLocked)} 
-          activeOpacity={0.8} 
+        <TouchableOpacity
+          onPress={() => handleLevelPress(item.id, item.isLocked)}
+          activeOpacity={0.8}
           style={styles.ufoTouchable}
         >
           {/* Centered Layers Container */}
@@ -463,7 +438,7 @@ const Roadmap: React.FC = () => {
 
   const getRoadmapPosition = (index: number) => {
     const isEven = index % 2 === 0;
-    const x = isEven ? SCREEN_WIDTH * 0.22 : SCREEN_WIDTH * 0.78;
+    const x = SCREEN_WIDTH * (isEven ? 0.22 : 0.78);
     // INVERTED Y Logic: Level 1 (Index 0) at the BOTTOM
     // Total Levels = 100.
     // Index 0 -> Bottom. Index 99 -> Top.
@@ -528,43 +503,45 @@ const Roadmap: React.FC = () => {
     return dots;
   };
 
-  if (showGameScreen) {
-    return (
-      <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-        {isLoading && <LoadingIndicator />}
-        <GameScreen onBackPress={handleBackPress} level={selectedLevel} />
-      </Animated.View>
-    );
-  }
-
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <View style={styles.container}>
+      {/* Background - Persistent across screens if needed, or specific per screen */}
+      {/* GameScreen has its own background, Roadmap has its own. */}
+
+      {showGameScreen ? (
+        <GameScreen onBackPress={handleBackPress} level={selectedLevel} />
+      ) : (
+        <View style={{ flex: 1 }}>
+          <SpaceBackground />
+
+          {/* Unified Dashboard Header */}
+          <RoadmapHeader coins={coins} />
+
+          <FlatList
+            ref={flatListRef}
+            data={levels.slice().reverse()} // Reverse to show level 1 at bottom
+            renderItem={({ item, index }) => <LevelItem item={item} index={levels.length - 1 - index} />}
+            keyExtractor={(item) => item.id.toString()}
+            style={styles.scrollView}
+            contentContainerStyle={styles.roadmapContainer}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={10}
+            maxToRenderPerBatch={5}
+            windowSize={10}
+            removeClippedSubviews={true}
+            getItemLayout={(data, index) => ({
+              length: 220, // Height of each level item
+              offset: 220 * index,
+              index,
+            })}
+            initialScrollIndex={Math.max(0, levels.length - currentLevel - 2)}
+          />
+        </View>
+      )}
+
+      {/* Loading Overlay - Visible on top during transitions */}
       {isLoading && <LoadingIndicator />}
-      <SpaceBackground />
-
-      {/* Unified Dashboard Header */}
-      <RoadmapHeader coins={coins} />
-
-      <FlatList
-        ref={flatListRef}
-        data={levels.slice().reverse()} // Reverse to show level 1 at bottom
-        renderItem={({ item, index }) => <LevelItem item={item} index={levels.length - 1 - index} />}
-        keyExtractor={(item) => item.id.toString()}
-        style={styles.scrollView}
-        contentContainerStyle={styles.roadmapContainer}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={5}
-        windowSize={10}
-        removeClippedSubviews={true}
-        getItemLayout={(data, index) => ({
-          length: 220, // Height of each level item
-          offset: 220 * index,
-          index,
-        })}
-        inverted={false}
-      />
-    </Animated.View>
+    </View>
   );
 };
 
@@ -690,7 +667,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: '#000', // Opaque black for solid cover
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
@@ -792,8 +769,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
-  levelNumberText: { 
-    fontSize: 16, 
+  levelNumberText: {
+    fontSize: 16,
     fontWeight: '900',
     textShadowColor: '#000',
     textShadowOffset: { width: 2, height: 2 },

@@ -318,7 +318,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     scrollY.setValue(centeredRevealScroll);
     currentScrollY.current = initialScroll;
 
-    // 2. Wait 1 second for the player to see the pattern, then slide up to position
+    // 2. Wait 0.5 second for the player to see the pattern, then slide up to position
     setTimeout(() => {
       Animated.spring(scrollY, {
         toValue: initialScroll,
@@ -326,11 +326,17 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         friction: 6,
         useNativeDriver: true,
       }).start();
-    }, 1000);
+    }, 500);
 
   }, [level, scrollY]);
 
-  useEffect(() => { initGame(); }, [initGame]);
+  const isGameInitialized = useRef(false);
+  useEffect(() => {
+    if (!isGameInitialized.current) {
+      initGame();
+      isGameInitialized.current = true;
+    }
+  }, [initGame]);
 
 
 
@@ -409,10 +415,10 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     // Add pulse ring animation
     pulseRingAnim.setValue(0);
-    Animated.timing(pulseRingAnim, { 
-      toValue: 1, 
-      duration: 400, 
-      useNativeDriver: true 
+    Animated.timing(pulseRingAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true
     }).start();
 
     Animated.sequence([
@@ -719,21 +725,21 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
               styles.pulseRing,
               {
                 borderColor: nextColor,
-                opacity: pulseRingAnim.interpolate({ 
-                  inputRange: [0, 0.3, 1], 
-                  outputRange: [0, 0.8, 0] 
+                opacity: pulseRingAnim.interpolate({
+                  inputRange: [0, 0.3, 1],
+                  outputRange: [0, 0.8, 0]
                 }),
                 transform: [
-                  { 
-                    scale: pulseRingAnim.interpolate({ 
-                      inputRange: [0, 1], 
-                      outputRange: [1, 2.5] 
-                    }) 
+                  {
+                    scale: pulseRingAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 2.5]
+                    })
                   }
                 ]
               }
             ]} />
-            
+
             <LottieView
               source={require("../images/Spaceship.json")}
               autoPlay
