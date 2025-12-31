@@ -102,21 +102,19 @@ const BubbleBlast = React.memo(({ x, y, color, delay = 0, onComplete }: BubbleBl
                 Animated.parallel([
                     Animated.timing(s.dist, {
                         toValue: BUBBLE_SIZE * 1.5,
-                        duration: 300,
+                        duration: 350,
                         easing: Easing.out(Easing.quad),
                         useNativeDriver: true
                     }),
                     Animated.timing(s.scale, {
                         toValue: 0,
-                        duration: 300,
+                        duration: 350,
                         useNativeDriver: true
                     })
                 ])
             )
         ]).start(({ finished }) => {
-            // We let the Lottie finish naturally or just use the sync fallback
-            // but we'll use a timer for safety if onComplete isn't triggered by Lottie
-            setTimeout(onComplete, 500);
+            if (finished) onComplete();
         });
     };
 

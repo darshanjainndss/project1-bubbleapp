@@ -8,274 +8,35 @@ import LaserTracer from "./LaserTracer"; // Import LaserTracer
 import BubbleBlast from "./BubbleBlast"; // Import BubbleBlast animation
 import MaterialIcon from "./MaterialIcon";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
+import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
+import { GameHUD } from "./game/GameHUD";
+import ImprovedLaserBeam from "./game/ImprovedLaserBeam"; // New improved laser design
+import LaserBall from "./game/LaserBall"; // New shooting ball design
 
 import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
+import { getPos, getHexNeighbors } from "../utils/gameUtils";
+import { resolveLanding as executeResolveLanding } from "../logic/LandingLogic";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10);
-const ROW_HEIGHT = BUBBLE_SIZE * 0.86;
-const GRID_COLS = 9;
-const CANNON_SIZE = 95;
-const FOOTER_BOTTOM = 150; // Increased to move shooter assembly up
-const GRID_TOP = 10;
+import {
+  styles,
+  BUBBLE_SIZE,
+  ROW_HEIGHT,
+  CANNON_SIZE,
+  FOOTER_BOTTOM,
+  GRID_TOP,
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  GRID_COLS
+} from "../styles/GameScreenStyles";
 
 const COLOR_MAP: Record<string, any> = {
-  "#ff3b30": require("../images/red.png"),
-  "#ff9500": require("../images/orange.png"),
-  "#ffd60a": require("../images/yellow.png"),
-  "#34c759": require("../images/green.png"),
-  "#007aff": require("../images/blue.png"),
-  "#af52de": require("../images/purple.png"),
+  "#ff3b30": require("../images/red.webp"),
+  "#ff9500": require("../images/orange.webp"),
+  "#ffd60a": require("../images/yellow.webp"),
+  "#34c759": require("../images/green.webp"),
+  "#007aff": require("../images/blue.webp"),
+  "#af52de": require("../images/purple.webp"),
 };
-
-// 1. MEMOIZED BUBBLE COMPONENT
-// Optimized Bubble component with reduced complexity for falling bubbles
-const Bubble = React.memo(({ x, y, color, anim, entryOffset, isGhost, hasMetalGrid, isFrozen, hitsRemaining, hasLightning, hasBomb, hasFreeze, hasFire }: any) => {
-  const imageSource = COLOR_MAP[color.toLowerCase()];
-
-  // Animation for metal grid effects
-  const metalPulseAnim = useRef(new Animated.Value(1)).current;
-  const metalRotateAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (hasMetalGrid && !isGhost) {
-      // Create pulsing animation for metal grid
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(metalPulseAnim, {
-            toValue: 1.05,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(metalPulseAnim, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-
-      // Create slow rotation animation for the cross pattern
-      Animated.loop(
-        Animated.timing(metalRotateAnim, {
-          toValue: 1,
-          duration: 8000,
-          useNativeDriver: true,
-        })
-      ).start();
-    }
-  }, [hasMetalGrid, isGhost, metalPulseAnim, metalRotateAnim]);
-
-  const rotateInterpolate = metalRotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return (
-    <Animated.View
-      style={[
-        styles.bubble,
-        {
-          backgroundColor: imageSource && !isGhost ? "transparent" : color,
-          opacity: anim || 1,
-          borderWidth: imageSource && !isGhost ? 0 : 1.5,
-          borderRadius: imageSource && !isGhost ? 0 : BUBBLE_SIZE / 2,
-          shadowOpacity: imageSource && !isGhost ? 0 : 0.4,
-          elevation: imageSource && !isGhost ? 0 : 5,
-          overflow: imageSource && !isGhost ? 'visible' : 'hidden',
-          transform: [
-            { translateX: x - BUBBLE_SIZE / 2 },
-            { translateY: y - BUBBLE_SIZE / 2 },
-            { translateY: entryOffset || 0 },
-            { scale: anim || 1 }
-          ],
-          ...(isGhost ? styles.ghostBubble : {})
-        }
-      ]}
-    >
-      {imageSource && !isGhost ? (
-        <Image
-          source={imageSource}
-          style={{ width: "120%", height: "120%", resizeMode: "contain" }}
-        />
-      ) : (
-        <>
-          {/* Planetary Elements (Only for ghosts or fallback) */}
-          {!isGhost && (
-            <>
-              <View style={styles.planetBands} />
-              <View style={styles.planetCrater1} />
-              <View style={styles.planetCrater2} />
-              <View style={styles.planetCrater3} />
-              <View style={styles.planetRing} />
-            </>
-          )}
-          <View style={styles.bubbleInner} />
-          <View style={styles.bubbleHighlight} />
-          <View style={styles.bubbleGloss} />
-        </>
-      )}
-
-      {/* Metal Grid Overlay - Circular Design */}
-      {hasMetalGrid && !isGhost && !isFrozen && (
-        <Animated.View style={[styles.metalGridOverlay, { transform: [{ scale: metalPulseAnim }] }]}>
-          {/* Outer Metal Ring */}
-          <View style={styles.metalOuterRing} />
-
-          {/* Inner Metal Ring */}
-          <View style={styles.metalInnerRing} />
-
-          {/* Rotating Cross Pattern Container */}
-          <Animated.View style={[styles.metalCrossContainer, { transform: [{ rotate: rotateInterpolate }] }]}>
-            {/* Cross Pattern */}
-            <View style={styles.metalCrossHorizontal} />
-            <View style={styles.metalCrossVertical} />
-
-            {/* Diagonal Cross Pattern */}
-            <View style={styles.metalDiagonal1} />
-            <View style={styles.metalDiagonal2} />
-          </Animated.View>
-
-          {/* Corner Bolts */}
-          <View style={[styles.metalBolt, { top: '15%', left: '15%' }]} />
-          <View style={[styles.metalBolt, { top: '15%', right: '15%' }]} />
-          <View style={[styles.metalBolt, { bottom: '15%', left: '15%' }]} />
-          <View style={[styles.metalBolt, { bottom: '15%', right: '15%' }]} />
-
-          {/* Metallic shine effect */}
-          <View style={styles.metallicShine} />
-        </Animated.View>
-      )}
-
-      {/* Ice Overlay */}
-      {isFrozen && !isGhost && (
-        <View style={styles.iceOverlay}>
-          <View style={styles.iceGlaze} />
-          <View style={styles.iceCrystal1} />
-          <View style={styles.iceCrystal2} />
-          <View style={styles.iceShine} />
-        </View>
-      )}
-
-      {/* Lightning Power Effect */}
-      {hasLightning && !isGhost && (
-        <View style={styles.lightningEffect}>
-          <MaterialIcon
-            name={GAME_ICONS.LIGHTNING.name}
-            family={GAME_ICONS.LIGHTNING.family}
-            size={ICON_SIZES.SMALL}
-            color={ICON_COLORS.SECONDARY}
-          />
-        </View>
-      )}
-
-      {/* Bomb Power Effect */}
-      {hasBomb && !isGhost && (
-        <View style={styles.bombEffect}>
-          <MaterialIcon
-            name={GAME_ICONS.BOMB.name}
-            family={GAME_ICONS.BOMB.family}
-            size={ICON_SIZES.SMALL}
-            color={ICON_COLORS.WARNING}
-          />
-        </View>
-      )}
-
-      {/* Freeze Power Effect */}
-      {hasFreeze && !isGhost && (
-        <View style={styles.freezeEffect}>
-          <MaterialIcon
-            name={GAME_ICONS.FREEZE.name}
-            family={GAME_ICONS.FREEZE.family}
-            size={ICON_SIZES.SMALL}
-            color="#00ffff"
-          />
-        </View>
-      )}
-
-      {/* Fire Power Effect */}
-      {hasFire && !isGhost && (
-        <View style={styles.fireEffect}>
-          <MaterialIcon
-            name={GAME_ICONS.FIRE.name}
-            family={GAME_ICONS.FIRE.family}
-            size={ICON_SIZES.SMALL}
-            color="#ff3b30"
-          />
-        </View>
-      )}
-    </Animated.View>
-  );
-});
-
-// 2. MEMOIZED GRID COMPONENT
-const BubbleGrid = React.memo(({ bubbles }: { bubbles: any[] }) => {
-  return (
-    <>
-      {bubbles.map(b => b.visible && (
-        <Bubble
-          key={b.id}
-          x={b.x}
-          y={b.y}
-          color={b.color}
-          anim={b.anim}
-          entryOffset={b.entryOffset}
-          hasMetalGrid={b.hasMetalGrid}
-          isFrozen={b.isFrozen}
-          hitsRemaining={b.hitsRemaining}
-        />
-      ))}
-    </>
-  );
-});
-
-// 3. PULSATING DOT COMPONENT
-const PulsatingDot = React.memo(({ x, y, delay }: { x: number, y: number, delay: number }) => {
-  const pulse = useRef(new Animated.Value(0.4)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.4, duration: 600, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <Animated.View style={[styles.pulsatingDot, { left: x - 3, top: y - 3, opacity: pulse, transform: [{ scale: pulse }] }]} />
-  );
-});
-
-// 4. OVERALL GRID BORDER COMPONENT
-const PulsatingBorder = React.memo(() => {
-  const dots = [];
-  const gridHeight = 18.5 * ROW_HEIGHT + BUBBLE_SIZE;
-  const padding = 10;
-  let dotCount = 0;
-
-  // Sequential flow: Top -> Right -> Bottom -> Left
-  for (let x = padding; x <= SCREEN_WIDTH - padding; x += 25) {
-    dots.push(<PulsatingDot key={`t-${x}`} x={x} y={GRID_TOP - padding} delay={dotCount * 50} />);
-    dotCount++;
-  }
-  for (let y = GRID_TOP - padding + 25; y <= GRID_TOP + gridHeight + padding; y += 25) {
-    dots.push(<PulsatingDot key={`r-${y}`} x={SCREEN_WIDTH - padding} y={y} delay={dotCount * 50} />);
-    dotCount++;
-  }
-  for (let x = SCREEN_WIDTH - padding - 25; x >= padding; x -= 25) {
-    dots.push(<PulsatingDot key={`b-${x}`} x={x} y={GRID_TOP + gridHeight + padding} delay={dotCount * 50} />);
-    dotCount++;
-  }
-  for (let y = GRID_TOP + gridHeight + padding - 25; y > GRID_TOP - padding; y -= 25) {
-    dots.push(<PulsatingDot key={`l-${y}`} x={padding} y={y} delay={dotCount * 50} />);
-    dotCount++;
-  }
-  return <>{dots}</>;
-  return <>{dots}</>;
-});
-
-
 
 
 
@@ -284,19 +45,44 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const [blasts, setBlasts] = useState<any[]>([]); // State for explosion effects
 
   const [shootingBubble, setShootingBubble] = useState<any>(null);
-  const [cannonAngle, setCannonAngle] = useState(0);
   const [nextColor, setNextColor] = useState(COLORS[0]);
   const [score, setScore] = useState(0);
   const [moves, setMoves] = useState(30);
-  const [aimDots, setAimDots] = useState<any[]>([]);
   const [showHint, setShowHint] = useState(true);
-  const [isAimingState, setIsAimingState] = useState(false);
-  const [targetSlot, setTargetSlot] = useState<{ x: number, y: number } | null>(null);
+  const cannonAngleRef = useRef(0);
+
   const scrollY = useRef(new Animated.Value(-100)).current;
   const currentScrollY = useRef(-100);
   const bubblesRef = useRef<any[]>([]);
 
   const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
+
+  // Shared Animation Values
+  const metalPulseAnim = useRef(new Animated.Value(1)).current;
+  const metalRotateAnim = useRef(new Animated.Value(0)).current;
+  const borderPulse = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    // Shared loop for metal grid
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(metalPulseAnim, { toValue: 1.05, duration: 2000, useNativeDriver: true }),
+        Animated.timing(metalPulseAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.timing(metalRotateAnim, { toValue: 1, duration: 8000, useNativeDriver: true })
+    ).start();
+
+    // Shared loop for border
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(borderPulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(borderPulse, { toValue: 0.4, duration: 1200, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
 
   // Power-up states
   const [lightningActive, setLightningActive] = useState(false);
@@ -311,7 +97,11 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const isProcessing = useRef(false);
   const isAiming = useRef(false);
   const rafRef = useRef<number | null>(null);
-
+  const shootingRef = useRef<View>(null);
+  const cannonRef = useRef<View>(null);
+  const aimLineRef = useRef<View>(null);
+  const aimSegmentRefs = useRef<any[]>([]); // Refs for segments
+  const ghostRef = useRef<any>(null); // Ref for ghost bubble
 
   const muzzleFlashAnim = useRef(new Animated.Value(0)).current;
   const muzzleVelocityAnim = useRef(new Animated.Value(0)).current;
@@ -322,29 +112,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   const cannonPos = { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT - FOOTER_BOTTOM - CANNON_SIZE / 2 };
 
-  // Helper function to get hexagonal neighbors
-  const getHexNeighbors = (row: number, col: number) => {
-    const neighbors = [];
-    if (row % 2 === 0) {
-      // Even row
-      neighbors.push(
-        [row - 1, col - 1], [row - 1, col],     // Top-left, Top-right
-        [row, col - 1], [row, col + 1],         // Left, Right
-        [row + 1, col - 1], [row + 1, col]      // Bottom-left, Bottom-right
-      );
-    } else {
-      // Odd row
-      neighbors.push(
-        [row - 1, col], [row - 1, col + 1],     // Top-left, Top-right
-        [row, col - 1], [row, col + 1],         // Left, Right
-        [row + 1, col], [row + 1, col + 1]      // Bottom-left, Bottom-right
-      );
-    }
-    return neighbors.filter(([r, c]) => {
-      const rowWidth = (r % 2 === 0) ? 9 : 8;
-      return r >= 0 && r < 19 && c >= 0 && c < rowWidth;
-    });
-  };
+
 
   const removeBlast = (id: string) => {
     setBlasts(prev => prev.filter(b => b.id !== id));
@@ -396,14 +164,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     }
   };
 
-  const getPos = (row: number, col: number) => {
-    const rowWidth = (row % 2 === 0) ? 9 : 8;
-    const sidePadding = (SCREEN_WIDTH - (rowWidth * BUBBLE_SIZE)) / 2;
-    return {
-      x: sidePadding + (col * BUBBLE_SIZE) + BUBBLE_SIZE / 2,
-      y: row * ROW_HEIGHT + BUBBLE_SIZE / 2 + GRID_TOP
-    };
-  };
+
 
   const initGame = useCallback(() => {
     const grid: any[] = [];
@@ -591,22 +352,28 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     if (isProcessing.current || !isAiming.current || gameState !== 'playing') return;
     if (showHint) setShowHint(false);
 
-    // Origin for tracer - start closer to the cannon, reducing distance between tracer and shooter
+    // Origin for tracer - start at the TOP of the spaceship (no gap)
     const startX = cannonPos.x;
-    const startY = cannonPos.y + 15; // Move tracer start point closer to cannon by 15 pixels
+    const startY = cannonPos.y - (CANNON_SIZE / 2); // Start from top edge of spaceship
 
     const dx = pageX - startX;
     const dy = pageY - startY;
 
-    // Boundary check for aiming angle - only allow touches ABOVE the cannon
-    if (pageY > cannonPos.y) return;
+    // Boundary check for aiming angle
+    if (pageY > cannonPos.y - 15) return;
 
     const angle = Math.atan2(dy, dx);
-    setCannonAngle(angle + Math.PI / 2);
+    cannonAngleRef.current = angle + Math.PI / 2;
+    if (cannonRef.current) {
+      cannonRef.current.setNativeProps({
+        style: { transform: [{ rotate: `${cannonAngleRef.current}rad` }] }
+      });
+    }
 
     const segments = [];
     let tx = startX; let ty = startY;
-    let vx = Math.cos(angle) * 8; let vy = Math.sin(angle) * 8;
+    // Step size 10 for both aim and shot for perfect path sync
+    let vx = Math.cos(angle) * 10; let vy = Math.sin(angle) * 10;
     let hitPoint = null;
     let segStartX = tx;
     let segStartY = ty;
@@ -615,12 +382,19 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       tx += vx; ty += vy;
       let bounced = false;
 
-      if (tx < BUBBLE_SIZE / 2 || tx > SCREEN_WIDTH - BUBBLE_SIZE / 2) {
+      // Harmonized bounce with direction check and clamping
+      if (tx < BUBBLE_SIZE / 2 && vx < 0) {
+        tx = BUBBLE_SIZE / 2;
+        vx *= -1;
+        bounced = true;
+      } else if (tx > SCREEN_WIDTH - BUBBLE_SIZE / 2 && vx > 0) {
+        tx = SCREEN_WIDTH - BUBBLE_SIZE / 2;
         vx *= -1;
         bounced = true;
       }
 
-      const hitIdx = bubblesRef.current.findIndex(b => b.visible && Math.sqrt((tx - b.x) ** 2 + (ty - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.85);
+      const currentBubbles = bubblesRef.current || [];
+      const hitIdx = currentBubbles.findIndex(b => b.visible && Math.sqrt((tx - b.x) ** 2 + (ty - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.85);
 
       if (hitIdx !== -1 || ty < GRID_TOP) {
         hitPoint = { x: tx, y: ty };
@@ -644,34 +418,78 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         segStartY = ty;
       }
     }
-    setAimDots(segments);
+    // 3. UPDATE AIM UI VIA NATIVE PROPS (ZERO RE-RENDERS)
+    segments.forEach((seg, idx) => {
+      const ref = aimSegmentRefs.current?.[idx];
+      if (ref) {
+        const dx = seg.x2 - seg.x1;
+        const dy = seg.y2 - seg.y1;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+
+        ref.setNativeProps({
+          style: {
+            opacity: Math.max(0.4, seg.opacity),
+            width: length + 1, // +1 for overlap to fix "distrub" gaps
+            transform: [
+              { translateX: (seg.x1 + seg.x2) / 2 - (length + 1) / 2 },
+              { translateY: (seg.y1 + seg.y2) / 2 - 2.5 },
+              { rotate: `${angle}rad` }
+            ]
+          }
+        });
+      }
+    });
+
+    // Hide unused segments (pool of 12)
+    for (let idx = segments.length; idx < 12; idx++) {
+      const ref = aimSegmentRefs.current?.[idx];
+      if (ref) ref.setNativeProps({ style: { opacity: 0 } });
+    }
 
     if (hitPoint) {
-      let best = { r: 0, c: 0, dist: Infinity };
+      let best = { r: 0, c: 0, distSq: Infinity };
+      const hitX = hitPoint.x;
+      const hitY = hitPoint.y;
+      const scrollOffset = currentScrollY.current;
+
       for (let r = 0; r < 35; r++) {
         const rowWidth = (r % 2 === 0) ? 9 : 8;
         for (let c = 0; c < rowWidth; c++) {
-          if (bubblesRef.current.some(b => b.visible && b.row === r && b.col === c)) continue;
+          if (bubblesRef.current?.some(b => b.visible && b.row === r && b.col === c)) continue;
           const coords = getPos(r, c);
-          const d = Math.sqrt((hitPoint.x - coords.x) ** 2 + (hitPoint.y - (coords.y + currentScrollY.current)) ** 2);
-          if (d < best.dist) best = { r, c, dist: d };
+          const dSq = (hitX - coords.x) ** 2 + (hitY - (coords.y + scrollOffset)) ** 2;
+          if (dSq < best.distSq) best = { r, c, distSq: dSq };
         }
       }
       const finalPos = getPos(best.r, best.c);
-      setTargetSlot({ x: finalPos.x, y: finalPos.y + currentScrollY.current });
+      const ghostY = finalPos.y + scrollOffset;
+
+      if (ghostRef.current) {
+        ghostRef.current.setNativeProps({
+          style: {
+            opacity: 0.6,
+            transform: [
+              { translateX: finalPos.x - BUBBLE_SIZE / 2 },
+              { translateY: ghostY - BUBBLE_SIZE / 2 }
+            ]
+          }
+        });
+      }
     } else {
-      setTargetSlot(null);
+      if (ghostRef.current) ghostRef.current.setNativeProps({ style: { opacity: 0 } });
     }
   };
 
   const onRelease = () => {
     if (!isAiming.current || isProcessing.current || gameState !== 'playing') return;
     isAiming.current = false;
-    setIsAimingState(false);
 
-    // Clear aim indicators when starting the shot
-    setAimDots([]);
-    setTargetSlot(null);
+    // Clear UI indicators via Refs (instantly) - pool of 12
+    for (let i = 0; i < 12; i++) {
+      if (aimSegmentRefs.current?.[i]) aimSegmentRefs.current[i]?.setNativeProps({ style: { opacity: 0 } });
+    }
+    if (ghostRef.current) ghostRef.current.setNativeProps({ style: { opacity: 0 } });
 
     isProcessing.current = true;
 
@@ -701,18 +519,18 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       Animated.timing(recoilAnim, { toValue: 0, duration: 200, useNativeDriver: true })
     ]).start();
 
-    const angle = cannonAngle - Math.PI / 2;
-    // Pushing velocity to 45 for ultra-fast response
-    const velocity = 45;
-    // Start the shot from the muzzle (top of robot image)
+    const angle = cannonAngleRef.current - Math.PI / 2;
+    // Pushing velocity to 40 (4 steps of 10px each)
+    const velocity = 40;
+    // Start the shot from the TOP of spaceship - EXACT MATCH with laser start
     const shot = {
       x: cannonPos.x,
-      y: cannonPos.y,
+      y: cannonPos.y - (CANNON_SIZE / 2), // Matched with updateAim for perfect alignment
       vx: Math.cos(angle) * velocity,
       vy: Math.sin(angle) * velocity,
       color: nextColor,
-      hasLightning: hasLightningPower, // Add lightning power to the shot
-      hasBomb: hasBombPower, // Add bomb power to the shot
+      hasLightning: hasLightningPower,
+      hasBomb: hasBombPower,
       hasFreeze: hasFreezePower,
       hasFire: hasFirePower,
     };
@@ -736,692 +554,73 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     }
 
     const step = () => {
-      // 3 sub-steps for rock-solid accuracy at 45px/frame
-      for (let i = 0; i < 3; i++) {
-        shot.x += shot.vx / 3;
-        shot.y += shot.vy / 3;
+      // 4 sub-steps of 10px each (matches aiming raycast resolution)
+      for (let i = 0; i < 4; i++) {
+        shot.x += shot.vx / 4;
+        shot.y += shot.vy / 4;
 
-        if (shot.x < BUBBLE_SIZE / 2 || shot.x > SCREEN_WIDTH - BUBBLE_SIZE / 2) shot.vx *= -1;
+        // Correct physics bounce logic (wall collision) with clamping
+        if (shot.x < BUBBLE_SIZE / 2 && shot.vx < 0) {
+          shot.x = BUBBLE_SIZE / 2;
+          shot.vx *= -1;
+        }
+        if (shot.x > SCREEN_WIDTH - BUBBLE_SIZE / 2 && shot.vx > 0) {
+          shot.x = SCREEN_WIDTH - BUBBLE_SIZE / 2;
+          shot.vx *= -1;
+        }
 
-        const hit = bubblesRef.current.find(b => b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82);
+        const thresholdSq = (BUBBLE_SIZE * 0.85) ** 2; // Matches laser threshold
+        const scrollOffset = currentScrollY.current;
+        const hit = (bubblesRef.current || []).find(b => {
+          if (!b.visible) return false;
+          const dSq = (shot.x - b.x) ** 2 + (shot.y - (b.y + scrollOffset)) ** 2;
+          return dSq < thresholdSq;
+        });
 
         if (shot.y < GRID_TOP || hit) {
-          cancelAnimationFrame(rafRef.current!);
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
           resolveLanding(shot);
           return;
         }
       }
 
-      setShootingBubble({ ...shot });
+      // Update shooting bubble position via Ref for 60fps smoothness WITHOUT re-render
+      if (shootingRef.current) {
+        const currentAngle = Math.atan2(shot.vy, shot.vx);
+        shootingRef.current.setNativeProps({
+          style: {
+            transform: [
+              { translateX: shot.x - 30 },
+              { translateY: shot.y - 12 },
+              { rotate: `${currentAngle}rad` }
+            ]
+          }
+        });
+      }
+
       rafRef.current = requestAnimationFrame(step);
     };
+
+    // Set initial shooting bubble state ONCE to mount the component
+    setShootingBubble({ ...shot });
     rafRef.current = requestAnimationFrame(step);
   };
 
   const resolveLanding = (shot: any) => {
-    // Lightning Power: Check if we hit an existing bubble
-    if (shot.hasLightning) {
-      const hitBubble = bubblesRef.current.find(b =>
-        b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
-      );
-
-      if (hitBubble) {
-        // Destroy the entire row where the bubble was hit, but skip metal grid bubbles
-        const targetRow = hitBubble.row;
-        const grid = [...bubblesRef.current];
-        const bubblesInRow = grid.filter(b => b.visible && b.row === targetRow);
-
-        // Destroy all bubbles in the hit row, except those with metal grid protection
-        const destroyedBubbles: any[] = [];
-        bubblesInRow.forEach(bubble => {
-          if (!bubble.hasMetalGrid) {
-            // Normal bubble - destroy it
-            bubble.visible = false;
-            destroyedBubbles.push(bubble);
-            // Lightning effect animation (still keep original scaling anim for backup/feel)
-            if (bubble.anim) {
-              Animated.sequence([
-                Animated.timing(bubble.anim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
-                Animated.timing(bubble.anim, { toValue: 0, duration: 200, useNativeDriver: true })
-              ]).start();
-            }
-          } else {
-            // Metal grid bubble - lightning bounces off, show bounce effect
-            if (bubble.anim) {
-              Animated.sequence([
-                Animated.timing(bubble.anim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
-                Animated.spring(bubble.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
-              ]).start();
-            }
-          }
-        });
-
-        // Score only for destroyed bubbles (not metal grid ones)
-        setScore(s => s + destroyedBubbles.length * 15); // Higher score for lightning
-
-        // Trigger Blasts for Lightning (Rapid chain)
-        const newBlasts = destroyedBubbles.map((b, i) => ({
-          id: `blast-${b.id}-${Date.now()}`,
-          x: b.x,
-          y: b.y,
-          color: b.color,
-          delay: i * 120 // Slower ripple
-        }));
-        if (newBlasts.length > 0) setBlasts(prev => [...prev, ...newBlasts]);
-
-        // Check for floating bubbles after row destruction
-        const connected = new Set();
-        const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
-        const cStack = [...topRowBubbles];
-        topRowBubbles.forEach(b => connected.add(b.id));
-
-        while (cStack.length > 0) {
-          const curr = cStack.pop()!;
-          const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
-          neighbors.forEach(n => {
-            connected.add(n.id);
-            cStack.push(n);
-          });
-        }
-
-        const newlyFloatingLightning: any[] = [];
-        grid.forEach(b => {
-          if (b.visible && !connected.has(b.id) && bubblesInRow.indexOf(b) === -1) {
-            b.visible = false;
-            setScore(s => s + 5);
-            newlyFloatingLightning.push(b);
-          }
-        });
-
-        // Trigger Blasts for Floating Bubbles (Lightning)
-        if (newlyFloatingLightning.length > 0) {
-          const floatBlasts = newlyFloatingLightning.map((b, i) => ({
-            id: `blast-float-${b.id}-${Date.now()}`,
-            x: b.x,
-            y: b.y,
-            color: b.color,
-            delay: (newBlasts.length * 120) + (i * 100)
-          }));
-          setBlasts(prev => [...prev, ...floatBlasts]);
-        }
-
-        // Update the grid and continue with normal flow
-        bubblesRef.current = grid;
-        setBubbles([...grid]);
-        setShootingBubble(null);
-        setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
-        setMoves(m => Math.max(0, m - 1));
-
-        // Check Win/Loss
-        const remainingBubbles = grid.filter(b => b.visible).length;
-        if (remainingBubbles === 0) {
-          setGameState('won');
-        } else if (moves - 1 <= 0) {
-          setGameState('lost');
-        }
-
-        // Re-center view
-        const visibleBubbles = grid.filter(b => b.visible);
-        if (visibleBubbles.length > 0) {
-          const maxY = Math.max(...visibleBubbles.map(b => b.y));
-          const targetScreenY = SCREEN_HEIGHT * 0.45;
-          const targetScrollY = targetScreenY - maxY;
-          currentScrollY.current = targetScrollY;
-          Animated.spring(scrollY, {
-            toValue: currentScrollY.current,
-            tension: 40,
-            friction: 7,
-            useNativeDriver: true
-          }).start();
-        }
-
-        isProcessing.current = false;
-        return; // Exit early for lightning
-      }
-    }
-
-    // Bomb Power: Check if we hit an existing bubble
-    if (shot.hasBomb) {
-      const hitBubble = bubblesRef.current.find(b =>
-        b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
-      );
-
-      if (hitBubble) {
-        // Destroy the hit bubble and its hexagonal neighbors, bomb can blast through metal grid
-        const grid = [...bubblesRef.current];
-        const bubblesDestroyed: any[] = [];
-
-        // Bomb can destroy any bubble, including metal grid ones
-        bubblesDestroyed.push(hitBubble);
-
-        // Get hexagonal neighbors of the hit bubble
-        const neighbors = getHexNeighbors(hitBubble.row, hitBubble.col);
-        neighbors.forEach(([r, c]) => {
-          const neighborBubble = grid.find(b => b.visible && b.row === r && b.col === c);
-          if (neighborBubble) {
-            // Bomb destroys all neighbors, including metal grid ones
-            bubblesDestroyed.push(neighborBubble);
-          }
-        });
-
-        // Destroy all affected bubbles (including metal grid ones)
-        bubblesDestroyed.forEach(bubble => {
-          bubble.visible = false;
-          // Bomb explosion animation
-          if (bubble.anim) {
-            Animated.sequence([
-              Animated.timing(bubble.anim, { toValue: 1.5, duration: 150, useNativeDriver: true }),
-              Animated.timing(bubble.anim, { toValue: 0, duration: 250, useNativeDriver: true })
-            ]).start();
-          }
-        });
-
-        // Score for destroyed bubbles (including metal grid ones)
-        setScore(s => s + bubblesDestroyed.length * 12); // Medium score for bomb
-
-        // Trigger Blasts for Bomb (Simultaneous/Fast)
-        const newBlasts = bubblesDestroyed.map((b, i) => ({
-          id: `blast-${b.id}-${Date.now()}`,
-          x: b.x,
-          y: b.y,
-          color: b.color,
-          delay: i * 20 // Almost instant but slightly staggered
-        }));
-        if (newBlasts.length > 0) setBlasts(prev => [...prev, ...newBlasts]);
-
-        // Check for floating bubbles after explosion
-        const connected = new Set();
-        const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
-        const cStack = [...topRowBubbles];
-        topRowBubbles.forEach(b => connected.add(b.id));
-
-        while (cStack.length > 0) {
-          const curr = cStack.pop()!;
-          const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
-          neighbors.forEach(n => {
-            connected.add(n.id);
-            cStack.push(n);
-          });
-        }
-
-        const newlyFloatingBomb: any[] = [];
-        grid.forEach(b => {
-          if (b.visible && !connected.has(b.id) && bubblesDestroyed.indexOf(b) === -1) {
-            b.visible = false;
-            setScore(s => s + 5);
-            newlyFloatingBomb.push(b);
-          }
-        });
-
-        // Trigger Blasts for Floating Bubbles (Bomb)
-        if (newlyFloatingBomb.length > 0) {
-          const floatBlasts = newlyFloatingBomb.map((b, i) => ({
-            id: `blast-float-${b.id}-${Date.now()}`,
-            x: b.x,
-            y: b.y,
-            color: b.color,
-            delay: ((newBlasts ? newBlasts.length : 0) * 100) + (i * 120)
-          }));
-          setBlasts(prev => [...prev, ...floatBlasts]);
-        }
-
-        // Update the grid and continue with normal flow
-        bubblesRef.current = grid;
-        setBubbles([...grid]);
-        setShootingBubble(null);
-        setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
-        setMoves(m => Math.max(0, m - 1));
-
-        // Check Win/Loss
-        const remainingBubbles = grid.filter(b => b.visible).length;
-        if (remainingBubbles === 0) {
-          setGameState('won');
-        } else if (moves - 1 <= 0) {
-          setGameState('lost');
-        }
-
-        // Re-center view
-        const visibleBubbles = grid.filter(b => b.visible);
-        if (visibleBubbles.length > 0) {
-          const maxY = Math.max(...visibleBubbles.map(b => b.y));
-          const targetScreenY = SCREEN_HEIGHT * 0.45;
-          const targetScrollY = targetScreenY - maxY;
-          currentScrollY.current = targetScrollY;
-          Animated.spring(scrollY, {
-            toValue: currentScrollY.current,
-            tension: 40,
-            friction: 7,
-            useNativeDriver: true
-          }).start();
-        }
-
-        isProcessing.current = false;
-        return; // Exit early for bomb
-      }
-    }
-
-    // Freeze Power
-    if (shot.hasFreeze) {
-      const hitBubble = bubblesRef.current.find(b =>
-        b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
-      );
-
-      if (hitBubble) {
-        const grid = [...bubblesRef.current];
-        // Identify "Vertical Column"
-        // Find bubbles that are vertically aligned (similar X) and above the hit bubble
-        const xThreshold = BUBBLE_SIZE * 0.3;
-        const targetBubbles = grid.filter(b =>
-          b.visible &&
-          Math.abs(b.x - hitBubble.x) < xThreshold &&
-          b.row <= hitBubble.row &&
-          b.row >= hitBubble.row - 3 // Up to 3 rows up
-        );
-
-        targetBubbles.forEach(b => {
-          b.isFrozen = true;
-          // Flash animation
-          if (b.anim) {
-            Animated.sequence([
-              Animated.timing(b.anim, { toValue: 1.2, duration: 150, useNativeDriver: true }),
-              Animated.timing(b.anim, { toValue: 1, duration: 250, useNativeDriver: true })
-            ]).start();
-          }
-        });
-
-        bubblesRef.current = grid;
-        setBubbles([...grid]);
-        setShootingBubble(null);
-        setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
-        setMoves(m => Math.max(0, m - 1));
-        isProcessing.current = false;
-        return;
-      }
-    }
-
-    // Fire Power
-    if (shot.hasFire) {
-      const hitBubble = bubblesRef.current.find(b =>
-        b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
-      );
-
-      if (hitBubble) {
-        // Fire does NOT blast metal grid balls
-        if (hitBubble.hasMetalGrid) {
-          // Bounce off metal grid
-          if (hitBubble.anim) {
-            Animated.sequence([
-              Animated.timing(hitBubble.anim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
-              Animated.spring(hitBubble.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
-            ]).start();
-          }
-          setShootingBubble(null);
-          isProcessing.current = false;
-          return;
-        }
-
-        const grid = [...bubblesRef.current];
-
-        if (hitBubble.isFrozen) {
-          // ICE SMASH! Destroy frozen bubbles in this column
-          // ICE SMASH! Destroy frozen bubbles in this column, IGNORING metal grid bubbles
-          const xThreshold = BUBBLE_SIZE * 0.3;
-          const frozenInColumn = grid.filter(b =>
-            b.visible && b.isFrozen &&
-            !b.hasMetalGrid && // Fire cannot destroy metal grid
-            Math.abs(b.x - hitBubble.x) < xThreshold
-          );
-
-          frozenInColumn.forEach(b => {
-            b.visible = false;
-            // Explosion effect? 
-          });
-          setScore(s => s + frozenInColumn.length * 20); // Bonus for Ice Smash
-
-          // Trigger Blasts for Ice Smash (Top to down logic usually, but here just fast)
-          const newBlasts = frozenInColumn.map((b, i) => ({
-            id: `blast-${b.id}-${Date.now()}`,
-            x: b.x,
-            y: b.y,
-            color: b.color,
-            delay: i * 120
-          }));
-          if (newBlasts.length > 0) setBlasts(prev => [...prev, ...newBlasts]);
-        } else {
-          // Normal Fire behavior - destroy hit bubble
-          hitBubble.visible = false;
-          setScore(s => s + 10);
-          setBlasts(prev => [...prev, {
-            id: `blast-${hitBubble.id}-${Date.now()}`,
-            x: hitBubble.x,
-            y: hitBubble.y,
-            color: hitBubble.color
-          }]);
-        }
-
-        // Check floating
-        const connected = new Set();
-        const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
-        const cStack = [...topRowBubbles];
-        topRowBubbles.forEach(b => connected.add(b.id));
-
-        while (cStack.length > 0) {
-          const curr = cStack.pop()!;
-          const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
-          neighbors.forEach(n => {
-            connected.add(n.id);
-            cStack.push(n);
-          });
-        }
-
-        const newlyFloatingFire: any[] = [];
-        grid.forEach(b => {
-          if (b.visible && !connected.has(b.id) && b.id !== hitBubble.id) {
-            b.visible = false;
-            setScore(s => s + 5);
-            newlyFloatingFire.push(b);
-          }
-        });
-
-        if (newlyFloatingFire.length > 0) {
-          const floatBlasts = newlyFloatingFire.map((b, i) => ({
-            id: `blast-float-${b.id}-${Date.now()}`,
-            x: b.x,
-            y: b.y,
-            color: b.color,
-            delay: 300 + (i * 120)
-          }));
-          setBlasts(prev => [...prev, ...floatBlasts]);
-        }
-
-        bubblesRef.current = grid;
-        setBubbles([...grid]);
-        setShootingBubble(null);
-        setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
-        setMoves(m => Math.max(0, m - 1));
-
-        // Win/Loss
-        const remainingBubbles = grid.filter(b => b.visible).length;
-        if (remainingBubbles === 0) setGameState('won');
-        else if (moves - 1 <= 0) setGameState('lost');
-
-        // Scroll
-        const visibleBubbles = grid.filter(b => b.visible);
-        if (visibleBubbles.length > 0) {
-          const maxY = Math.max(...visibleBubbles.map(b => b.y));
-          const targetScreenY = SCREEN_HEIGHT * 0.45;
-          const targetScrollY = targetScreenY - maxY;
-          currentScrollY.current = targetScrollY;
-          Animated.spring(scrollY, {
-            toValue: currentScrollY.current,
-            tension: 40,
-            friction: 7,
-            useNativeDriver: true
-          }).start();
-        }
-
-        isProcessing.current = false;
-        return;
-      }
-    }
-
-    // Normal landing logic for non-power shots or power shots that don't hit anything
-    let best = { r: 0, c: 0, dist: Infinity };
-    for (let r = 0; r < 35; r++) {
-      const rowWidth = (r % 2 === 0) ? 9 : 8;
-      for (let c = 0; c < rowWidth; c++) {
-        if (bubblesRef.current.some(b => b.visible && b.row === r && b.col === c)) continue;
-        const coords = getPos(r, c);
-        const d = Math.sqrt((shot.x - coords.x) ** 2 + (shot.y - (coords.y + currentScrollY.current)) ** 2);
-        if (d < best.dist) best = { r, c, dist: d };
-      }
-    }
-
-    const { x, y } = getPos(best.r, best.c);
-    const hitAnim = new Animated.Value(0.7); // Start slightly smaller for "impact" feel
-    const newB = {
-      id: `b-${Date.now()}`,
-      row: best.r,
-      col: best.c,
-      x,
-      y,
-      color: shot.color,
-      visible: true,
-      anim: hitAnim,
-      hasMetalGrid: false,
-      isFrozen: false,
-      hitsRemaining: 1,
-      maxHits: 1
-    };
-    const grid = [...bubblesRef.current, newB];
-
-    // Trigger Impact Animation for the landed bubble
-    Animated.spring(hitAnim, {
-      toValue: 1,
-      tension: 100,
-      friction: 5,
-      useNativeDriver: true
-    }).start();
-
-    // Bomb Power: Destroy hexagonal neighbors if shot lands with bomb power
-    if (shot.hasBomb) {
-      const bubblesDestroyed = [newB]; // Always destroy the landing bubble
-
-      // Get hexagonal neighbors of the landing position
-      const neighbors = getHexNeighbors(best.r, best.c);
-      neighbors.forEach(([r, c]) => {
-        const neighborBubble = grid.find(b => b.visible && b.row === r && b.col === c);
-        if (neighborBubble) {
-          // Bomb destroys all neighbors, including metal grid ones
-          bubblesDestroyed.push(neighborBubble);
-        }
-      });
-
-      // Destroy all affected bubbles (including metal grid ones)
-      bubblesDestroyed.forEach(bubble => {
-        bubble.visible = false;
-        // Bomb explosion animation
-        if (bubble.anim) {
-          Animated.sequence([
-            Animated.timing(bubble.anim, { toValue: 1.5, duration: 150, useNativeDriver: true }),
-            Animated.timing(bubble.anim, { toValue: 0, duration: 250, useNativeDriver: true })
-          ]).start();
-        }
-      });
-
-      // Score for destroyed bubbles (including metal grid ones)
-      setScore(s => s + bubblesDestroyed.length * 12); // Medium score for bomb
-
-      // Check for floating bubbles after explosion
-      const connected = new Set();
-      const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
-      const cStack = [...topRowBubbles];
-      topRowBubbles.forEach(b => connected.add(b.id));
-
-      while (cStack.length > 0) {
-        const curr = cStack.pop()!;
-        const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
-        neighbors.forEach(n => {
-          connected.add(n.id);
-          cStack.push(n);
-        });
-      }
-
-      const newlyFloatingBombLanding: any[] = [];
-      grid.forEach(b => {
-        if (b.visible && !connected.has(b.id)) {
-          b.visible = false;
-          setScore(s => s + 5);
-          newlyFloatingBombLanding.push(b);
-        }
-      });
-
-      // Trigger Blasts for Floating Bubbles (Bomb Landing)
-      if (newlyFloatingBombLanding.length > 0) {
-        const floatBlasts = newlyFloatingBombLanding.map((b, i) => ({
-          id: `blast-float-${b.id}-${Date.now()}`,
-          x: b.x,
-          y: b.y,
-          color: b.color,
-          delay: (bubblesDestroyed.length * 100) + (i * 120)
-        }));
-        setBlasts(prev => [...prev, ...floatBlasts]);
-      }
-
-      // Also trigger blasts for the bomb's main destruction
-      if (bubblesDestroyed.length > 0) {
-        const mainBlasts = bubblesDestroyed.map((b, i) => ({
-          id: `blast-bomb-${b.id}-${Date.now()}`,
-          x: b.x,
-          y: b.y,
-          color: b.color,
-          delay: i * 100
-        }));
-        setBlasts(prev => [...prev, ...mainBlasts]);
-      }
-
-    } else {
-      // Normal bubble matching logic
-      // 1. FIND MATCHES
-      const match = [newB];
-      const stack = [newB];
-      const visited = new Set([newB.id]);
-
-      // Impact neighbors - briefly shake them
-      const nb = grid.filter(g => g.visible && g.id !== newB.id && Math.sqrt((newB.x - g.x) ** 2 + (newB.y - g.y) ** 2) < BUBBLE_SIZE * 1.5);
-      nb.forEach(n => {
-        if (n.anim) {
-          Animated.sequence([
-            Animated.timing(n.anim, { toValue: 1.08, duration: 50, useNativeDriver: true }),
-            Animated.spring(n.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
-          ]).start();
-        }
-      });
-
-      while (stack.length > 0) {
-        const b = stack.pop()!;
-        // Fix case sensitivity issue in color comparison
-        const neighbors = grid.filter(g => g.visible && !visited.has(g.id) && g.color.toLowerCase() === newB.color.toLowerCase() && Math.sqrt((b.x - g.x) ** 2 + (b.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
-        neighbors.forEach(n => { visited.add(n.id); match.push(n); stack.push(n); });
-      }
-
-      if (match.length >= 3) {
-        // Handle metal grid protection - reduce hits instead of immediate destruction
-        const bubblesDestroyed: any[] = [];
-        const bubblesHit: any[] = [];
-
-        match.forEach(m => {
-          if (m.hasMetalGrid && m.hitsRemaining > 1) {
-            // Metal grid bubble hit - remove the metal grid and reduce hits
-            m.hitsRemaining -= 1;
-            m.hasMetalGrid = false; // Remove metal grid after first hit
-            bubblesHit.push(m);
-
-            // Visual feedback for metal grid removal
-            if (m.anim) {
-              Animated.sequence([
-                Animated.timing(m.anim, { toValue: 0.8, duration: 100, useNativeDriver: true }),
-                Animated.spring(m.anim, { toValue: 1, tension: 150, friction: 6, useNativeDriver: true })
-              ]).start();
-            }
-          } else {
-            // Normal bubble or metal grid bubble with 1 hit remaining - destroy it
-            m.visible = false;
-            bubblesDestroyed.push(m);
-          }
-        });
-
-        // Score only for destroyed bubbles
-        setScore(s => s + bubblesDestroyed.length * 10);
-
-        // Trigger Blasts for Standard Match (Satisfying ripple)
-        if (bubblesDestroyed.length > 0) {
-          const newBlasts = bubblesDestroyed.map((b, i) => ({
-            id: `blast-${b.id}-${Date.now()}`,
-            x: b.x,
-            y: b.y,
-            color: b.color,
-            delay: i * 150 // Clear one-by-one pop
-          }));
-          setBlasts(prev => [...prev, ...newBlasts]);
-        }
-
-        // 2. FLOATING LOGIC - only check if any bubbles were actually destroyed
-        if (bubblesDestroyed.length > 0) {
-          const connected = new Set();
-          const topRowBubbles = grid.filter(b => b.visible && b.row === 0);
-          const cStack = [...topRowBubbles];
-          topRowBubbles.forEach(b => connected.add(b.id));
-
-          while (cStack.length > 0) {
-            const curr = cStack.pop()!;
-            const neighbors = grid.filter(g => g.visible && !connected.has(g.id) && Math.sqrt((curr.x - g.x) ** 2 + (curr.y - g.y) ** 2) < BUBBLE_SIZE * 1.2);
-            neighbors.forEach(n => {
-              connected.add(n.id);
-              cStack.push(n);
-            });
-          }
-
-          const newlyFloatingMatch: any[] = [];
-          grid.forEach(b => {
-            if (b.visible && !connected.has(b.id)) {
-              b.visible = false;
-              setScore(s => s + 5);
-              newlyFloatingMatch.push(b);
-            }
-          });
-
-          // Trigger Blasts for Floating Bubbles (Standard)
-          if (newlyFloatingMatch.length > 0) {
-            const floatBlasts = newlyFloatingMatch.map((b, i) => ({
-              id: `blast-float-${b.id}-${Date.now()}`,
-              x: b.x,
-              y: b.y,
-              color: b.color,
-              delay: (bubblesDestroyed.length * 150) + (i * 120)
-            }));
-            setBlasts(prev => [...prev, ...floatBlasts]);
-          }
-
-
-        }
-      }
-    } // Close the else block for normal matching logic
-
-    setMoves(m => Math.max(0, m - 1));
-
-    // DYNAMIC RE-CENTERING LOGIC
-    // Recalculate grid bounds based on visibility
-    const visibleBubbles = grid.filter(b => b.visible);
-    if (visibleBubbles.length > 0) {
-      const maxY = Math.max(...visibleBubbles.map(b => b.y));
-      // Target: Lowest bubble at 45% of screen height
-      const targetScreenY = SCREEN_HEIGHT * 0.45;
-      const targetScrollY = targetScreenY - maxY;
-
-      currentScrollY.current = targetScrollY;
-      Animated.spring(scrollY, {
-        toValue: currentScrollY.current,
-        tension: 40,
-        friction: 7,
-        useNativeDriver: true
-      }).start();
-    }
-
-    bubblesRef.current = grid;
-    setBubbles([...grid]);
-    setShootingBubble(null);
-    setNextColor(COLORS[Math.floor(Math.random() * COLORS.length)]);
-
-    // Check Win/Loss
-    const remainingBubbles = grid.filter(b => b.visible).length;
-    if (remainingBubbles === 0) {
-      setGameState('won');
-    } else if (moves - 1 <= 0) {
-      setGameState('lost');
-    }
-
-    isProcessing.current = false;
+    executeResolveLanding(shot, {
+      bubblesRef,
+      setBubbles,
+      setScore,
+      setBlasts,
+      setShootingBubble,
+      setNextColor,
+      setMoves,
+      setGameState,
+      currentScrollY,
+      scrollY,
+      isProcessing,
+      moves
+    });
   };
 
   const restartLevel = () => {
@@ -1433,132 +632,28 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       <StatusBar hidden />
       <SpaceBackground />
 
-      {/* NEW UNIFIED TOP HUD CARD */}
-      <View style={styles.hudTopContainer}>
-        <View style={styles.topCard}>
-          {/* Moves */}
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>MOVES</Text>
-            <Text style={styles.statValue}>{moves}</Text>
-          </View>
-
-          {/* Vertical Divider */}
-          <View style={styles.verticalDivider} />
-
-          {/* Score */}
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>SCORE</Text>
-            <Text style={styles.statValue}>{score}</Text>
-          </View>
-
-          {/* Vertical Divider */}
-          <View style={styles.verticalDivider} />
-
-          {/* Stars (Progress Based) */}
-          <View style={styles.starContainer}>
-            <MaterialIcon
-              name={score > 100 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
-              family={GAME_ICONS.STAR.family}
-              size={ICON_SIZES.MEDIUM}
-              color={score > 100 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
-            />
-            <MaterialIcon
-              name={score > 500 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
-              family={GAME_ICONS.STAR.family}
-              size={ICON_SIZES.MEDIUM}
-              color={score > 500 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
-            />
-            <MaterialIcon
-              name={score > 1000 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
-              family={GAME_ICONS.STAR.family}
-              size={ICON_SIZES.MEDIUM}
-              color={score > 1000 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
-            />
-          </View>
-
-          {/* Exit Button */}
-          <TouchableOpacity style={styles.topExitBtn} onPress={onBackPress}>
-            <MaterialIcon
-              name={GAME_ICONS.CLOSE.name}
-              family={GAME_ICONS.CLOSE.family}
-              size={ICON_SIZES.MEDIUM}
-              color={ICON_COLORS.ERROR}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Bottom Center: U-Shape Command Card */}
-      <View style={styles.hudBottomContainer}>
-        <View style={styles.uCard}>
-
-          {/* Left Wing: Abilities */}
-          <View style={styles.uWingLeft}>
-            <TouchableOpacity
-              style={[styles.abilityBtn, lightningActive && styles.abilityBtnActive]}
-              onPress={activateLightning}
-            >
-              <MaterialIcon
-                name={GAME_ICONS.LIGHTNING.name}
-                family={GAME_ICONS.LIGHTNING.family}
-                size={ICON_SIZES.MEDIUM}
-                color={lightningActive ? ICON_COLORS.SECONDARY : ICON_COLORS.PRIMARY}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.abilityBtn, freezeActive && styles.abilityBtnActive]}
-              onPress={activateFreeze}
-            >
-              <MaterialIcon
-                name={GAME_ICONS.FREEZE.name}
-                family={GAME_ICONS.FREEZE.family}
-                size={ICON_SIZES.MEDIUM}
-                color={freezeActive ? ICON_COLORS.SECONDARY : ICON_COLORS.INFO}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Center: Ammo (The Core) */}
-          <View style={styles.uCenterAmmo}>
-            <View style={styles.ammoRing}>
-              <View style={[styles.ammoBubble, { backgroundColor: nextColor }]} />
-            </View>
-          </View>
-
-          {/* Right Wing: More Abilities */}
-          <View style={styles.uWingRight}>
-            <TouchableOpacity
-              style={[styles.abilityBtn, fireActive && styles.abilityBtnActive]}
-              onPress={activateFire}
-            >
-              <MaterialIcon
-                name={GAME_ICONS.FIRE.name}
-                family={GAME_ICONS.FIRE.family}
-                size={ICON_SIZES.MEDIUM}
-                color={fireActive ? ICON_COLORS.SECONDARY : ICON_COLORS.ERROR}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.abilityBtn, bombActive && styles.abilityBtnActive]}
-              onPress={activateBomb}
-            >
-              <MaterialIcon
-                name={GAME_ICONS.BOMB.name}
-                family={GAME_ICONS.BOMB.family}
-                size={ICON_SIZES.MEDIUM}
-                color={bombActive ? ICON_COLORS.SECONDARY : ICON_COLORS.WARNING}
-              />
-            </TouchableOpacity>
-          </View>
-
-        </View>
-      </View>
+      <GameHUD
+        score={score}
+        moves={moves}
+        level={level}
+        nextColor={nextColor}
+        onBackPress={onBackPress}
+        abilities={{
+          lightning: lightningActive,
+          bomb: bombActive,
+          freeze: freezeActive,
+          fire: fireActive,
+        }}
+        onActivateLightning={activateLightning}
+        onActivateBomb={activateBomb}
+        onActivateFreeze={activateFreeze}
+        onActivateFire={activateFire}
+      />
 
       <View style={styles.gameArea} onStartShouldSetResponder={() => true}
         onResponderGrant={(e) => {
           const { pageX, pageY } = e.nativeEvent;
           isAiming.current = true;
-          setIsAimingState(true);
           updateAim(pageX, pageY);
         }}
         onResponderMove={(e) => updateAim(e.nativeEvent.pageX, e.nativeEvent.pageY)}
@@ -1572,8 +667,8 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             { translateY: shakeAnim.interpolate({ inputRange: [0, 0.2, 0.5, 1], outputRange: [0, 5, -5, 0] }) }
           ]
         }}>
-          <PulsatingBorder />
-          <BubbleGrid bubbles={bubbles} />
+          <PulsatingBorder pulse={borderPulse} />
+          <BubbleGrid bubbles={bubbles} metalPulseAnim={metalPulseAnim} metalRotateAnim={metalRotateAnim} />
           {/* Render Blasts INSIDE moving container */}
           {blasts.map(blast => (
             <BubbleBlast
@@ -1587,72 +682,72 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           ))}
         </Animated.View>
 
-        {aimDots.map((seg, i) => {
-          const dx = seg.x2 - seg.x1;
-          const dy = seg.y2 - seg.y1;
-          const length = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx);
+        {/* Enhanced Laser Tracer Line */}
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(idx => (
+          <View
+            key={`aim-${idx}`}
+            ref={el => { if (aimSegmentRefs.current) aimSegmentRefs.current[idx] = el; }}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0, top: 0,
+              height: 6, // Thicker for better visibility
+              backgroundColor: nextColor,
+              borderRadius: 3,
+              opacity: 0,
+              shadowColor: nextColor,
+              shadowRadius: 12,
+              shadowOpacity: 1,
+              elevation: 12,
+              zIndex: 99,
+            }}
+          >
+            {/* Bright energy core */}
+            <View style={{
+              width: '100%',
+              height: 3,
+              backgroundColor: 'rgba(255,255,255,0.95)',
+              marginTop: 1.5,
+              borderRadius: 1.5,
+              shadowColor: '#fff',
+              shadowRadius: 6,
+              shadowOpacity: 0.8,
+            }} />
+          </View>
+        ))}
 
-          return (
-            <View
-              key={`seg-${i}`}
-              style={{
-                position: 'absolute',
-                left: (seg.x1 + seg.x2) / 2 - length / 2,
-                top: (seg.y1 + seg.y2) / 2 - 2,
-                width: length,
-                height: 4, // Continuous beam thickness
-                backgroundColor: nextColor,
-                opacity: Math.max(0.4, seg.opacity),
-                transform: [{ rotate: `${angle}rad` }],
-                borderRadius: 2,
-                shadowColor: nextColor,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 1,
-                shadowRadius: 6,
-                elevation: 10,
-                zIndex: 99,
-              }}
-            >
-              {/* Inner brighter core */}
-              <View style={{
-                width: '100%',
-                height: 1.5,
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                marginTop: 1.25,
-                borderRadius: 1
-              }} />
-            </View>
-          );
-        })}
-
-        {/* Ghost Prediction Bubble */}
-        {targetSlot && (
-          <Bubble
-            x={targetSlot.x}
-            y={targetSlot.y}
-            color={nextColor}
-            isGhost
-          />
-        )}
-
-
+        {/* Ghost Prediction Bubble via Ref */}
+        <View ref={ghostRef} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, opacity: 0 }}>
+          <Bubble x={BUBBLE_SIZE / 2} y={BUBBLE_SIZE / 2} color={nextColor} isGhost />
+        </View>
 
         {shootingBubble && (
-          <View pointerEvents="none" style={{
-            position: 'absolute',
-            left: shootingBubble.x - 30, // Center the 60px wide tracer
-            top: shootingBubble.y - 10,  // Center the 20px high tracer
-            zIndex: 100
-          }}>
-            <LaserTracer
-              color={shootingBubble.color}
-              angle={Math.atan2(shootingBubble.vy, shootingBubble.vx)}
-            />
+          <View
+            ref={shootingRef}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: 60,
+              height: 24,
+              zIndex: 100,
+              transform: [
+                { translateX: shootingBubble.x - 30 },
+                { translateY: shootingBubble.y - 12 },
+                { rotate: `${Math.atan2(shootingBubble.vy, shootingBubble.vx)}rad` }
+              ]
+            }}
+          >
+            {/* Improved Laser Beam */}
+            <ImprovedLaserBeam color={shootingBubble.color} />
+
+            {/* Laser Ball at the front */}
+            <View style={{ position: 'absolute', right: -6, top: -6 }}>
+              <LaserBall color={shootingBubble.color} size={36} />
+            </View>
           </View>
         )}
-
-
 
         <View style={styles.footer}>
           {/* Muzzle Velocity Effect (Blast Wave) */}
@@ -1661,17 +756,19 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
             {
               opacity: muzzleVelocityAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] }),
               transform: [
-                { rotate: `${cannonAngle}rad` },
+                { rotate: `${cannonAngleRef.current}rad` },
                 { scale: muzzleVelocityAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.5] }) },
                 { translateY: -60 }
               ]
             }
           ]} />
 
-          <Animated.View style={[
-            styles.cannon,
-            { transform: [{ translateY: recoilAnim }] }
-          ]}>
+          <Animated.View
+            ref={cannonRef}
+            style={[
+              styles.cannon,
+              { transform: [{ translateY: recoilAnim }] }
+            ]}>
             {/* Pulse Ring around Spaceship */}
             <Animated.View style={[
               styles.pulseRing,
@@ -1692,6 +789,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
               }
             ]} />
 
+            {/* Lottie Spaceship */}
             <LottieView
               source={require("../images/Spaceship.json")}
               autoPlay
@@ -1706,8 +804,6 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           )}
         </View>
       </View>
-
-
 
       {/* Game Over / Win Modal */}
       {gameState !== 'playing' && (
@@ -1761,7 +857,6 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
               </TouchableOpacity>
               {gameState === 'won' && (
                 <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
-                  {/* Placeholder for Next Level - currently restarts */}
                   <MaterialIcon
                     name={GAME_ICONS.NEXT.name}
                     family={GAME_ICONS.NEXT.family}
@@ -1778,682 +873,5 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-
-  // Command Deck Styles
-  // NEW HUD STYLES
-  hudTopContainer: {
-    position: 'absolute',
-    top: 50,
-    width: '100%',
-    alignItems: 'center',
-    zIndex: 60,
-  },
-  topCard: {
-    flexDirection: 'row',
-    width: '90%',
-    height: 60,
-    backgroundColor: 'rgba(20, 20, 30, 0.9)',
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#00E0FF', // Neon Cyan
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 20,
-  },
-  verticalDivider: {
-    width: 1,
-    height: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  starContainer: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  starIcon: {
-    fontSize: 16,
-  },
-  topExitBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.5)',
-  },
-
-  hudBottomContainer: {
-    position: 'absolute',
-    bottom: 40, // Lifted slightly
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 50,
-  },
-  uCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-end', // Align items to bottom
-    backgroundColor: 'rgba(20, 20, 30, 0.9)',
-    paddingHorizontal: 20,
-    paddingTop: 15,
-    paddingBottom: 20,
-    borderRadius: 35,
-    borderWidth: 2, // Thicker border for neon effect
-    borderColor: '#00E0FF', // Neon Cyan
-    gap: 15,
-    shadowColor: '#00E0FF', // Neon glow
-    shadowOffset: { width: 0, height: 0 }, // All-around glow
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-    elevation: 20,
-  },
-  uWingLeft: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingBottom: 5,
-  },
-  uWingRight: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingBottom: 5,
-  },
-  uCenterAmmo: {
-    marginBottom: 10, // Push ammo up
-  },
-  ammoRing: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(0, 224, 255, 0.1)', // Slight cyan tint
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#00E0FF', // Neon
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  ammoBubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-
-  // Reused text styles
-  statValue: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
-    fontFamily: 'monospace',
-  },
-  iconText: {
-    fontSize: 18,
-    color: '#fff',
-  },
-  abilityBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0, 224, 255, 0.1)', // Slight cyan tint
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#00E0FF', // Neon
-  },
-  abilityBtnActive: {
-    backgroundColor: 'rgba(255, 214, 10, 0.3)', // Yellow tint when active
-    borderColor: '#FFD60A', // Yellow border when active
-  },
-  abilityText: {
-    fontSize: 20,
-  },
-
-  pulsatingDot: {
-    position: 'absolute',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FF3B30',
-  },
-
-  gameArea: { flex: 1 },
-  bg: { ...StyleSheet.absoluteFillObject, opacity: 0.8, resizeMode: 'cover' },
-  bubble: {
-    position: "absolute",
-    width: BUBBLE_SIZE,
-    height: BUBBLE_SIZE,
-    borderRadius: BUBBLE_SIZE / 2,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.4)",
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5
-  },
-  bubbleInner: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    borderRadius: BUBBLE_SIZE / 2,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
-  },
-  planetBands: {
-    position: 'absolute',
-    width: '150%',
-    height: '100%',
-    top: 0,
-    left: '-25%',
-    borderTopWidth: 6,
-    borderBottomWidth: 4,
-    borderColor: 'rgba(0,0,0,0.15)',
-    opacity: 0.6,
-  },
-  planetCrater1: {
-    position: 'absolute',
-    width: '20%',
-    height: '20%',
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-    top: '20%',
-    right: '25%',
-  },
-  planetCrater2: {
-    position: 'absolute',
-    width: '12%',
-    height: '12%',
-    borderRadius: 6,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    bottom: '25%',
-    left: '30%',
-  },
-  planetCrater3: {
-    position: 'absolute',
-    width: '15%',
-    height: '15%',
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    bottom: '40%',
-    right: '35%',
-  },
-  planetRing: {
-    position: 'absolute',
-    width: '140%',
-    height: '35%',
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.25)',
-    top: '35%',
-    left: '-20%',
-    transform: [{ rotate: '-15deg' }],
-    zIndex: -1, // Behind the planet body
-  },
-  bubbleHighlight: {
-    position: 'absolute',
-    top: '5%',
-    left: '10%',
-    width: '40%',
-    height: '40%',
-    borderRadius: BUBBLE_SIZE / 4,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    transform: [{ rotate: '-10deg' }],
-    zIndex: 2,
-  },
-  bubbleGloss: {
-    position: 'absolute',
-    bottom: '10%',
-    right: '10%',
-    width: '30%',
-    height: '15%',
-    borderRadius: BUBBLE_SIZE,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    transform: [{ rotate: '45deg' }],
-    zIndex: 2,
-  },
-  ghostBubble: {
-    opacity: 0.6,
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
-    borderColor: '#fff',
-  },
-  simpleBubble: {
-    position: "absolute",
-    width: BUBBLE_SIZE,
-    height: BUBBLE_SIZE,
-    borderRadius: BUBBLE_SIZE / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    // Minimal styling for performance
-  },
-  shine: { position: "absolute", top: "15%", left: "15%", width: "25%", height: "25%", backgroundColor: "rgba(255,255,255,0.4)", borderRadius: 10 },
-  laserDot: {
-    position: "absolute",
-    width: 12,
-    height: 3,
-    borderRadius: 1.5,
-    zIndex: 100,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 4,
-    elevation: 8,
-  },
-  dot: {
-    position: "absolute",
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    zIndex: 100, // Render ABOVE the cannon/spaceship so dots are visible immediately
-  },
-  hintContainer: {
-    position: 'absolute',
-    bottom: 150,
-    width: SCREEN_WIDTH,
-    alignItems: 'center',
-  },
-  hintText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    fontWeight: 'bold',
-    letterSpacing: 1.2,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  footer: { position: "absolute", bottom: FOOTER_BOTTOM, width: "100%", alignItems: "center" },
-  cannon: {
-    width: CANNON_SIZE,
-    height: CANNON_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: CANNON_SIZE + 20,
-    height: CANNON_SIZE + 20,
-    borderRadius: (CANNON_SIZE + 20) / 2,
-    borderWidth: 3,
-    borderColor: '#fff',
-    backgroundColor: 'transparent',
-    zIndex: 5, // Behind the spaceship but visible
-  },
-  muzzleBlast: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: '#00E0FF',
-    backgroundColor: 'rgba(0, 224, 255, 0.2)',
-    bottom: 50,
-    zIndex: 15,
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 15,
-  },
-  modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modalContent: {
-    width: '80%',
-    backgroundColor: 'rgba(30, 30, 40, 0.95)',
-    borderRadius: 24,
-    padding: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 20,
-  },
-  modalTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#fff',
-    marginBottom: 20,
-    textAlign: 'center',
-    letterSpacing: 1,
-  },
-  modalStars: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalScore: {
-    fontSize: 20,
-    color: '#fbbf24',
-    fontWeight: 'bold',
-    marginBottom: 30,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 20,
-    alignItems: 'center',
-  },
-  modalBtnPrimary: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#3b82f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  modalBtnSecondary: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  statItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'column',
-    gap: 0,
-  },
-  statLabel: {
-    color: '#aaa',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-
-  // Metal Grid Overlay Styles - Circular Design
-  metalGridOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-    borderRadius: BUBBLE_SIZE / 2,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(0, 0, 0, 0.1)', // Very subtle dark overlay to show metal effect
-  },
-
-  // Outer metal ring
-  metalOuterRing: {
-    position: 'absolute',
-    width: '95%',
-    height: '95%',
-    borderRadius: BUBBLE_SIZE / 2,
-    borderWidth: 2,
-    borderColor: 'rgba(139, 139, 139, 0.8)', // Semi-transparent silver
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 3,
-  },
-
-  // Inner metal ring
-  metalInnerRing: {
-    position: 'absolute',
-    width: '75%',
-    height: '75%',
-    borderRadius: BUBBLE_SIZE / 2,
-    borderWidth: 1.5,
-    borderColor: 'rgba(168, 168, 168, 0.7)', // Semi-transparent lighter silver
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.4,
-    shadowRadius: 2,
-  },
-
-  // Container for rotating cross pattern
-  metalCrossContainer: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Cross pattern - horizontal
-  metalCrossHorizontal: {
-    position: 'absolute',
-    width: '60%',
-    height: 2,
-    backgroundColor: 'rgba(144, 144, 144, 0.7)', // Semi-transparent
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.5,
-    shadowRadius: 1,
-  },
-
-  // Cross pattern - vertical
-  metalCrossVertical: {
-    position: 'absolute',
-    width: 2,
-    height: '60%',
-    backgroundColor: 'rgba(144, 144, 144, 0.7)', // Semi-transparent
-    shadowColor: '#000',
-    shadowOffset: { width: 1, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 1,
-  },
-
-  // Diagonal cross 1
-  metalDiagonal1: {
-    position: 'absolute',
-    width: '50%',
-    height: 1.5,
-    backgroundColor: 'rgba(122, 122, 122, 0.6)', // Semi-transparent
-    transform: [{ rotate: '45deg' }],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 1,
-  },
-
-  // Diagonal cross 2
-  metalDiagonal2: {
-    position: 'absolute',
-    width: '50%',
-    height: 1.5,
-    backgroundColor: 'rgba(122, 122, 122, 0.6)', // Semi-transparent
-    transform: [{ rotate: '-45deg' }],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 1,
-  },
-
-  // Metal bolts at corners
-  metalBolt: {
-    position: 'absolute',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(107, 107, 107, 0.8)', // Semi-transparent
-    borderWidth: 0.5,
-    borderColor: 'rgba(74, 74, 74, 0.8)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.6,
-    shadowRadius: 1,
-  },
-
-  // Metallic shine effect
-  metallicShine: {
-    position: 'absolute',
-    top: '10%',
-    left: '20%',
-    width: '25%',
-    height: '15%',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)', // More subtle shine
-    borderRadius: 10,
-    transform: [{ rotate: '-30deg' }],
-    opacity: 0.5,
-  },
-
-  // Lightning effect overlay
-  lightningEffect: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 214, 10, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FFD60A',
-    shadowColor: '#FFD60A',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    zIndex: 20,
-  },
-
-  // Bomb effect overlay
-  bombEffect: {
-    position: 'absolute',
-    top: -5,
-    left: -5,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 149, 0, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF9500',
-    shadowColor: '#FF9500',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    zIndex: 20,
-  },
-
-  // Freeze effect overlay
-  freezeEffect: {
-    position: 'absolute',
-    top: -5,
-    left: -5,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0, 224, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#00E0FF',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    zIndex: 20,
-  },
-
-  // Fire effect overlay
-  fireEffect: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 59, 48, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    zIndex: 20,
-  },
-  // Ice Overlay
-  iceOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(200, 255, 255, 0.3)',
-    borderRadius: BUBBLE_SIZE / 2,
-    borderWidth: 2,
-    borderColor: '#00ffff',
-    zIndex: 15,
-  },
-  iceGlaze: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '40%',
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  iceShine: {
-    position: 'absolute',
-    top: '10%',
-    left: '10%',
-    width: '30%',
-    height: '30%',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderRadius: 15,
-  },
-  iceCrystal1: {
-    position: 'absolute',
-    bottom: '20%',
-    right: '20%',
-    width: 8,
-    height: 8,
-    backgroundColor: '#fff',
-    transform: [{ rotate: '45deg' }]
-  },
-  iceCrystal2: {
-    position: 'absolute',
-    top: '40%',
-    left: '20%',
-    width: 6,
-    height: 6,
-    backgroundColor: '#fff',
-    transform: [{ rotate: '45deg' }]
-  },
-});
 
 export default GameScreen;
