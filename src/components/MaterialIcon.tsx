@@ -46,6 +46,21 @@ const FALLBACK_ICONS: Record<string, string> = {
   'arrow-back': '←',
   'menu': '☰',
   'settings': '⚙️',
+  'trophy': '🏆',
+  'emoji-events': '🏆',
+  'group': '👥',
+  'public': '🌍',
+  'add-shopping-cart': '🛒',
+  'shopping-cart': '🛒',
+  'sports_score': '🎯',
+  'trending-up': '📈',
+  'play-arrow': '▶️',
+  'email': '📧',
+  'lock': '🔒',
+  'person-add': '👤+',
+  'login': '🚪',
+  'google': 'G',
+  'account-circle': '👤',
 };
 
 const MaterialIcon: React.FC<MaterialIconProps> = ({

@@ -13,10 +13,12 @@ import {
 import LottieView from 'lottie-react-native';
 import GameScreen from './GameScreen';
 import SpaceBackground from "./SpaceBackground.tsx";
+import Leaderboard from './Leaderboard';
 import MaterialIcon from './MaterialIcon';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
 import { useAuth } from '../context/AuthContext';
+import StorageService, { UserGameData } from '../services/StorageService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -131,7 +133,12 @@ const OrbitalRing = ({ size, color, duration, rotateX = '0deg', rotateY = '0deg'
 };
 
 // UNIFIED DASHBOARD HEADER COMPONENT
-const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () => void }) => {
+const RoadmapHeader = ({ coins, score, onShopPress, onLeaderboardPress }: { 
+  coins: number; 
+  score: number;
+  onShopPress: () => void;
+  onLeaderboardPress: () => void;
+}) => {
   const { signOut, user } = useAuth();
 
   const handleLogout = () => {
@@ -175,12 +182,12 @@ const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () 
           </View>
           <View style={styles.statChip}>
             <MaterialIcon 
-              name={GAME_ICONS.STAR.name} 
-              family={GAME_ICONS.STAR.family}
+              name={GAME_ICONS.SCORE.name} 
+              family={GAME_ICONS.SCORE.family}
               size={ICON_SIZES.MEDIUM} 
-              color={ICON_COLORS.GOLD} 
+              color={ICON_COLORS.SUCCESS} 
             />
-            <Text style={styles.statNumber}>48</Text>
+            <Text style={styles.statNumber}>{score.toLocaleString()}</Text>
           </View>
         </View>
       </View>
@@ -190,7 +197,7 @@ const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () 
 
       {/* Bottom Section: Action Menu */}
       <View style={styles.dashboardBottom}>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity style={styles.actionBtn} onPress={onLeaderboardPress}>
           <MaterialIcon 
             name={GAME_ICONS.LEADERBOARD.name} 
             family={GAME_ICONS.LEADERBOARD.family}
@@ -229,13 +236,18 @@ const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () 
 };
 
 const Roadmap: React.FC = () => {
+  const { user } = useAuth();
   const [showGameScreen, setShowGameScreen] = useState(false);
   const [currentLevel, setCurrentLevel] = useState(1);
-  const [score, setScore] = useState(0);
-  const [coins, setCoins] = useState(1250);
+  const [score, setScore] = useState(0); // Start with zero score
+  const [coins, setCoins] = useState(0); // Start with zero coins
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [showShop, setShowShop] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [userGameData, setUserGameData] = useState<UserGameData | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [loadingDirection, setLoadingDirection] = useState<'toFight' | 'toBase'>('toFight');
   
   // Ability inventory
   const [abilityInventory, setAbilityInventory] = useState({
@@ -248,6 +260,107 @@ const Roadmap: React.FC = () => {
   const flatListRef = useRef<FlatList>(null);
   const glowAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  // Load user data when component mounts or user changes
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (user?.uid) {
+        try {
+          // Only show loading on initial data load, not for modal operations
+          if (!dataLoaded) {
+            setIsLoading(true);
+          }
+          
+          await StorageService.setCurrentUser(user.uid);
+          
+          // For testing - clear existing data to start fresh (remove this in production)
+          if (__DEV__) {
+            await StorageService.clearAllData();
+          }
+          
+          const userData = await StorageService.loadUserData(user.uid);
+          
+          setUserGameData(userData);
+          setScore(userData.score);
+          setCoins(userData.coins);
+          setCurrentLevel(userData.currentLevel);
+          setAbilityInventory(userData.abilityInventory);
+          setDataLoaded(true);
+        } catch (error) {
+          console.error('Error loading user data:', error);
+        } finally {
+          // Only hide loading if we showed it
+          if (!dataLoaded) {
+            setIsLoading(false);
+          }
+        }
+      }
+    };
+
+    loadUserData();
+  }, [user?.uid]);
+
+  // Save user data whenever important state changes
+  useEffect(() => {
+    const saveUserData = async () => {
+      if (user?.uid && dataLoaded && userGameData) {
+        try {
+          const updatedData: UserGameData = {
+            ...userGameData,
+            score,
+            coins,
+            currentLevel,
+            abilityInventory,
+          };
+          await StorageService.saveUserData(user.uid, updatedData);
+          setUserGameData(updatedData);
+          
+          // Update leaderboard with user info
+          await updateLeaderboardEntry();
+        } catch (error) {
+          console.error('Error saving user data:', error);
+        }
+      }
+    };
+
+    // Only save if data has been loaded to avoid overwriting with initial values
+    if (dataLoaded) {
+      saveUserData();
+    }
+  }, [score, coins, currentLevel, abilityInventory, user?.uid, dataLoaded]);
+
+  // Update leaderboard entry with current user info
+  const updateLeaderboardEntry = async () => {
+    if (!user?.uid || !userGameData) return;
+    
+    try {
+      const leaderboard = await StorageService.getLeaderboard();
+      const existingIndex = leaderboard.findIndex(entry => entry.userId === user.uid);
+      
+      const leaderboardEntry = {
+        userId: user.uid,
+        username: user.displayName || user.email?.split('@')[0] || `Player_${user.uid.substring(0, 8)}`,
+        email: user.email || '',
+        score,
+        level: currentLevel,
+        coins,
+        stars: userGameData.totalStars,
+        lastUpdated: new Date().toISOString(),
+      };
+      
+      if (existingIndex >= 0) {
+        leaderboard[existingIndex] = leaderboardEntry;
+      } else {
+        leaderboard.push(leaderboardEntry);
+      }
+      
+      // Sort and save
+      leaderboard.sort((a, b) => b.score - a.score);
+      await StorageService.getLeaderboard(); // This will trigger the save
+    } catch (error) {
+      console.error('Error updating leaderboard:', error);
+    }
+  };
 
   // Level-specific ring colors for variety
   const RING_COLORS = [
@@ -269,7 +382,7 @@ const Roadmap: React.FC = () => {
       id: 'lightning',
       name: 'Lightning',
       icon: GAME_ICONS.LIGHTNING,
-      price: 2,
+      price: 15, // Increased from 2 to 15
       description: 'Destroys entire row',
       color: ICON_COLORS.PRIMARY,
     },
@@ -277,36 +390,51 @@ const Roadmap: React.FC = () => {
       id: 'bomb',
       name: 'Bomb',
       icon: GAME_ICONS.BOMB,
-      price: 2,
+      price: 20, // Increased from 2 to 20
       description: 'Destroys 6 hex neighbors',
       color: ICON_COLORS.WARNING,
-    },
-    {
-      id: 'fire',
-      name: 'Fire',
-      icon: GAME_ICONS.FIRE,
-      price: 3,
-      description: 'Coming soon...',
-      color: ICON_COLORS.ERROR,
     },
     {
       id: 'freeze',
       name: 'Freeze',
       icon: GAME_ICONS.FREEZE,
-      price: 3,
-      description: 'Coming soon...',
+      price: 5, // Decreased from 3 to 5
+      description: 'Freezes column up to 2 rows',
       color: ICON_COLORS.INFO,
+    },
+    {
+      id: 'fire',
+      name: 'Fire',
+      icon: GAME_ICONS.FIRE,
+      price: 10, // Decreased from 3 to 10
+      description: 'Burns through obstacles',
+      color: ICON_COLORS.ERROR,
     },
   ];
 
-  // Purchase ability function
-  const purchaseAbility = (abilityId: string, price: number) => {
-    if (coins >= price) {
-      setCoins(coins - price);
-      setAbilityInventory(prev => ({
-        ...prev,
-        [abilityId]: prev[abilityId as keyof typeof prev] + 1
-      }));
+  // Purchase ability function - no loading screen for shop operations
+  const purchaseAbility = async (abilityId: string, price: number) => {
+    if (!user?.uid) return;
+    
+    try {
+      const result = await StorageService.purchaseAbility(
+        user.uid, 
+        abilityId as keyof UserGameData['abilityInventory'], 
+        price
+      );
+      
+      if (result.success) {
+        setCoins(result.newCoins);
+        setAbilityInventory(result.newInventory);
+        
+        // Show success feedback without loading screen
+        Alert.alert('Purchase Successful!', `You bought ${abilityId}!`);
+      } else {
+        Alert.alert('Insufficient Coins', 'You need more coins to purchase this ability.');
+      }
+    } catch (error) {
+      console.error('Error purchasing ability:', error);
+      Alert.alert('Error', 'Failed to purchase ability. Please try again.');
     }
   };
 
@@ -337,28 +465,80 @@ const Roadmap: React.FC = () => {
 
   // Generate levels data (100 levels) - memoized for performance
   const levels = useMemo(() =>
-    Array.from({ length: 100 }, (_, i) => ({
-      id: i + 1,
-      isLocked: false, // For testing, unlock all. Real game would lock i > solvedMax
-      stars: Math.floor(Math.random() * 3) + 1,
-    })), []
+    Array.from({ length: 100 }, (_, i) => {
+      const levelId = i + 1;
+      const isCompleted = userGameData?.completedLevels.includes(levelId) || false;
+      const stars = userGameData?.levelStars[levelId] || 0;
+      const currentUserLevel = userGameData?.currentLevel || 1;
+      
+      return {
+        id: levelId,
+        isLocked: levelId > currentUserLevel, // Lock levels beyond current
+        isCompleted,
+        stars: isCompleted ? stars : 0,
+      };
+    }), [userGameData]
   );
+
+  // Progressive coin calculation based on level
+  const calculateLevelCoins = (level: number, stars: number): number => {
+    // Base coins increase progressively with level
+    const baseCoins = Math.floor(10 + (level * 2.5)); // Level 1: 12, Level 50: 135, Level 100: 260
+    const starBonus = stars * Math.floor(5 + (level * 0.5)); // Star bonus also increases with level
+    const completionBonus = Math.floor(level * 1.2); // Completion bonus
+    
+    return baseCoins + starBonus + completionBonus;
+  };
+
+  // Handle level completion with progressive rewards
+  const handleLevelComplete = async (level: number, starsEarned: number, scoreEarned: number) => {
+    if (!user?.uid) return;
+    
+    try {
+      const updatedData = await StorageService.completeLevel(
+        user.uid, 
+        level, 
+        starsEarned, 
+        scoreEarned
+      );
+      
+      // Calculate progressive coin reward
+      const coinsEarned = calculateLevelCoins(level, starsEarned);
+      const newCoins = await StorageService.addCoins(user.uid, coinsEarned);
+      
+      // Update local state
+      setUserGameData(updatedData);
+      setScore(updatedData.score);
+      setCurrentLevel(updatedData.currentLevel);
+      setCoins(newCoins);
+      
+      Alert.alert(
+        'Level Complete!', 
+        `Level ${level} Complete!\n⭐ Stars: ${starsEarned}\n🎯 Score: +${scoreEarned.toLocaleString()}\n🪙 Coins: +${coinsEarned}`
+      );
+    } catch (error) {
+      console.error('Error completing level:', error);
+    }
+  };
 
   // Auto-scroll to current level on mount and when current level changes
   useEffect(() => {
-    setTimeout(() => {
-      const currentIndex = levels.findIndex(level => level.id === currentLevel);
-      if (currentIndex !== -1) {
-        // Calculate the reversed index since we're showing levels in reverse order
-        const reversedIndex = levels.length - 1 - currentIndex;
-        flatListRef.current?.scrollToIndex({
-          index: Math.max(0, reversedIndex - 2), // Show a bit of context above
-          animated: true,
-          viewPosition: 0.5 // Center the item
-        });
-      }
-    }, 100);
-  }, [currentLevel]); // Re-run when current level changes
+    if (dataLoaded && userGameData) {
+      setTimeout(() => {
+        const currentUserLevel = userGameData.currentLevel;
+        const currentIndex = levels.findIndex(level => level.id === currentUserLevel);
+        if (currentIndex !== -1) {
+          // Calculate the reversed index since we're showing levels in reverse order
+          const reversedIndex = levels.length - 1 - currentIndex;
+          flatListRef.current?.scrollToIndex({
+            index: reversedIndex,
+            animated: true,
+            viewPosition: 0.5 // Center the current level perfectly
+          });
+        }
+      }, 500); // Increased delay to ensure data is loaded
+    }
+  }, [dataLoaded, userGameData?.currentLevel, levels.length]); // Re-run when data loads or current level changes
 
   useEffect(() => {
     Animated.loop(
@@ -384,8 +564,18 @@ const Roadmap: React.FC = () => {
   };
 
   const handleLevelPress = (level: number, isLocked: boolean) => {
-    if (isLocked || isLoading) return;
+    if (isLocked) {
+      // Show message for locked levels without loading
+      Alert.alert(
+        'Level Locked', 
+        `Complete level ${level - 1} first to unlock this level!`,
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
 
+    // Set direction to fight and show loading
+    setLoadingDirection('toFight');
     setIsLoading(true);
     setSelectedLevel(level);
     setCurrentLevel(level);
@@ -401,6 +591,8 @@ const Roadmap: React.FC = () => {
   };
 
   const handleBackPress = () => {
+    // Set direction to base and show loading
+    setLoadingDirection('toBase');
     setIsLoading(true);
 
     // Wait for loading screen to appear before switching
@@ -409,14 +601,17 @@ const Roadmap: React.FC = () => {
 
       // Scroll to current level when returning
       setTimeout(() => {
-        const currentIndex = levels.findIndex(level => level.id === currentLevel);
-        if (currentIndex !== -1) {
-          const reversedIndex = levels.length - 1 - currentIndex;
-          flatListRef.current?.scrollToIndex({
-            index: Math.max(0, reversedIndex - 2),
-            animated: false, // Instant scroll while hidden
-            viewPosition: 0.5
-          });
+        if (userGameData) {
+          const currentUserLevel = userGameData.currentLevel;
+          const currentIndex = levels.findIndex(level => level.id === currentUserLevel);
+          if (currentIndex !== -1) {
+            const reversedIndex = levels.length - 1 - currentIndex;
+            flatListRef.current?.scrollToIndex({
+              index: reversedIndex,
+              animated: false, // Instant scroll while hidden
+              viewPosition: 0.5 // Center perfectly
+            });
+          }
         }
         setIsLoading(false);
       }, 100);
@@ -433,7 +628,10 @@ const Roadmap: React.FC = () => {
         style={styles.loadingSpaceship}
       />
       <Text style={styles.loadingText}>
-        {showGameScreen ? 'Returning to Base...' : `Travel to Level ${selectedLevel}...`}
+        {loadingDirection === 'toFight' 
+          ? `Going for Fight - Level ${selectedLevel}...` 
+          : 'Returning to Base...'
+        }
       </Text>
     </View>
   );
@@ -441,7 +639,8 @@ const Roadmap: React.FC = () => {
   // Individual Level Item Component for better performance
   const LevelItem = React.memo(({ item, index }: { item: any, index: number }) => {
     const isCurrent = item.id === currentLevel;
-    const isPassed = item.id < currentLevel;
+    const isPassed = item.isCompleted;
+    const isLocked = item.isLocked;
     const levelColor = RING_COLORS[index % RING_COLORS.length];
     const isEven = index % 2 === 0;
     const x = isEven ? SCREEN_WIDTH * 0.22 : SCREEN_WIDTH * 0.78;
@@ -449,8 +648,8 @@ const Roadmap: React.FC = () => {
     return (
       <View style={[styles.levelItemContainer, { marginLeft: x - 75 }]}>
         <TouchableOpacity
-          onPress={() => handleLevelPress(item.id, item.isLocked)}
-          activeOpacity={0.8}
+          onPress={() => handleLevelPress(item.id, isLocked)}
+          activeOpacity={isLocked ? 1.0 : 0.8}
           style={styles.ufoTouchable}
         >
           {/* Centered Layers Container */}
@@ -481,6 +680,7 @@ const Roadmap: React.FC = () => {
                 );
               })}
 
+              {/* Current level indicator */}
               {isCurrent && (
                 <OrbitalRing
                   size={110}
@@ -499,7 +699,6 @@ const Roadmap: React.FC = () => {
           {/* Planet Node */}
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
             <View style={[styles.centeredLayers, { zIndex: 1 }]}>
-              {/* zIndex 1 for nodeCore, higher than waves (default 0) */}
               <View style={[
                 styles.nodeCore,
                 isCurrent && styles.activeNodeCore,
@@ -512,12 +711,25 @@ const Roadmap: React.FC = () => {
               ]}>
                 <StationInnerGlow color={levelColor} isCurrent={isCurrent} />
 
+                {/* Planet Icon - always visible clearly */}
                 {!(item.id === 6 || item.id === 8) && (
                   <Image
                     source={{ uri: ICONS[index % ICONS.length] }}
-                    style={[styles.ufoIcon, { opacity: index <= currentLevel ? 1 : 0.85 }]}
+                    style={styles.ufoIcon}
                     resizeMode="contain"
                   />
+                )}
+
+                {/* Simple lock overlay for locked levels */}
+                {isLocked && (
+                  <View style={styles.lockOverlay}>
+                    <MaterialIcon 
+                      name={GAME_ICONS.LOCK.name} 
+                      family={GAME_ICONS.LOCK.family}
+                      size={ICON_SIZES.LARGE} 
+                      color="rgba(255, 255, 255, 0.9)" 
+                    />
+                  </View>
                 )}
               </View>
             </View>
@@ -532,10 +744,12 @@ const Roadmap: React.FC = () => {
 
           {/* Level Text */}
           <View style={styles.levelTextContainer}>
-            <Text style={[styles.levelNumberText, { color: levelColor }]}>LEVEL {item.id}</Text>
+            <Text style={[styles.levelNumberText, { color: levelColor }]}>
+              LEVEL {item.id}
+            </Text>
           </View>
 
-          {/* Star Reward Display */}
+          {/* Star Reward Display - only for completed levels */}
           {isPassed && (
             <View style={styles.starsContainer}>
               {[1, 2, 3].map(s => (
@@ -633,6 +847,14 @@ const Roadmap: React.FC = () => {
         <View style={{ flex: 1 }}>
           <SpaceBackground />
 
+          {/* Leaderboard Modal */}
+          <Leaderboard 
+            isVisible={showLeaderboard}
+            onClose={() => setShowLeaderboard(false)}
+            currentUserScore={score}
+            userId={user?.uid}
+          />
+
           {/* Shop Modal */}
           {showShop && (
             <View style={styles.shopOverlay}>
@@ -721,7 +943,12 @@ const Roadmap: React.FC = () => {
           )}
 
           {/* Unified Dashboard Header */}
-          <RoadmapHeader coins={coins} onShopPress={() => setShowShop(true)} />
+          <RoadmapHeader 
+            coins={coins} 
+            score={score}
+            onShopPress={() => setShowShop(true)}
+            onLeaderboardPress={() => setShowLeaderboard(true)}
+          />
 
           <FlatList
             ref={flatListRef}
@@ -740,7 +967,16 @@ const Roadmap: React.FC = () => {
               offset: 220 * index,
               index,
             })}
-            initialScrollIndex={Math.max(0, levels.length - currentLevel - 2)}
+            initialScrollIndex={dataLoaded && userGameData ? Math.max(0, levels.length - userGameData.currentLevel) : 0}
+            onScrollToIndexFailed={(info) => {
+              // Fallback if scroll fails
+              setTimeout(() => {
+                flatListRef.current?.scrollToIndex({
+                  index: Math.min(info.index, levels.length - 1),
+                  animated: false,
+                });
+              }, 100);
+            }}
           />
         </View>
       )}
@@ -758,7 +994,7 @@ const styles = StyleSheet.create({
   dashboardContainer: {
     marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: 5,
+    marginBottom: 15,
     backgroundColor: 'rgba(20, 20, 30, 0.95)',
     // Asymmetric Cyber Shape
     borderTopLeftRadius: 40,
@@ -798,6 +1034,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
+    gap: 6, // Add gap between icon and text
   },
   dashboardDivider: {
     height: 1,
@@ -808,7 +1045,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
-    paddingVertical: 10,
+    paddingVertical: 15,
     backgroundColor: 'rgba(0, 0, 0, 0.2)', // Slightly darker bottom
   },
   actionBtn: {
@@ -842,7 +1079,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   userEmail: {
-    color: '#888',
+    color: '#FFD700',
     fontSize: 8,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -947,6 +1184,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 30,
   },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 50,
+  },
   titleContainer: {
     marginTop: 15,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -973,7 +1221,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     opacity: 1, // Full opacity
   },
-  ufoIcon: { width: 85, height: 85 },
+  ufoIcon: { width: 85, height: 85, opacity: 1 },
   levelTextContainer: {
     position: 'absolute',
     bottom: -30, // Position below the planet

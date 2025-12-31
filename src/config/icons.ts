@@ -34,6 +34,7 @@ export const GAME_ICONS = {
   TROPHY: { name: 'trophy', family: 'material-community' as const },
   MEDAL: { name: 'medal', family: 'material-community' as const },
   CROWN: { name: 'crown', family: 'material-community' as const },
+  SCORE: { name: 'trending-up', family: 'material' as const },
   
   // Currency & Rewards
   COIN: { name: 'monetization-on', family: 'material' as const },

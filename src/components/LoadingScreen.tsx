@@ -104,7 +104,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ onLoadingComplete }) => {
           </View>
 
           {/* App Title */}
-          <Text style={styles.title}>Bubble Shooter</Text>
+          <Text style={styles.title}>SPACE ADVENTURE</Text>
           <Text style={styles.subtitle}>Loading your game...</Text>
 
           {/* Progress Bar */}
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#FFD700',
     marginBottom: 8,
     textAlign: 'center',
     letterSpacing: 1,
