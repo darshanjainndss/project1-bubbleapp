@@ -9,16 +9,16 @@ import MaterialIcon from "./MaterialIcon";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
 import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
 import { GameHUD } from "./game/GameHUD";
-import LaserSystem from "./LaserSystem";
+import OptimizedLaser from "./game/OptimizedLaser";
 
 import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
 import { getPos, getHexNeighbors } from "../utils/gameUtils";
 import { resolveLanding as executeResolveLanding } from "../logic/LandingLogic";
-import { 
-  calculateLaserGeometry, 
-  calculateAimingPath, 
-  findBestLandingSpot, 
-  createShotFromCircleEdge 
+import {
+  calculateLaserGeometry,
+  calculateAimingPath,
+  findBestLandingSpot,
+  createShotFromCannonCenter
 } from "../utils/laserUtils";
 
 import {
@@ -56,7 +56,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const cannonAngleRef = useRef(0);
 
   // New laser system states
-  const [aimSegments, setAimSegments] = useState<any[]>([]);
+  const [aimDots, setAimDots] = useState<any[]>([]);
   const [ghostBubble, setGhostBubble] = useState({ x: 0, y: 0, visible: false });
 
   const scrollY = useRef(new Animated.Value(-100)).current;
@@ -108,6 +108,10 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const cannonRef = useRef<View>(null);
   const shootingRef = useRef<View>(null);
 
+  // SHOOTING COOLDOWN TO PREVENT RAPID FIRE LAG
+  const lastShotTime = useRef(0);
+  const SHOT_COOLDOWN = 300; // 300ms cooldown between shots
+
   const muzzleFlashAnim = useRef(new Animated.Value(0)).current;
   const muzzleVelocityAnim = useRef(new Animated.Value(0)).current;
   const recoilAnim = useRef(new Animated.Value(0)).current;
@@ -122,9 +126,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
 
 
-  const removeBlast = (id: string) => {
+  const removeBlast = useCallback((id: string) => {
     setBlasts(prev => prev.filter(b => b.id !== id));
-  };
+  }, []);
 
   // Lightning power-up activation
   const activateLightning = () => {
@@ -370,13 +374,21 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   const updateAim = (pageX: number, pageY: number) => {
     if (isProcessing.current || !isAiming.current || gameState !== 'playing') return;
+
+    // PREVENT AIMING WHILE BLASTS ARE ACTIVE
+    if (blasts.length > 0) {
+      setAimDots([]);
+      setGhostBubble({ x: 0, y: 0, visible: false });
+      return;
+    }
+
     if (showHint) setShowHint(false);
 
     // Calculate laser geometry
-    const { circleCenterX, circleCenterY, circleRadius } = calculateLaserGeometry(
-      CANNON_SIZE, 
-      FOOTER_BOTTOM, 
-      0 // angle will be calculated below
+    const { circleCenterX, circleCenterY, traceStartX, traceStartY } = calculateLaserGeometry(
+      CANNON_SIZE,
+      FOOTER_BOTTOM,
+      0
     );
 
     const dx = pageX - circleCenterX;
@@ -385,7 +397,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     // REJECT AIM IF BELOW FIRING LINE
     if (dy >= -5) {
       isValidAim.current = false;
-      setAimSegments([]);
+      setAimDots([]);
       setGhostBubble({ x: 0, y: 0, visible: false });
       return;
     }
@@ -394,13 +406,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     const angle = Math.atan2(dy, dx);
     cannonAngleRef.current = angle + Math.PI / 2;
-    
-    // Calculate starting point on circle edge
-    const traceStartX = circleCenterX + Math.cos(angle) * circleRadius;
-    const traceStartY = circleCenterY + Math.sin(angle) * circleRadius;
 
     // Calculate aiming path
-    const { segments, hitPoint } = calculateAimingPath(
+    const { dots, hitPoint } = calculateAimingPath(
       traceStartX,
       traceStartY,
       angle,
@@ -410,7 +418,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
       GRID_TOP
     );
 
-    setAimSegments(segments);
+    setAimDots(dots);
 
     if (hitPoint) {
       const best = findBestLandingSpot(
@@ -419,7 +427,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         currentScrollY.current,
         getPos
       );
-      
+
       const finalPos = getPos(best.r, best.c);
       const ghostY = finalPos.y + currentScrollY.current;
 
@@ -435,10 +443,19 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   const onRelease = () => {
     if (!isAiming.current || isProcessing.current || gameState !== 'playing') return;
+
+    // PREVENT SHOOTING WHILE BLASTS ARE ACTIVE
+    if (blasts.length > 0) return;
+
+    // PREVENT RAPID FIRE LAG
+    const now = Date.now();
+    if (now - lastShotTime.current < SHOT_COOLDOWN) return;
+    lastShotTime.current = now;
+
     isAiming.current = false;
 
     // Clear UI indicators
-    setAimSegments([]);
+    setAimDots([]);
     setGhostBubble({ x: 0, y: 0, visible: false });
 
     // ONLY SHOOT IF AIM WAS VALID
@@ -479,9 +496,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
     const angle = cannonAngleRef.current - Math.PI / 2;
     const velocity = 28;
-    
+
     // Create shot using new laser utilities
-    const shot = createShotFromCircleEdge(
+    const shot = createShotFromCannonCenter(
       CANNON_SIZE,
       FOOTER_BOTTOM,
       angle,
@@ -532,19 +549,10 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         });
       }
 
-      // PERFORMANCE OPTIMIZATION: Broad-phase filtering
-      const stepStartY = shot.y;
-      const stepEndY = shot.y + shot.vy;
-      const candidates = bubbles.filter(b => {
-        if (!b.visible) return false;
-        const by = b.y + scrollOffset;
-        return by > Math.min(stepStartY, stepEndY) - BUBBLE_SIZE && by < Math.max(stepStartY, stepEndY) + BUBBLE_SIZE;
-      });
-
-      // 4 sub-steps for good smoothness but better performance
-      for (let i = 0; i < 4; i++) {
-        shot.x += shot.vx / 4;
-        shot.y += shot.vy / 4;
+      // OPTIMIZED: Reduced sub-steps for better performance
+      for (let i = 0; i < 2; i++) {
+        shot.x += shot.vx / 2;
+        shot.y += shot.vy / 2;
 
         // Wall collision
         if (shot.x < BUBBLE_SIZE / 2 && shot.vx < 0) {
@@ -560,7 +568,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           break;
         }
 
-        const hit = candidates.find(b => {
+        // OPTIMIZED: Simple distance check without filtering
+        const hit = bubbles.find(b => {
+          if (!b.visible) return false;
           return (shot.x - b.x) ** 2 + (shot.y - (b.y + scrollOffset)) ** 2 < thresholdSq;
         });
 
@@ -585,6 +595,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   };
 
   const resolveLanding = (shot: any) => {
+    // Clear shooting bubble immediately to prevent visual artifacts
+    setShootingBubble(null);
+
     executeResolveLanding(shot, {
       bubblesRef,
       setBubbles,
@@ -630,6 +643,9 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
       <View style={styles.gameArea} onStartShouldSetResponder={() => true}
         onResponderGrant={(e) => {
+          // PREVENT STARTING AIM WHILE BLASTS ARE ACTIVE
+          if (blasts.length > 0) return;
+
           const { pageX, pageY } = e.nativeEvent;
           // BROADENED AIMING ZONE: Touching the spaceship or anywhere above it up to the patterns
           // cannonPos.y is the ship center, GRID_TOP is the start of bubble grid
@@ -666,45 +682,21 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           ))}
         </Animated.View>
 
-        {/* New Laser System - handles all laser effects */}
-        <LaserSystem
+        {/* Optimized Laser System - handles all laser effects */}
+        <OptimizedLaser
           cannonPos={cannonPos}
           cannonSize={CANNON_SIZE}
           footerBottom={FOOTER_BOTTOM}
           nextColor={nextColor}
           currentShotColor={currentShotColor}
-          isAiming={isAiming.current}
-          aimSegments={aimSegments}
+          aimDots={aimDots}
           ghostBubble={ghostBubble}
-          shootingBubble={null} // Don't pass shooting bubble to LaserSystem
+          shootingBubble={shootingBubble}
           colorWaveAnim={colorWaveAnim}
           recoilAnim={recoilAnim}
-          onAimUpdate={() => {}} // Not needed with new system
+          shootingRef={shootingRef}
+          blastsActive={blasts.length > 0}
         />
-
-        {/* Shooting Laser Ball - handled directly for better performance */}
-        {shootingBubble && (
-          <View
-            ref={shootingRef}
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: shootingBubble.color,
-              zIndex: 101,
-              opacity: 0,
-              shadowColor: shootingBubble.color,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.8,
-              shadowRadius: 6,
-              elevation: 8,
-            }}
-          />
-        )}
 
         <View style={styles.footer}>
           {showHint && (

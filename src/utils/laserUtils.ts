@@ -18,12 +18,12 @@ export const calculateLaserGeometry = (
   const circleSize = cannonSize + 30;
   const circleRadius = circleSize / 2;
   const circleCenterX = SCREEN_WIDTH / 2;
-  const circleCenterY = SCREEN_HEIGHT - footerBottom - circleRadius;
-  
-  // Calculate starting point on circle edge
-  const traceStartX = circleCenterX + Math.cos(aimAngle) * circleRadius;
-  const traceStartY = circleCenterY + Math.sin(aimAngle) * circleRadius;
-  
+  const circleCenterY = SCREEN_HEIGHT - footerBottom - (cannonSize / 2);
+
+  // Start from center of cannon
+  const traceStartX = circleCenterX;
+  const traceStartY = circleCenterY;
+
   return {
     circleCenterX,
     circleCenterY,
@@ -42,63 +42,52 @@ export const calculateAimingPath = (
   bubbleSize: number,
   gridTop: number
 ) => {
-  const segments = [];
+  const dots = [];
   let tx = startX;
   let ty = startY;
-  let vx = Math.cos(angle) * 10;
-  let vy = Math.sin(angle) * 10;
+  let vx = Math.cos(angle) * 5; // Smaller steps for smoother path
+  let vy = Math.sin(angle) * 5;
   let hitPoint = null;
-  let segStartX = tx;
-  let segStartY = ty;
 
-  for (let i = 0; i < 200; i++) {
+  const stepDist = 20; // Distance between visible dots
+  let distSinceLastDot = stepDist; // Start with a dot
+
+  for (let i = 0; i < 400; i++) {
     tx += vx;
     ty += vy;
-    let bounced = false;
+    distSinceLastDot += 5; // step size
 
     // Wall bouncing
     if (tx < bubbleSize / 2 && vx < 0) {
       tx = bubbleSize / 2;
       vx *= -1;
-      bounced = true;
     } else if (tx > SCREEN_WIDTH - bubbleSize / 2 && vx > 0) {
       tx = SCREEN_WIDTH - bubbleSize / 2;
       vx *= -1;
-      bounced = true;
     }
 
     // Bubble collision detection
-    const hitIdx = bubbles.findIndex(b => 
-      b.visible && 
+    const hitIdx = bubbles.findIndex(b =>
+      b.visible &&
       Math.sqrt((tx - b.x) ** 2 + (ty - (b.y + currentScrollY)) ** 2) < bubbleSize * 0.85
     );
 
     if (hitIdx !== -1 || ty < gridTop) {
       hitPoint = { x: tx, y: ty };
-      segments.push({
-        x1: segStartX,
-        y1: segStartY,
-        x2: tx,
-        y2: ty,
-        opacity: 1 - i / 300
-      });
       break;
     }
 
-    if (bounced) {
-      segments.push({
-        x1: segStartX,
-        y1: segStartY,
-        x2: tx,
-        y2: ty,
-        opacity: 1 - i / 300
+    if (distSinceLastDot >= stepDist) {
+      dots.push({
+        x: tx,
+        y: ty,
+        opacity: Math.max(0.2, 1 - dots.length / 50)
       });
-      segStartX = tx;
-      segStartY = ty;
+      distSinceLastDot = 0;
     }
   }
 
-  return { segments, hitPoint };
+  return { dots, hitPoint };
 };
 
 export const findBestLandingSpot = (
@@ -115,10 +104,10 @@ export const findBestLandingSpot = (
     const rowWidth = (r % 2 === 0) ? 9 : 8;
     for (let c = 0; c < rowWidth; c++) {
       if (bubbles.some(b => b.visible && b.row === r && b.col === c)) continue;
-      
+
       const coords = getPos(r, c);
       const dSq = (hitX - coords.x) ** 2 + (hitY - (coords.y + scrollOffset)) ** 2;
-      
+
       if (dSq < best.distSq) {
         best = { r, c, distSq: dSq };
       }
@@ -128,7 +117,7 @@ export const findBestLandingSpot = (
   return best;
 };
 
-export const createShotFromCircleEdge = (
+export const createShotFromCannonCenter = (
   cannonSize: number,
   footerBottom: number,
   angle: number,
@@ -142,7 +131,7 @@ export const createShotFromCircleEdge = (
   }
 ) => {
   const { traceStartX, traceStartY } = calculateLaserGeometry(cannonSize, footerBottom, angle);
-  
+
   return {
     x: traceStartX,
     y: traceStartY,
