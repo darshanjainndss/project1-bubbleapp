@@ -1,4 +1,7 @@
 {
   "name": "bubbleapp",
-  "displayName": "bubbleapp"
+  "displayName": "bubbleapp",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-9343780880487586~7301029574"
+  }
 }

@@ -10,11 +10,38 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import mobileAds from 'react-native-google-mobile-ads';
 import LoadingScreen from './src/components/LoadingScreen';
 import TransitionScreen from './src/components/TransitionScreen';
 import Roadmap from './src/components/Roadmap';
 import LoginScreen from './src/components/LoginScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+
+// Initialize AdMob
+mobileAds()
+  .initialize()
+  .then(adapterStatuses => {
+    console.log('✅ AdMob initialized successfully');
+    
+    // Log adapter statuses for debugging
+    Object.keys(adapterStatuses).forEach(adapter => {
+      const status = adapterStatuses[adapter];
+      console.log(`📱 ${adapter}: ${status.state} (${status.description})`);
+    });
+  })
+  .catch(error => {
+    console.error('❌ AdMob initialization failed:', error);
+  });
+
+// Set request configuration for better ad serving
+mobileAds().setRequestConfiguration({
+  // Max ad content rating
+  maxAdContentRating: 'G',
+  // Tag for under age of consent
+  tagForUnderAgeOfConsent: false,
+  // Tag for child directed treatment
+  tagForChildDirectedTreatment: false,
+});
 
 function App() {
   return (

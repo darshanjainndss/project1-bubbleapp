@@ -15,6 +15,9 @@ import GameScreen from './GameScreen';
 import SpaceBackground from "./SpaceBackground.tsx";
 import Leaderboard from './Leaderboard';
 import MaterialIcon from './MaterialIcon';
+import AdBanner from './AdBanner';
+import RewardedAdButton from './RewardedAdButton';
+import SimpleRewardedAdButton from './SimpleRewardedAdButton';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
 import { useAuth } from '../context/AuthContext';
@@ -165,11 +168,12 @@ const SHOP_ITEMS = [
 ];
 
 // UNIFIED DASHBOARD HEADER COMPONENT
-const RoadmapHeader = ({ coins, score, onShopPress, onLeaderboardPress }: {
+const RoadmapHeader = ({ coins, score, onShopPress, onLeaderboardPress, onRewardedAdPress }: {
   coins: number;
   score: number;
   onShopPress: () => void;
   onLeaderboardPress: () => void;
+  onRewardedAdPress: () => void;
 }) => {
   const { signOut, user } = useAuth();
 
@@ -253,6 +257,18 @@ const RoadmapHeader = ({ coins, score, onShopPress, onLeaderboardPress }: {
 
         <View style={styles.dividerVerticalSmall} />
 
+        <TouchableOpacity style={styles.actionBtn} onPress={onRewardedAdPress}>
+          <MaterialIcon
+            name="play-circle-filled"
+            family="material"
+            size={ICON_SIZES.MEDIUM}
+            color={ICON_COLORS.WARNING}
+          />
+          <Text style={[styles.menuText, { color: '#FFD60A' }]}>WATCH AD</Text>
+        </TouchableOpacity>
+
+        <View style={styles.dividerVerticalSmall} />
+
         <TouchableOpacity style={styles.actionBtn} onPress={handleLogout}>
           <MaterialIcon
             name="exit-to-app"
@@ -288,6 +304,10 @@ const Roadmap: React.FC = () => {
     fire: 2,
     freeze: 2,
   });
+
+  // Rewarded ad state
+  const [rewardedAd, setRewardedAd] = useState<any>(null);
+  const [isAdLoaded, setIsAdLoaded] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -327,6 +347,54 @@ const Roadmap: React.FC = () => {
 
     loadUserData();
   }, [user?.uid]);
+
+  // Initialize rewarded ad
+  useEffect(() => {
+    const { RewardedAd, AdEventType, RewardedAdEventType } = require('react-native-google-mobile-ads');
+    const { ADMOB_CONFIG } = require('../config/admob');
+
+    const ad = RewardedAd.createForAdRequest(ADMOB_CONFIG.REWARDED_AD_UNIT_ID, {
+      requestNonPersonalizedAdsOnly: true,
+    });
+
+    const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+      console.log('✅ Rewarded ad loaded');
+      setIsAdLoaded(true);
+    });
+
+    const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: any) => {
+      console.log('🎉 User earned reward:', reward);
+      setCoins(prev => prev + 50);
+      Alert.alert('Reward Earned!', 'You earned 50 coins!', [{ text: 'OK' }]);
+    });
+
+    const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error: any) => {
+      console.log('❌ Rewarded ad error:', error);
+      setIsAdLoaded(false);
+    });
+
+    setRewardedAd(ad);
+    ad.load();
+
+    return () => {
+      unsubscribeLoaded();
+      unsubscribeEarned();
+      unsubscribeError();
+    };
+  }, []);
+
+  // Handle rewarded ad button press
+  const handleRewardedAdPress = () => {
+    if (rewardedAd && isAdLoaded) {
+      rewardedAd.show();
+    } else {
+      Alert.alert(
+        'Ad Not Ready',
+        'The rewarded ad is still loading. Please try again in a moment.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
   // Save user data whenever important state changes
   useEffect(() => {
@@ -923,6 +991,18 @@ const Roadmap: React.FC = () => {
                     </View>
                   ))}
                 </View>
+
+                {/* Rewarded Ad Section */}
+                <View style={styles.shopRewardSection}>
+                  <Text style={styles.shopRewardTitle}>GET FREE COINS</Text>
+                  <RewardedAdButton
+                    onReward={(amount) => {
+                      setCoins(prev => prev + amount);
+                      console.log(`🎉 Rewarded ${amount} coins from ad!`);
+                    }}
+                    rewardAmount={50}
+                  />
+                </View>
               </View>
             </View>
           )}
@@ -933,7 +1013,13 @@ const Roadmap: React.FC = () => {
             score={score}
             onShopPress={() => setShowShop(true)}
             onLeaderboardPress={() => setShowLeaderboard(true)}
+            onRewardedAdPress={handleRewardedAdPress}
           />
+
+          {/* AdMob Banner Ad */}
+          <View style={styles.adBannerContainer}>
+            <AdBanner />
+          </View>
 
           <FlatList
             ref={flatListRef}
@@ -941,7 +1027,7 @@ const Roadmap: React.FC = () => {
             renderItem={({ item, index }) => <LevelItem item={item} index={levels.length - 1 - index} />}
             keyExtractor={(item) => item.id.toString()}
             style={styles.scrollView}
-            contentContainerStyle={styles.roadmapContainer}
+            contentContainerStyle={[styles.roadmapContainer, { paddingBottom: 180 }]}
             showsVerticalScrollIndicator={false}
             initialNumToRender={6}
             maxToRenderPerBatch={3}

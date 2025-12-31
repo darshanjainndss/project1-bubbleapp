@@ -146,6 +146,29 @@ export const styles = StyleSheet.create({
         marginHorizontal: 1,
     },
 
+    // AD BANNER STYLES
+    adBannerContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0, 224, 255, 0.3)',
+        zIndex: 50,
+    },
+
+    // REWARDED AD BUTTON STYLES
+    rewardedAdButtonContainer: {
+        position: 'absolute',
+        top: 160, // Below the dashboard header
+        left: 20,
+        right: 20,
+        zIndex: 60,
+    },
+
     listContent: {
         paddingBottom: 200,
     },
@@ -419,6 +442,23 @@ export const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: 'bold',
         color: '#fff',
+    },
+
+    // REWARDED AD SECTION STYLES
+    shopRewardSection: {
+        marginTop: 20,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.1)',
+    },
+    shopRewardTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#00FF88',
+        textAlign: 'center',
+        marginBottom: 10,
+        letterSpacing: 1,
+        fontFamily: 'monospace',
     },
     staticSpaceship: {
         position: 'absolute',
