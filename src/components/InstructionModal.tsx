@@ -199,14 +199,17 @@ const InstructionModal: React.FC<InstructionModalProps> = ({ visible, onClose })
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
   },
   modalContainer: {
-    backgroundColor: 'rgba(20, 20, 30, 0.8)',
-    borderRadius: 25,
+    backgroundColor: 'rgba(5, 5, 10, 0.98)',
+    borderTopLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 10,
     width: Math.min(SCREEN_WIDTH - 32, 420),
     maxHeight: SCREEN_HEIGHT * 0.85,
     minHeight: SCREEN_HEIGHT * 0.6,
@@ -215,8 +218,9 @@ const styles = StyleSheet.create({
     shadowColor: '#00E0FF',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 25,
+    shadowRadius: 25,
+    elevation: 15,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',

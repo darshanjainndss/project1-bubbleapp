@@ -5,11 +5,41 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image,
+  ScrollView,
 } from 'react-native';
 import MaterialIcon from './MaterialIcon';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
-import StorageService, { LeaderboardEntry } from '../services/StorageService';
+import BackendService from '../services/BackendService';
+import { useAuth } from '../context/AuthContext';
+
+interface LeaderboardEntry {
+  userId: string;
+  displayName: string;
+  profilePicture?: string;
+  highScore: number;
+  totalScore: number;
+  gamesWon: number;
+  rank: number;
+}
+
+interface UserGameData {
+  userId: string;
+  totalScore: number;
+  highScore: number;
+  totalCoins: number;
+  currentLevel: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  abilities: {
+    lightning: number;
+    bomb: number;
+    freeze: number;
+    fire: number;
+  };
+  achievements: string[];
+  lastPlayedAt: string;
+  rank?: number;
+}
 
 interface LeaderboardProps {
   isVisible: boolean;
@@ -24,35 +54,190 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
   currentUserScore = 0,
   userId 
 }) => {
-  const [leaderboardData, setLeaderboardData] = useState<(LeaderboardEntry & { rank: number })[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuth(); // Get Firebase user
+  // Dummy data for testing/fallback
+  const dummyLeaderboardData: LeaderboardEntry[] = [
+    {
+      userId: 'dummy1',
+      displayName: 'Charlie Pro',
+      highScore: 3000,
+      totalScore: 18000,
+      gamesWon: 12,
+      rank: 1,
+    },
+    {
+      userId: 'dummy2',
+      displayName: 'Alice Champion',
+      highScore: 2500,
+      totalScore: 15000,
+      gamesWon: 8,
+      rank: 2,
+    },
+    {
+      userId: 'dummy3',
+      displayName: 'Bob Master',
+      highScore: 2200,
+      totalScore: 12000,
+      gamesWon: 6,
+      rank: 3,
+    },
+    {
+      userId: 'dummy4',
+      displayName: 'Diana Expert',
+      highScore: 1800,
+      totalScore: 9000,
+      gamesWon: 5,
+      rank: 4,
+    },
+    {
+      userId: 'dummy5',
+      displayName: 'Eve Rookie',
+      highScore: 1200,
+      totalScore: 5000,
+      gamesWon: 3,
+      rank: 5,
+    },
+  ];
 
-  // Load leaderboard data - internal loading only
+  // Dummy user game data
+  const dummyUserGameData: UserGameData = {
+    userId: 'current-user',
+    totalScore: 850,
+    highScore: 850,
+    totalCoins: 150,
+    currentLevel: 2,
+    gamesPlayed: 3,
+    gamesWon: 2,
+    abilities: {
+      lightning: 2,
+      bomb: 2,
+      freeze: 2,
+      fire: 2,
+    },
+    achievements: [],
+    lastPlayedAt: new Date().toISOString(),
+    rank: 6,
+  };
+
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>(dummyLeaderboardData);
+  const [userGameData, setUserGameData] = useState<UserGameData | null>(dummyUserGameData);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load leaderboard data and user game data from backend
   useEffect(() => {
-    const loadLeaderboard = async () => {
+    const loadData = async () => {
       if (isVisible) {
         setLoading(true);
+        setError(null);
+        
         try {
-          const data = await StorageService.getLeaderboard();
-          // Add rank to each entry and sort by score only
-          const rankedData: (LeaderboardEntry & { rank: number })[] = data
-            .sort((a, b) => b.score - a.score) // Sort by score descending
-            .map((entry, index) => ({
-              ...entry,
-              rank: index + 1,
-            }));
-          setLeaderboardData(rankedData);
+          console.log('🔍 Loading leaderboard data...');
+          
+          // Load leaderboard data (public endpoint, no auth required)
+          const leaderboardResult = await BackendService.getLeaderboard(50);
+          console.log('📊 Leaderboard result:', leaderboardResult);
+          
+          if (leaderboardResult.success && leaderboardResult.leaderboard && leaderboardResult.leaderboard.length > 0) {
+            console.log('✅ Leaderboard data loaded:', leaderboardResult.leaderboard.length, 'entries');
+            let leaderboard = leaderboardResult.leaderboard;
+            
+            // If user is authenticated but not in leaderboard, add them
+            if (user && userGameData && !leaderboard.find(entry => entry.userId === user.uid)) {
+              const userEntry: LeaderboardEntry = {
+                userId: user.uid,
+                displayName: user.displayName || user.email || 'You',
+                highScore: userGameData.highScore,
+                totalScore: userGameData.totalScore,
+                gamesWon: userGameData.gamesWon,
+                rank: leaderboard.length + 1,
+              };
+              leaderboard = [...leaderboard, userEntry];
+            }
+            
+            setLeaderboardData(leaderboard);
+          } else {
+            console.log('⚠️ No backend data, using dummy data');
+            let dummyData = [...dummyLeaderboardData];
+            
+            // Add current user to dummy data if authenticated
+            if (user && userGameData) {
+              const userEntry: LeaderboardEntry = {
+                userId: user.uid,
+                displayName: user.displayName || user.email || 'You',
+                highScore: userGameData.highScore,
+                totalScore: userGameData.totalScore,
+                gamesWon: userGameData.gamesWon,
+                rank: dummyData.length + 1,
+              };
+              dummyData = [...dummyData, userEntry];
+            }
+            
+            setLeaderboardData(dummyData);
+          }
+
+          // Load user game data (requires authentication)
+          if (BackendService.isAuthenticated()) {
+            console.log('🔍 Loading user game data...');
+            const userDataResult = await BackendService.getUserGameData();
+            console.log('👤 User data result:', userDataResult);
+            
+            if (userDataResult.success && userDataResult.data) {
+              console.log('✅ User game data loaded:', userDataResult.data);
+              setUserGameData(userDataResult.data);
+            } else {
+              console.log('⚠️ No user data, using dummy data');
+              setUserGameData(dummyUserGameData);
+            }
+          } else {
+            console.log('⚠️ User not authenticated, using dummy data');
+            // If we have a Firebase user, create personalized dummy data
+            if (user) {
+              const personalizedData = {
+                ...dummyUserGameData,
+                userId: user.uid,
+                displayName: user.displayName || user.email || 'You',
+              };
+              setUserGameData(personalizedData);
+            } else {
+              setUserGameData(dummyUserGameData);
+            }
+          }
         } catch (error) {
-          console.error('Error loading leaderboard:', error);
+          console.error('💥 Error loading data:', error);
+          console.log('🔄 Falling back to dummy data');
+          
+          let dummyData = [...dummyLeaderboardData];
+          let userData = { ...dummyUserGameData };
+          
+          // Personalize dummy data if user is authenticated
+          if (user) {
+            userData = {
+              ...dummyUserGameData,
+              userId: user.uid,
+            };
+            
+            const userEntry: LeaderboardEntry = {
+              userId: user.uid,
+              displayName: user.displayName || user.email || 'You',
+              highScore: userData.highScore,
+              totalScore: userData.totalScore,
+              gamesWon: userData.gamesWon,
+              rank: dummyData.length + 1,
+            };
+            dummyData = [...dummyData, userEntry];
+          }
+          
+          setLeaderboardData(dummyData);
+          setUserGameData(userData);
         } finally {
           setLoading(false);
         }
       }
     };
 
-    // Small delay to prevent immediate loading flash
     if (isVisible) {
-      setTimeout(loadLeaderboard, 100);
+      loadData();
     }
   }, [isVisible]);
 
@@ -74,11 +259,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
     }
   };
 
-  const renderLeaderboardItem = ({ item }: { item: LeaderboardEntry & { rank: number } }) => {
+  const renderLeaderboardItem = ({ item }: { item: LeaderboardEntry }) => {
     const rankColor = getRankColor(item.rank);
     const rankIcon = getRankIcon(item.rank);
     const isTopThree = item.rank <= 3;
-    const isCurrentUser = item.userId === userId;
+    const isCurrentUser = item.userId === (user?.uid || userId); // Use Firebase UID
 
     return (
       <View style={[
@@ -112,21 +297,26 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
         {/* Player Info Section */}
         <View style={styles.playerInfoSection}>
           <Text style={[styles.username, isCurrentUser && { color: '#00FF88' }]}>
-            {isCurrentUser ? 'You' : item.username}
+            {isCurrentUser ? 'You' : item.displayName}
           </Text>
           <View style={styles.playerStats}>
             <View style={styles.statItem}>
-              <Text style={styles.levelText}>Level {item.level}</Text>
+              <Text style={styles.levelText}>Games Won: {item.gamesWon}</Text>
             </View>
+            {item.totalScore && (
+              <View style={styles.statItem}>
+                <Text style={styles.statText}>Total: {item.totalScore.toLocaleString()}</Text>
+              </View>
+            )}
           </View>
         </View>
 
         {/* Score Section - Main focus */}
         <View style={styles.scoreSection}>
           <Text style={[styles.scoreText, { color: rankColor }]}>
-            {item.score.toLocaleString()}
+            {item.highScore.toLocaleString()}
           </Text>
-          <Text style={styles.scoreLabel}>SCORE</Text>
+          <Text style={styles.scoreLabel}>HIGH SCORE</Text>
         </View>
       </View>
     );
@@ -150,7 +340,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Current User Score */}
+        {/* Current User Score and Abilities */}
         <View style={styles.currentUserSection}>
           <MaterialIcon
             name="person"
@@ -158,7 +348,48 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             size={ICON_SIZES.MEDIUM}
             color={ICON_COLORS.SUCCESS}
           />
-          <Text style={styles.currentUserText}>Your Score: {currentUserScore.toLocaleString()}</Text>
+          <View style={styles.currentUserInfo}>
+            <Text style={styles.currentUserText}>
+              Your Score: {userGameData?.highScore?.toLocaleString() || currentUserScore.toLocaleString()}
+            </Text>
+            {userGameData && (
+              <View style={styles.userStatsRow}>
+                <Text style={styles.userStatText}>Rank: #{userGameData.rank || 'Unranked'}</Text>
+                <Text style={styles.userStatText}>Games Won: {userGameData.gamesWon}</Text>
+                <Text style={styles.userStatText}>Level: {userGameData.currentLevel}</Text>
+              </View>
+            )}
+            {userGameData && (
+              <View style={styles.userAbilities}>
+                <Text style={styles.abilitiesTitle}>Abilities:</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.abilitiesScrollContent}
+                >
+                  <View style={styles.abilitiesRow}>
+                    <View style={styles.abilityItem}>
+                      <MaterialIcon name="flash-on" family="material" size={16} color="#FFD700" />
+                      <Text style={styles.abilityCount}>{userGameData.abilities.lightning}</Text>
+                    </View>
+                    <View style={styles.abilityItem}>
+                      <MaterialIcon name="whatshot" family="material" size={16} color="#FF4500" />
+                      <Text style={styles.abilityCount}>{userGameData.abilities.bomb}</Text>
+                    </View>
+                    <View style={styles.abilityItem}>
+                      <MaterialIcon name="ac-unit" family="material" size={16} color="#00BFFF" />
+                      <Text style={styles.abilityCount}>{userGameData.abilities.freeze}</Text>
+                    </View>
+                    <View style={styles.abilityItem}>
+                      <MaterialIcon name="local-fire-department" family="material" size={16} color="#FF6347" />
+                      <Text style={styles.abilityCount}>{userGameData.abilities.fire}</Text>
+                    </View>
+                  </View>
+                </ScrollView>
+                <Text style={styles.coinsText}>Coins: {userGameData.totalCoins}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Leaderboard List */}
@@ -172,13 +403,39 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             />
             <Text style={styles.loadingText}>Loading leaderboard...</Text>
           </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <MaterialIcon
+              name="error"
+              family="material"
+              size={ICON_SIZES.LARGE}
+              color={ICON_COLORS.ERROR}
+            />
+            <Text style={styles.errorText}>Failed to load leaderboard</Text>
+            <Text style={styles.errorSubtext}>{error}</Text>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => {
+                if (isVisible) {
+                  setError(null);
+                  // Trigger reload by toggling loading state
+                  setLoading(true);
+                  setTimeout(() => setLoading(false), 100);
+                }
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <FlatList
             data={leaderboardData}
             renderItem={renderLeaderboardItem}
-            keyExtractor={(item) => item.userId}
+            keyExtractor={(item, index) => item.userId || `leaderboard-${index}`}
             style={styles.leaderboardList}
-            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.leaderboardListContent}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <MaterialIcon
@@ -212,27 +469,41 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   leaderboardModal: {
-    width: '90%',
-    maxHeight: '80%',
-    backgroundColor: 'rgba(20, 20, 30, 0.95)',
-    borderRadius: 20,
+    width: '92%',
+    backgroundColor: 'rgba(5, 5, 10, 0.98)',
+    borderTopLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 10,
     borderWidth: 2,
     borderColor: '#00E0FF',
-    padding: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 25,
+    elevation: 15,
+    overflow: 'hidden',
+    maxHeight: 600, // Ensure modal doesn't take full screen
   },
   
-  // Header (same as shop)
+  // Header (same as roadmap header)
   leaderboardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingBottom: 15,
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   leaderboardTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: '#fff',
-    letterSpacing: 1,
+    letterSpacing: 2,
+    lineHeight: 24,
   },
   leaderboardCloseBtn: {
     width: 40,
@@ -245,46 +516,121 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 59, 48, 0.5)',
   },
 
-  // Current User Section
+  // Current User Section (roadmap card style)
   currentUserSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    padding: 10,
-    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+    justifyContent: 'flex-start',
+    marginBottom: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 15,
     borderWidth: 1,
     borderColor: 'rgba(0, 255, 136, 0.3)',
-    gap: 8,
+    gap: 12,
+  },
+  currentUserInfo: {
+    flex: 1,
   },
   currentUserText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#00FF88',
+    marginBottom: 8,
+  },
+  userStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 5,
+  },
+  userStatText: {
+    fontSize: 12,
+    color: '#00E0FF',
+    fontWeight: 'bold',
+  },
+  userAbilities: {
+    gap: 8,
+  },
+  abilitiesScrollContent: {
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  abilitiesTitle: {
+    fontSize: 12,
+    color: '#aaa',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  abilitiesRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 4,
+    alignItems: 'center',
+  },
+  abilityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    gap: 4,
+    minWidth: 50,
+  },
+  abilityCount: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '700',
+    fontFamily: 'monospace',
+  },
+  coinsText: {
+    fontSize: 12,
+    color: '#FFD700',
+    fontWeight: '700',
+    fontFamily: 'monospace',
   },
 
   // Leaderboard List
   leaderboardList: {
     flex: 1,
+    maxHeight: 350, // Limit height to ensure scrolling works
+  },
+  leaderboardListContent: {
+    paddingBottom: 10,
+    flexGrow: 1,
   },
   leaderboardItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 15,
-    padding: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   topThreeItem: {
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderColor: 'rgba(255, 215, 0, 0.4)',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   currentUserItem: {
-    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-    borderColor: 'rgba(0, 255, 136, 0.3)',
+    backgroundColor: 'rgba(0, 255, 136, 0.15)',
+    borderColor: 'rgba(0, 255, 136, 0.4)',
+    shadowColor: '#00FF88',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
 
   // Rank Section
@@ -378,17 +724,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 40,
+    minHeight: 200,
   },
   loadingText: {
     fontSize: 16,
     color: '#aaa',
     marginTop: 10,
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+    minHeight: 200,
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#FF6B6B',
+    fontWeight: 'bold',
+    marginTop: 15,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: '#aaa',
+    marginTop: 5,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    marginTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0, 224, 255, 0.2)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 255, 0.5)',
+  },
+  retryButtonText: {
+    color: '#00E0FF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 40,
+    minHeight: 200,
   },
   emptyText: {
     fontSize: 18,

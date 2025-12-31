@@ -283,10 +283,10 @@ const Roadmap: React.FC = () => {
 
   // Ability inventory
   const [abilityInventory, setAbilityInventory] = useState({
-    lightning: 0,
-    bomb: 0,
-    fire: 0,
-    freeze: 0,
+    lightning: 2,
+    bomb: 2,
+    fire: 2,
+    freeze: 2,
   });
 
   const flatListRef = useRef<FlatList>(null);
@@ -442,37 +442,6 @@ const Roadmap: React.FC = () => {
     return baseCoins + starBonus + completionBonus;
   };
 
-  // Handle level completion with progressive rewards
-  const handleLevelComplete = async (level: number, starsEarned: number, scoreEarned: number) => {
-    if (!user?.uid) return;
-
-    try {
-      const updatedData = await StorageService.completeLevel(
-        user.uid,
-        level,
-        starsEarned,
-        scoreEarned
-      );
-
-      // Calculate progressive coin reward
-      const coinsEarned = calculateLevelCoins(level, starsEarned);
-      const newCoins = await StorageService.addCoins(user.uid, coinsEarned);
-
-      // Update local state
-      setUserGameData(updatedData);
-      setScore(updatedData.score);
-      setCurrentLevel(updatedData.currentLevel);
-      setCoins(newCoins);
-
-      Alert.alert(
-        'Level Complete!',
-        `Level ${level} Complete!\n⭐ Stars: ${starsEarned}\n🎯 Score: +${scoreEarned.toLocaleString()}\n🪙 Coins: +${coinsEarned}`
-      );
-    } catch (error) {
-      console.error('Error completing level:', error);
-    }
-  };
-
   // Auto-scroll to current level on mount and when current level changes
   useEffect(() => {
     if (dataLoaded && userGameData) {
@@ -592,6 +561,50 @@ const Roadmap: React.FC = () => {
         setIsLoading(false);
       }, 100);
     }, 100);
+  };
+
+  const handleLevelComplete = async (completedLevel: number, finalScore: number, stars: number) => {
+    try {
+      // Update user progress
+      const newCurrentLevel = Math.max(completedLevel + 1, currentLevel);
+      const newScore = Math.max(finalScore, score);
+      
+      // Update local state
+      setCurrentLevel(newCurrentLevel);
+      setScore(newScore);
+
+      // Save to storage
+      const updatedGameData: UserGameData = {
+        currentLevel: newCurrentLevel,
+        score: newScore,
+        coins: userGameData?.coins || 0,
+        completedLevels: userGameData?.completedLevels || [],
+        levelStars: userGameData?.levelStars || {},
+        abilityInventory: userGameData?.abilityInventory || { lightning: 2, bomb: 2, freeze: 2, fire: 2 },
+        totalStars: userGameData?.totalStars || 0,
+        lastPlayedDate: new Date().toISOString()
+      };
+      
+      await StorageService.saveUserData(user?.uid || 'guest', updatedGameData);
+      setUserGameData(updatedGameData);
+
+      // Progress to next level
+      if (completedLevel < levels.length) {
+        setSelectedLevel(completedLevel + 1);
+        setLoadingDirection('toFight');
+        setIsLoading(true);
+
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 1000);
+      } else {
+        // All levels completed - go back to roadmap
+        handleBackPress();
+      }
+    } catch (error) {
+      console.error('Error handling level completion:', error);
+      handleBackPress();
+    }
   };
 
   // Loading Indicator Component - Full Screen Overlay
@@ -810,7 +823,11 @@ const Roadmap: React.FC = () => {
       {/* GameScreen has its own background, Roadmap has its own. */}
 
       {showGameScreen ? (
-        <GameScreen onBackPress={handleBackPress} level={selectedLevel} />
+        <GameScreen 
+          onBackPress={handleBackPress} 
+          level={selectedLevel} 
+          onLevelComplete={handleLevelComplete}
+        />
       ) : (
         <View style={{ flex: 1 }}>
           <SpaceBackground />

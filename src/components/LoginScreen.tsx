@@ -115,159 +115,148 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <SpaceBackground />
       
-      <View style={styles.mainContent}>
-        {/* Game Title Header */}
-        <View style={styles.titleSection}>
-          <LottieView
-            source={require('../images/Spaceship.json')}
-            autoPlay
-            loop
-            style={styles.titleSpaceship}
-          />
-          <Text style={styles.gameTitle}>SPACE</Text>
-          <Text style={styles.gameSubtitle}>ADVENTURE</Text>
-        </View>
-
-        {/* Tab Selector */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'quickplay' && styles.activeTab]}
-            onPress={() => setActiveTab('quickplay')}
-          >
-            <MaterialIcon 
-              name={GAME_ICONS.PLAY.name} 
-              family={GAME_ICONS.PLAY.family}
-              size={ICON_SIZES.MEDIUM} 
-              color={activeTab === 'quickplay' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY} 
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.mainContent}>
+          {/* Game Title Header */}
+          <View style={styles.titleSection}>
+            <LottieView
+              source={require('../images/Spaceship.json')}
+              autoPlay
+              loop
+              style={styles.titleSpaceship}
             />
-            <Text style={[
-              styles.tabText, 
-              { color: activeTab === 'quickplay' ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
-            ]}>
-              QUICK PLAY
-            </Text>
-          </TouchableOpacity>
+            <Text style={styles.gameTitle}>SPACE</Text>
+            <Text style={styles.gameSubtitle}>ADVENTURE</Text>
+          </View>
 
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'login' && styles.activeTab]}
-            onPress={() => setActiveTab('login')}
-          >
-            <MaterialIcon 
-              name="login" 
-              family="material"
-              size={ICON_SIZES.MEDIUM} 
-              color={activeTab === 'login' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY} 
-            />
-            <Text style={[
-              styles.tabText,
-              { color: activeTab === 'login' ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
-            ]}>
-              SIGN IN
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tab Content */}
-        <View style={styles.contentContainer}>
-          {activeTab === 'quickplay' ? (
-            // Quick Play Content
-            <View style={styles.quickPlayContent}>
-              <Text style={styles.contentTitle}>QUICK PLAY</Text>
-
-              <View style={styles.inputContainer}>
-                <MaterialIcon 
-                  name="person" 
-                  family="material"
-                  size={ICON_SIZES.MEDIUM} 
-                  color={ICON_COLORS.SUCCESS} 
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your commander name"
-                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                  value={playerName}
-                  onChangeText={setPlayerName}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  maxLength={20}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.quickPlayButton}
-                onPress={handleQuickPlay}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#000" size="small" />
-                ) : (
-                  <>
-                    <MaterialIcon 
-                      name={GAME_ICONS.PLAY.name} 
-                      family={GAME_ICONS.PLAY.family}
-                      size={ICON_SIZES.MEDIUM} 
-                      color="#000" 
-                    />
-                    <Text style={styles.quickPlayButtonText}>START ADVENTURE</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <Text style={styles.quickPlayNote}>
-                Progress won't be saved without an account
+          {/* Tab Selector */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'quickplay' && styles.activeTab]}
+              onPress={() => setActiveTab('quickplay')}
+            >
+              <MaterialIcon 
+                name={GAME_ICONS.PLAY.name} 
+                family={GAME_ICONS.PLAY.family}
+                size={ICON_SIZES.MEDIUM} 
+                color={activeTab === 'quickplay' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY} 
+              />
+              <Text style={[
+                styles.tabText, 
+                { color: activeTab === 'quickplay' ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
+              ]}>
+                QUICK PLAY
               </Text>
-            </View>
-          ) : (
-            // Login Content
-            <View style={styles.loginContent}>
-              <Text style={styles.contentTitle}>
-                {isSignUp ? 'JOIN THE FLEET' : 'WELCOME BACK'}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'login' && styles.activeTab]}
+              onPress={() => setActiveTab('login')}
+            >
+              <MaterialIcon 
+                name="login" 
+                family="material"
+                size={ICON_SIZES.MEDIUM} 
+                color={activeTab === 'login' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY} 
+              />
+              <Text style={[
+                styles.tabText,
+                { color: activeTab === 'login' ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
+              ]}>
+                SIGN IN
               </Text>
+            </TouchableOpacity>
+          </View>
 
-              <View style={styles.inputContainer}>
-                <MaterialIcon 
-                  name="email" 
-                  family="material"
-                  size={ICON_SIZES.MEDIUM} 
-                  color={ICON_COLORS.SECONDARY} 
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email Address"
-                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+          {/* Tab Content */}
+          <View style={styles.contentContainer}>
+            {activeTab === 'quickplay' ? (
+              // Quick Play Content
+              <View style={styles.quickPlayContent}>
+                <Text style={styles.contentTitle}>QUICK PLAY</Text>
+
+                <View style={styles.inputContainer}>
+                  <MaterialIcon 
+                    name="person" 
+                    family="material"
+                    size={ICON_SIZES.MEDIUM} 
+                    color={ICON_COLORS.SUCCESS} 
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your commander name"
+                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                    value={playerName}
+                    onChangeText={setPlayerName}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    maxLength={20}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={styles.quickPlayButton}
+                  onPress={handleQuickPlay}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#000" size="small" />
+                  ) : (
+                    <>
+                      <MaterialIcon 
+                        name={GAME_ICONS.PLAY.name} 
+                        family={GAME_ICONS.PLAY.family}
+                        size={ICON_SIZES.MEDIUM} 
+                        color="#000" 
+                      />
+                      <Text style={styles.quickPlayButtonText}>START ADVENTURE</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <Text style={styles.quickPlayNote}>
+                  Progress won't be saved without an account
+                </Text>
               </View>
+            ) : (
+              // Login Content
+              <View style={styles.loginContent}>
+                <Text style={styles.contentTitle}>
+                  {isSignUp ? 'JOIN THE FLEET' : 'WELCOME BACK'}
+                </Text>
 
-              <View style={styles.inputContainer}>
-                <MaterialIcon 
-                  name="lock" 
-                  family="material"
-                  size={ICON_SIZES.MEDIUM} 
-                  color={ICON_COLORS.SECONDARY} 
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-              </View>
+                <View style={styles.inputContainer}>
+                  <MaterialIcon 
+                    name="email" 
+                    family="material"
+                    size={ICON_SIZES.MEDIUM} 
+                    color={ICON_COLORS.SECONDARY} 
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email Address"
+                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
 
-              {isSignUp && (
                 <View style={styles.inputContainer}>
                   <MaterialIcon 
                     name="lock" 
@@ -278,67 +267,88 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Confirm Password"
+                    placeholder="Password"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
+                    value={password}
+                    onChangeText={setPassword}
                     secureTextEntry
                     autoCapitalize="none"
                   />
                 </View>
-              )}
 
-              <TouchableOpacity
-                style={styles.loginButton}
-                onPress={handleEmailAuth}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
+                {isSignUp && (
+                  <View style={styles.inputContainer}>
                     <MaterialIcon 
-                      name={isSignUp ? "person-add" : "login"} 
+                      name="lock" 
                       family="material"
                       size={ICON_SIZES.MEDIUM} 
-                      color={ICON_COLORS.WHITE} 
+                      color={ICON_COLORS.SECONDARY} 
+                      style={styles.inputIcon}
                     />
-                    <Text style={styles.loginButtonText}>
-                      {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
-                    </Text>
-                  </>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm Password"
+                      placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry
+                      autoCapitalize="none"
+                    />
+                  </View>
                 )}
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.googleButton}
-                onPress={handleGoogleSignIn}
-                disabled={loading}
-              >
-                <View style={styles.googleIcon}>
-                  <Text style={styles.googleIconText}>G</Text>
-                </View>
-                <Text style={styles.googleButtonText}>
-                  Continue with Google
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.loginButton}
+                  onPress={handleEmailAuth}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <MaterialIcon 
+                        name={isSignUp ? "person-add" : "login"} 
+                        family="material"
+                        size={ICON_SIZES.MEDIUM} 
+                        color={ICON_COLORS.WHITE} 
+                      />
+                      <Text style={styles.loginButtonText}>
+                        {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.switchButton}
-                onPress={() => setIsSignUp(!isSignUp)}
-              >
-                <Text style={styles.switchButtonText}>
-                  {isSignUp 
-                    ? 'Already a commander? Sign In' 
-                    : "New recruit? Join the Fleet"
-                  }
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                <TouchableOpacity
+                  style={styles.googleButton}
+                  onPress={handleGoogleSignIn}
+                  disabled={loading}
+                >
+                  <View style={styles.googleIcon}>
+                    <Text style={styles.googleIconText}>G</Text>
+                  </View>
+                  <Text style={styles.googleButtonText}>
+                    Continue with Google
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.switchButton}
+                  onPress={() => setIsSignUp(!isSignUp)}
+                >
+                  <Text style={styles.switchButtonText}>
+                    {isSignUp 
+                      ? 'Already a commander? Sign In' 
+                      : "New recruit? Join the Fleet"
+                    }
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -347,10 +357,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  scrollContainer: {
+    flexGrow: 1,
+    minHeight: SCREEN_HEIGHT,
+  },
   mainContent: {
     flex: 1,
     padding: 20,
     justifyContent: 'space-between',
+    minHeight: SCREEN_HEIGHT - 40, // Account for padding
   },
   
   // Title Section - Compact

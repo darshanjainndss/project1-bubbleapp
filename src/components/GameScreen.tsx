@@ -11,6 +11,7 @@ import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
 import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
 import { GameHUD } from "./game/GameHUD";
 import OptimizedLaser from "./game/OptimizedLaser";
+import { useAuth } from '../context/AuthContext';
 
 import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
 import { getPos, getHexNeighbors } from "../utils/gameUtils";
@@ -21,6 +22,7 @@ import {
   findBestLandingSpot,
   createShotFromCannonCenter
 } from "../utils/laserUtils";
+import BackendService from "../services/BackendService";
 
 import {
   styles,
@@ -45,7 +47,13 @@ const COLOR_MAP: Record<string, any> = {
 
 
 
-const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, level?: number }) => {
+const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: { 
+  onBackPress?: () => void, 
+  level?: number,
+  onLevelComplete?: (level: number, score: number, stars: number) => void 
+}) => {
+  const { user } = useAuth(); // Get Firebase user
+  
   const [bubbles, setBubbles] = useState<any[]>([]);
   const [blasts, setBlasts] = useState<any[]>([]); // State for explosion effects
 
@@ -66,6 +74,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
   const [showInstructions, setShowInstructions] = useState(false);
+  const [gameStartTime, setGameStartTime] = useState(Date.now());
 
   // Shared Animation Values
   const metalPulseAnim = useRef(new Animated.Value(1)).current;
@@ -193,6 +202,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
 
   const initGame = useCallback(() => {
+    setGameStartTime(Date.now());
     const grid: any[] = [];
     const pattern = getLevelPattern(level);
     const metalGridConfig = getLevelMetalGridConfig(level);
@@ -621,6 +631,59 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     initGame();
   };
 
+  const goToNextLevel = async () => {
+    if (onLevelComplete) {
+      const stars = score > 1000 ? 3 : score > 500 ? 2 : score > 100 ? 1 : 0;
+      
+      // Submit game session to backend
+      try {
+        // Check if user is authenticated with Firebase
+        if (!user) {
+          console.log('User not authenticated with Firebase, skipping backend submission');
+          onLevelComplete(level, score, stars);
+          return;
+        }
+
+        // Check if BackendService is authenticated, if not, try to authenticate with Firebase user
+        if (!BackendService.isAuthenticated()) {
+          console.log('BackendService not authenticated, attempting to authenticate with Firebase user...');
+          
+          // Try to login with Firebase user email (this assumes the user exists in backend)
+          // For now, we'll skip backend submission if not authenticated
+          console.log('Backend authentication not implemented, skipping submission');
+          onLevelComplete(level, score, stars);
+          return;
+        }
+
+        const sessionResult = await BackendService.submitGameSession({
+          level,
+          score,
+          moves: moves,
+          stars,
+          duration: Math.floor((Date.now() - gameStartTime) / 1000), // Calculate duration
+          abilitiesUsed: {
+            lightning: hasLightningPower ? 1 : 0,
+            bomb: hasBombPower ? 1 : 0,
+            freeze: hasFreezePower ? 1 : 0,
+            fire: hasFirePower ? 1 : 0
+          },
+          coinsEarned: 0, // Will be calculated by backend
+          completedAt: new Date().toISOString()
+        });
+
+        if (sessionResult.success) {
+          console.log('Game session submitted successfully:', sessionResult.sessionId);
+        } else {
+          console.error('Failed to submit game session:', sessionResult.error);
+        }
+      } catch (error) {
+        console.error('Error submitting game session:', error);
+      }
+
+      onLevelComplete(level, score, stars);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar hidden />
@@ -762,7 +825,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
                 />
               </TouchableOpacity>
               {gameState === 'won' && (
-                <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
+                <TouchableOpacity style={styles.modalBtnPrimary} onPress={goToNextLevel}>
                   <MaterialIcon
                     name={GAME_ICONS.NEXT.name}
                     family={GAME_ICONS.NEXT.family}

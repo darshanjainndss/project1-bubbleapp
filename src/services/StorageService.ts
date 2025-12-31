@@ -41,10 +41,10 @@ class StorageService {
       completedLevels: [], // No completed levels initially
       levelStars: {},
       abilityInventory: {
-        lightning: 0,
-        bomb: 0,
-        fire: 0,
-        freeze: 0,
+        lightning: 2,
+        bomb: 2,
+        fire: 2,
+        freeze: 2,
       },
       totalStars: 0,
       lastPlayedDate: new Date().toISOString(),
