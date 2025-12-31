@@ -8,6 +8,7 @@ import {
   Animated,
   Image,
   FlatList,
+  Alert,
 } from "react-native";
 import LottieView from 'lottie-react-native';
 import GameScreen from './GameScreen';
@@ -15,6 +16,7 @@ import SpaceBackground from "./SpaceBackground.tsx";
 import MaterialIcon from './MaterialIcon';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
+import { useAuth } from '../context/AuthContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -130,6 +132,23 @@ const OrbitalRing = ({ size, color, duration, rotateX = '0deg', rotateY = '0deg'
 
 // UNIFIED DASHBOARD HEADER COMPONENT
 const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () => void }) => {
+  const { signOut, user } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive',
+          onPress: () => signOut()
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.dashboardContainer}>
       {/* Top Section: Title & Stats */}
@@ -137,6 +156,9 @@ const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () 
         <View style={styles.titleBlock}>
           <Text style={styles.cardTitle}>SPACE</Text>
           <Text style={styles.cardSubtitle}>ADVENTURE</Text>
+          {user?.email && (
+            <Text style={styles.userEmail}>{user.email}</Text>
+          )}
         </View>
 
         <View style={styles.dividerVertical} />
@@ -192,14 +214,14 @@ const RoadmapHeader = ({ coins, onShopPress }: { coins: number; onShopPress: () 
 
         <View style={styles.dividerVerticalSmall} />
 
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleLogout}>
           <MaterialIcon 
-            name={GAME_ICONS.PERSON.name} 
-            family={GAME_ICONS.PERSON.family}
+            name="exit-to-app" 
+            family="material"
             size={ICON_SIZES.MEDIUM} 
-            color={ICON_COLORS.PRIMARY} 
+            color={ICON_COLORS.ERROR} 
           />
-          <Text style={[styles.menuText, { color: '#00E0FF' }]}>PROFILE</Text>
+          <Text style={[styles.menuText, { color: '#FF6B6B' }]}>LOGOUT</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -817,6 +839,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.5,
+    marginTop: 2,
+  },
+  userEmail: {
+    color: '#888',
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 0.5,
     marginTop: 2,
   },
   coinIcon: { fontSize: 14, marginRight: 4 },

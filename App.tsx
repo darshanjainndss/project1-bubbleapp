@@ -13,11 +13,22 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import LoadingScreen from './src/components/LoadingScreen';
 import TransitionScreen from './src/components/TransitionScreen';
 import Roadmap from './src/components/Roadmap';
+import LoginScreen from './src/components/LoginScreen';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 
 function App() {
+  return (
+    <AuthProvider>
+      <AppWrapper />
+    </AuthProvider>
+  );
+}
+
+function AppWrapper() {
   const isDarkMode = useColorScheme() === 'dark';
   const [isLoading, setIsLoading] = useState(true);
   const [showMainApp, setShowMainApp] = useState(false);
+  const { user, loading: authLoading } = useAuth();
 
   const handleLoadingComplete = () => {
     setIsLoading(false);
@@ -26,6 +37,35 @@ function App() {
       setShowMainApp(true);
     }, 100);
   };
+
+  const handleLoginSuccess = () => {
+    // User is now authenticated, the auth context will handle the state
+  };
+
+  // Show loading while auth is initializing
+  if (authLoading) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <View style={styles.loadingContainer}>
+            <LoadingScreen onLoadingComplete={() => {}} />
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
+
+  // Show login screen if user is not authenticated
+  if (!user) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+          <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
