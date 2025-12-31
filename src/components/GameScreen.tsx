@@ -110,7 +110,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
 
   // SHOOTING COOLDOWN TO PREVENT RAPID FIRE LAG
   const lastShotTime = useRef(0);
-  const SHOT_COOLDOWN = 300; // 300ms cooldown between shots
+  const SHOT_COOLDOWN = 150; // Reduced cooldown for faster shooting
 
   const muzzleFlashAnim = useRef(new Animated.Value(0)).current;
   const muzzleVelocityAnim = useRef(new Animated.Value(0)).current;
@@ -490,12 +490,12 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     }).start(() => shakeAnim.setValue(0));
 
     Animated.sequence([
-      Animated.timing(recoilAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
-      Animated.timing(recoilAnim, { toValue: 0, duration: 200, useNativeDriver: true })
+      Animated.timing(recoilAnim, { toValue: 20, duration: 40, useNativeDriver: true }),
+      Animated.timing(recoilAnim, { toValue: 0, duration: 120, useNativeDriver: true })
     ]).start();
 
     const angle = cannonAngleRef.current - Math.PI / 2;
-    const velocity = 28;
+    const velocity = 55;
 
     // Create shot using new laser utilities
     const shot = createShotFromCannonCenter(
@@ -549,10 +549,10 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         });
       }
 
-      // OPTIMIZED: Reduced sub-steps for better performance
-      for (let i = 0; i < 2; i++) {
-        shot.x += shot.vx / 2;
-        shot.y += shot.vy / 2;
+      // OPTIMIZED: Increased sub-steps for smoother movement at higher speeds
+      for (let i = 0; i < 4; i++) {
+        shot.x += shot.vx / 4;
+        shot.y += shot.vy / 4;
 
         // Wall collision
         if (shot.x < BUBBLE_SIZE / 2 && shot.vx < 0) {
@@ -598,6 +598,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
     // Clear shooting bubble immediately to prevent visual artifacts
     setShootingBubble(null);
 
+    // Execute landing logic (now has internal delay for explosion effects)
     executeResolveLanding(shot, {
       bubblesRef,
       setBubbles,

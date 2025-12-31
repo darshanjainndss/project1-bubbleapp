@@ -224,8 +224,14 @@ export const resolveLanding = (
 
     Animated.spring(hitAnim, { toValue: 1, tension: 100, friction: 5, useNativeDriver: true }).start();
 
-    // BOMB LANDING (Normal path but with power active)
-    if (shot.hasBomb) {
+    // Update bubbles immediately to show the ball landing
+    bubblesRef.current = grid;
+    setBubbles([...grid]);
+
+    // Add delay to show the ball landing before explosion effects
+    setTimeout(() => {
+        // BOMB LANDING (Normal path but with power active)
+        if (shot.hasBomb) {
         const destroyed = [newB];
         const neighbors = getHexNeighbors(best.r, best.c);
         neighbors.forEach(([r, c]) => {
@@ -304,4 +310,5 @@ export const resolveLanding = (
     }
 
     updateCommonState(grid, setBubbles, bubblesRef, setShootingBubble, setNextColor, setMoves, moves, setGameState, currentScrollY, scrollY, isProcessing);
+    }, 200); // 200ms delay to see the ball land and settle first
 };

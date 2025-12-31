@@ -45,17 +45,17 @@ export const calculateAimingPath = (
   const dots = [];
   let tx = startX;
   let ty = startY;
-  let vx = Math.cos(angle) * 5; // Smaller steps for smoother path
-  let vy = Math.sin(angle) * 5;
+  let vx = Math.cos(angle) * 8; // Increased step size to match higher velocity
+  let vy = Math.sin(angle) * 8;
   let hitPoint = null;
 
-  const stepDist = 20; // Distance between visible dots
+  const stepDist = 15; // Reduced distance between dots for smoother path
   let distSinceLastDot = stepDist; // Start with a dot
 
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 500; i++) { // Increased iterations for longer paths
     tx += vx;
     ty += vy;
-    distSinceLastDot += 5; // step size
+    distSinceLastDot += 8; // Updated step size
 
     // Wall bouncing
     if (tx < bubbleSize / 2 && vx < 0) {
