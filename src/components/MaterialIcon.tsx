@@ -61,6 +61,14 @@ const FALLBACK_ICONS: Record<string, string> = {
   'login': '🚪',
   'google': 'G',
   'account-circle': '👤',
+  'help-outline': '❓',
+  'play-circle': '▶️',
+  'touch-app': '👆',
+  'stars': '⭐',
+  'shield': '🛡️',
+  'chevron-left': '←',
+  'chevron-right': '→',
+  'check': '✓',
 };
 
 const MaterialIcon: React.FC<MaterialIconProps> = ({

@@ -6,6 +6,7 @@ import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
 import BubbleBlast from "./BubbleBlast"; // Import BubbleBlast animation
 import MaterialIcon from "./MaterialIcon";
+import InstructionModal from "./InstructionModal";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
 import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
 import { GameHUD } from "./game/GameHUD";
@@ -64,6 +65,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
   const bubblesRef = useRef<any[]>([]);
 
   const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
+  const [showInstructions, setShowInstructions] = useState(false);
 
   // Shared Animation Values
   const metalPulseAnim = useRef(new Animated.Value(1)).current;
@@ -630,6 +632,7 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
         level={level}
         nextColor={nextColor}
         onBackPress={onBackPress}
+        onShowInstructions={() => setShowInstructions(true)}
         abilities={{
           lightning: lightningActive,
           bomb: bombActive,
@@ -772,6 +775,12 @@ const GameScreen = ({ onBackPress, level = 1 }: { onBackPress?: () => void, leve
           </View>
         </View>
       )}
+
+      {/* Instruction Modal */}
+      <InstructionModal
+        visible={showInstructions}
+        onClose={() => setShowInstructions(false)}
+      />
 
     </View>
   );

@@ -10,6 +10,7 @@ interface GameHUDProps {
     level: number;
     nextColor: string;
     onBackPress?: () => void;
+    onShowInstructions?: () => void;
     abilities: {
         lightning: boolean;
         bomb: boolean;
@@ -28,6 +29,7 @@ export const GameHUD = ({
     level,
     nextColor,
     onBackPress,
+    onShowInstructions,
     abilities,
     onActivateLightning,
     onActivateBomb,
@@ -48,6 +50,16 @@ export const GameHUD = ({
                         <Text style={styles.statLabel}>SCORE</Text>
                         <Text style={styles.statValue}>{score.toLocaleString()}</Text>
                     </View>
+                    <View style={styles.verticalDivider} />
+                    <TouchableOpacity
+                        style={styles.instructionTab}
+                        onPress={onShowInstructions}
+                    >
+                        <View style={styles.helpIcon}>
+                            <Text style={styles.helpIconText}>i</Text>
+                        </View>
+                        <Text style={styles.instructionLabel}>HELP</Text>
+                    </TouchableOpacity>
                     <View style={styles.verticalDivider} />
                     <TouchableOpacity
                         style={styles.topExitBtn}
