@@ -16,12 +16,12 @@ const SPARKLE_COUNT = 5;
 
 /* Replicate Color Map */
 const COLOR_MAP: Record<string, any> = {
-    "#ff3b30": require("../images/red.png"),
-    "#ff9500": require("../images/orange.png"),
-    "#ffd60a": require("../images/yellow.png"),
-    "#34c759": require("../images/green.png"),
-    "#007aff": require("../images/blue.png"),
-    "#af52de": require("../images/purple.png"),
+    "#ff3b30": require("../images/red.webp"),
+    "#ff9500": require("../images/orange.webp"),
+    "#ffd60a": require("../images/yellow.webp"),
+    "#34c759": require("../images/green.webp"),
+    "#007aff": require("../images/blue.webp"),
+    "#af52de": require("../images/purple.webp"),
 };
 
 const BubbleBlast = React.memo(({ x, y, color, delay = 0, onComplete }: BubbleBlastProps) => {

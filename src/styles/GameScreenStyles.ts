@@ -6,8 +6,8 @@ export const GRID_COLS = 9;
 
 export const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10);
 export const ROW_HEIGHT = BUBBLE_SIZE * 0.86;
-export const CANNON_SIZE = 80; // Reduced from 95 for more compact design
-export const FOOTER_BOTTOM = 160; // Optimized spacing between spaceship and HUD
+export const CANNON_SIZE = 80;
+export const FOOTER_BOTTOM = 200; // Moved down closer to HUD as requested
 export const GRID_TOP = 10;
 
 export const styles = StyleSheet.create({
@@ -73,13 +73,13 @@ export const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-end',
         backgroundColor: 'rgba(20, 20, 30, 0.92)',
-        paddingHorizontal: 15, // Reduced from 20
-        paddingTop: 10, // Reduced from 15
-        paddingBottom: 12, // Reduced from 20
-        borderRadius: 30, // Reduced from 35
+        paddingHorizontal: 25, // Increased for wider look
+        paddingTop: 10,
+        paddingBottom: 12,
+        borderRadius: 30,
         borderWidth: 2,
         borderColor: '#00E0FF',
-        gap: 12, // Reduced from 15
+        gap: 20, // Increased gap for wider distribution
         shadowColor: '#00E0FF',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.6,

@@ -1,144 +1,92 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Easing } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import { View, StyleSheet, Animated } from 'react-native';
 
 interface LaserTracerProps {
     color: string;
-    angle: number; // in radians
+    width: number;
+    opacity?: number;
 }
 
-const LaserTracer = React.memo(({ color, angle }: LaserTracerProps) => {
+/**
+ * A clean, high-tech laser tracer line component.
+ * Features a bright white core and a vibrant neon aura.
+ */
+const LaserTracer = React.memo(({ color, width, opacity = 1 }: LaserTracerProps) => {
     const pulseAnim = useRef(new Animated.Value(1)).current;
-    const particlesAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // High-frequency pulsing for "intense energy"
+        // Subtle energy flicker/pulse
         Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, { toValue: 1.4, duration: 80, useNativeDriver: true }),
-                Animated.timing(pulseAnim, { toValue: 1.0, duration: 80, useNativeDriver: true }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1.2,
+                    duration: 100,
+                    useNativeDriver: true
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 0.9,
+                    duration: 100,
+                    useNativeDriver: true
+                }),
             ])
-        ).start();
-
-        // Constant particle flow for tail
-        Animated.loop(
-            Animated.timing(particlesAnim, {
-                toValue: 1,
-                duration: 400,
-                easing: Easing.linear,
-                useNativeDriver: true,
-            })
         ).start();
     }, []);
 
     return (
-        <View style={[styles.container, { transform: [{ rotate: `${angle}rad` }] }]}>
-
-            {/* 1. Long Trail / Motion Blur (Fade from color to transparent) */}
-            <LinearGradient
-                colors={['rgba(255,255,255,0)', color]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.trail}
-            />
-
-            {/* 2. Outer Glow (Soft Neon Halo) */}
+        <View style={[styles.container, { width, opacity }]}>
+            {/* Outer Glow Area */}
             <Animated.View style={[
-                styles.glow,
+                styles.glowLayer,
                 {
                     backgroundColor: color,
-                    opacity: 0.6,
-                    transform: [{ scale: pulseAnim }]
+                    transform: [{ scaleY: pulseAnim }]
                 }
             ]} />
 
-            {/* 3. The Solid Core Beam */}
-            <View style={[styles.beam, { backgroundColor: color }]} />
+            {/* Main Laser Line */}
+            <View style={[styles.mainLine, { backgroundColor: color }]} />
 
-            {/* 4. White Hot Center (Intensity) */}
+            {/* White Core Line */}
             <View style={styles.whiteCore} />
-
-            {/* 5. Trailing Particles/Sparks */}
-            {[...Array(4)].map((_, i) => (
-                <Animated.View
-                    key={i}
-                    style={[
-                        styles.spark,
-                        {
-                            backgroundColor: color,
-                            left: -10 - (i * 15), // Staggered behind
-                            opacity: particlesAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [1, 0] // Fade out as they move back? 
-                                // Actually, let's just make them flicker or move back relative to the head
-                            }),
-                            transform: [
-                                {
-                                    translateX: particlesAnim.interpolate({
-                                        inputRange: [0, 1],
-                                        outputRange: [0, -30] // Move backward relative to laser
-                                    })
-                                },
-                                { scale: Math.random() * 0.5 + 0.5 }
-                            ]
-                        }
-                    ]}
-                />
-            ))}
         </View>
     );
 });
 
 const styles = StyleSheet.create({
     container: {
-        width: 60, // Length of the laser visuals
-        height: 20,
+        height: 6,
         justifyContent: 'center',
         alignItems: 'center',
-        // We center the "head" of the laser at the pivot point
-        // adjustments might be needed depending on how it's positioned in GameScreen
     },
-    trail: {
+    glowLayer: {
         position: 'absolute',
-        left: -40, // Extend behind
-        width: 60,
-        height: 12,
-        borderRadius: 6,
-    },
-    glow: {
-        position: 'absolute',
-        width: 40,
-        height: 14,
-        borderRadius: 7,
+        width: '100%',
+        height: 8,
+        borderRadius: 4,
+        opacity: 0.4,
         shadowColor: '#fff',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.8,
         shadowRadius: 10,
-        elevation: 10, // Android bright glow
+        elevation: 8,
     },
-    beam: {
-        position: 'absolute',
-        width: 30, // The sharp part
-        height: 8,
-        borderRadius: 4,
+    mainLine: {
+        width: '100%',
+        height: 4,
+        borderRadius: 2,
+        shadowColor: '#fff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 5,
+        elevation: 5,
     },
     whiteCore: {
         position: 'absolute',
-        width: 20,
-        height: 4,
-        backgroundColor: '#ffffff',
-        borderRadius: 2,
-        shadowColor: '#fff',
-        shadowOpacity: 1,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    spark: {
-        position: 'absolute',
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        top: 8, // center vertically roughly
+        width: '100%',
+        height: 1.5,
+        backgroundColor: '#fff',
+        borderRadius: 1,
+        opacity: 0.9,
     }
 });
 
