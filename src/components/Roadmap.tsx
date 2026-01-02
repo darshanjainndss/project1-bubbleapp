@@ -21,9 +21,9 @@ import SimpleRewardedAdButton from './SimpleRewardedAdButton';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
 import { useAuth } from '../context/AuthContext';
-import StorageService, { UserGameData } from '../services/StorageService';
-
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from "../styles/RoadmapStyles";
+import BackendService from '../services/BackendService';
+import ConfirmationModal from './ConfirmationModal';
 
 // Sub-component for Wave effect that emits from the circle edge
 const WavePulse = ({ color, duration, delay = 0, size = 100 }: any) => {
@@ -161,141 +161,128 @@ const ICONS = [
 ];
 
 const SHOP_ITEMS = [
-  { id: 'lightning', name: 'Lightning', icon: GAME_ICONS.LIGHTNING, price: 15, description: 'Destroys entire row', color: ICON_COLORS.PRIMARY },
-  { id: 'bomb', name: 'Bomb', icon: GAME_ICONS.BOMB, price: 20, description: 'Destroys 6 hex neighbors', color: ICON_COLORS.WARNING },
-  { id: 'freeze', name: 'Freeze', icon: GAME_ICONS.FREEZE, price: 5, description: 'Freezes column up to 2 rows', color: ICON_COLORS.INFO },
-  { id: 'fire', name: 'Fire', icon: GAME_ICONS.FIRE, price: 10, description: 'Burns through obstacles', color: ICON_COLORS.ERROR },
+  { id: 'lightning', name: 'Lightning', icon: GAME_ICONS.LIGHTNING, price: 50, description: 'Destroys entire row', color: ICON_COLORS.PRIMARY },
+  { id: 'bomb', name: 'Bomb', icon: GAME_ICONS.BOMB, price: 75, description: 'Destroys 6 hex neighbors', color: ICON_COLORS.WARNING },
+  { id: 'freeze', name: 'Freeze', icon: GAME_ICONS.FREEZE, price: 30, description: 'Freezes column up to 2 rows', color: ICON_COLORS.INFO },
+  { id: 'fire', name: 'Fire', icon: GAME_ICONS.FIRE, price: 40, description: 'Burns through obstacles', color: ICON_COLORS.ERROR },
 ];
 
-// UNIFIED DASHBOARD HEADER COMPONENT
-const RoadmapHeader = ({ coins, score, onShopPress, onLeaderboardPress, onRewardedAdPress }: {
-  coins: number;
-  score: number;
-  onShopPress: () => void;
-  onLeaderboardPress: () => void;
-  onRewardedAdPress: () => void;
-}) => {
-  const { signOut, user } = useAuth();
+// Top HUD Component
+// Top HUD Component - with Neon Styling
+const TopHUD = ({ coins, score, onProfilePress, onLogout }: any) => (
+  <View style={[styles.dashboardContainer, localStyles.topHudContainer]}>
+    <TouchableOpacity onPress={onProfilePress} style={localStyles.profileButton}>
+      <MaterialIcon name="account-circle" family="material" size={48} color="#FFFFFF" />
+    </TouchableOpacity>
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: () => signOut()
-        }
-      ]
-    );
-  };
+    <View style={localStyles.statsRow}>
+      <View style={localStyles.statBadgeNeon}>
+        <MaterialIcon name="stars" family="material" size={20} color={ICON_COLORS.SUCCESS} />
+        <Text style={localStyles.statValue}>{score.toLocaleString()}</Text>
+      </View>
+      <View style={[localStyles.statBadgeNeon, { marginLeft: 10 }]}>
+        <MaterialIcon name="monetization-on" family="material" size={20} color={ICON_COLORS.GOLD} />
+        <Text style={localStyles.statValue}>{coins}</Text>
+      </View>
+    </View>
+
+    <TouchableOpacity onPress={onLogout} style={localStyles.logoutButton}>
+      <MaterialIcon name="logout" family="material" size={28} color={ICON_COLORS.ERROR} />
+    </TouchableOpacity>
+  </View>
+);
+
+// Bottom Navigation Bar Component
+// Bottom Navigation Bar Component - with Center Map Button
+const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) => (
+  <View style={localStyles.bottomNavGrid}>
+    {/* Left Side */}
+    <TouchableOpacity style={localStyles.navItem} onPress={onLeaderboard}>
+      <MaterialIcon name="leaderboard" family="material" size={26} color={ICON_COLORS.SECONDARY} />
+      <Text style={localStyles.navText}>Rank</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity style={localStyles.navItem} onPress={onShop}>
+      <MaterialIcon name="shopping-cart" family="material" size={26} color={ICON_COLORS.SUCCESS} />
+      <Text style={localStyles.navText}>Shop</Text>
+    </TouchableOpacity>
+
+    {/* Placeholder for center button space to ensure equal gaps */}
+    <View style={localStyles.placeholderNavItem} />
+
+    {/* Right Side */}
+    <TouchableOpacity style={localStyles.navItem} onPress={onAd}>
+      <MaterialIcon name="play-circle-filled" family="material" size={26} color={ICON_COLORS.WARNING} />
+      <Text style={localStyles.navText}>Free</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity style={localStyles.navItem} onPress={onProfile}>
+      <MaterialIcon name="person" family="material" size={26} color="#FFFFFF" />
+      <Text style={localStyles.navText}>Profile</Text>
+    </TouchableOpacity>
+
+    {/* Center Map Button - Raised & Floating */}
+    <View style={localStyles.centerBtnContainer}>
+      <TouchableOpacity style={localStyles.centerMapBtn} onPress={onMap}>
+        <MaterialIcon name="map" family="material" size={32} color="#000" />
+      </TouchableOpacity>
+      <Text style={[localStyles.navText, { color: '#00E0FF', marginTop: 4 }]}>Map</Text>
+    </View>
+  </View>
+);
+
+// Profile Popup Component
+const ProfilePopup = ({ visible, onClose, user }: any) => {
+  if (!visible || !user) return null;
+
+  // Get name without @gmail.com or domain
+  const rawName = user.displayName || user.email?.split('@')[0] || 'Explorer';
+  const cleanName = rawName.replace(/@.*/, '');
 
   return (
-    <View style={styles.dashboardContainer}>
-      {/* Top Section: Title & Stats */}
-      <View style={styles.dashboardTop}>
-        <View style={styles.titleBlock}>
-          <Text style={styles.cardTitle}>SPACE</Text>
-          <Text style={styles.cardSubtitle}>ADVENTURE</Text>
-          {user?.email && (
-            <Text style={styles.userEmail}>{user.email}</Text>
-          )}
+    <View style={localStyles.popupOverlay}>
+      <View style={localStyles.popupContent}>
+        <TouchableOpacity style={localStyles.closePopupBtn} onPress={onClose}>
+          <MaterialIcon name="close" family="material" size={24} color="#FFF" />
+        </TouchableOpacity>
+
+        <View style={localStyles.popupAvatar}>
+          <MaterialIcon name="account-circle" family="material" size={80} color={ICON_COLORS.PRIMARY} />
         </View>
 
-        <View style={styles.dividerVertical} />
-
-        <View style={styles.statsBlock}>
-          <View style={styles.statChip}>
-            <MaterialIcon
-              name={GAME_ICONS.COIN.name}
-              family={GAME_ICONS.COIN.family}
-              size={ICON_SIZES.MEDIUM}
-              color={ICON_COLORS.GOLD}
-            />
-            <Text style={styles.statNumber}>{coins}</Text>
-          </View>
-          <View style={styles.statChip}>
-            <MaterialIcon
-              name={GAME_ICONS.SCORE.name}
-              family={GAME_ICONS.SCORE.family}
-              size={ICON_SIZES.MEDIUM}
-              color={ICON_COLORS.SUCCESS}
-            />
-            <Text style={styles.statNumber}>{score.toLocaleString()}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Horizontal Divider Line */}
-      <View style={styles.dashboardDivider} />
-
-      {/* Bottom Section: Action Menu */}
-      <View style={styles.dashboardBottom}>
-        <TouchableOpacity style={styles.actionBtn} onPress={onLeaderboardPress}>
-          <MaterialIcon
-            name={GAME_ICONS.LEADERBOARD.name}
-            family={GAME_ICONS.LEADERBOARD.family}
-            size={ICON_SIZES.MEDIUM}
-            color={ICON_COLORS.SECONDARY}
-          />
-          <Text style={[styles.menuText, { color: '#00E0FF' }]}>LEADERBOARD</Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerVerticalSmall} />
-
-        <TouchableOpacity style={styles.actionBtn} onPress={onShopPress}>
-          <MaterialIcon
-            name={GAME_ICONS.SHOP.name}
-            family={GAME_ICONS.SHOP.family}
-            size={ICON_SIZES.MEDIUM}
-            color={ICON_COLORS.SUCCESS}
-          />
-          <Text style={[styles.menuText, { color: '#00FF88' }]}>SHOP</Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerVerticalSmall} />
-
-        <TouchableOpacity style={styles.actionBtn} onPress={onRewardedAdPress}>
-          <MaterialIcon
-            name="play-circle-filled"
-            family="material"
-            size={ICON_SIZES.MEDIUM}
-            color={ICON_COLORS.WARNING}
-          />
-          <Text style={[styles.menuText, { color: '#FFD60A' }]}>WATCH AD</Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerVerticalSmall} />
-
-        <TouchableOpacity style={styles.actionBtn} onPress={handleLogout}>
-          <MaterialIcon
-            name="exit-to-app"
-            family="material"
-            size={ICON_SIZES.MEDIUM}
-            color={ICON_COLORS.ERROR}
-          />
-          <Text style={[styles.menuText, { color: '#FF6B6B' }]}>LOGOUT</Text>
-        </TouchableOpacity>
+        <Text style={localStyles.popupName}>{cleanName}</Text>
+        <Text style={localStyles.popupLabel}>Space Commander</Text>
       </View>
     </View>
   );
 };
 
 const Roadmap: React.FC = () => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [showGameScreen, setShowGameScreen] = useState(false);
   const [currentLevel, setCurrentLevel] = useState(1);
-  const [score, setScore] = useState(0); // Start with zero score
-  const [coins, setCoins] = useState(0); // Start with zero coins
+  const [score, setScore] = useState(0);
+  const [coins, setCoins] = useState(0);
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [userGameData, setUserGameData] = useState<UserGameData | null>(null);
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [userGameData, setUserGameData] = useState<any>({
+    completedLevels: [],
+    levelStars: {},
+    currentLevel: 1,
+    highScore: 0,
+    totalCoins: 0,
+    abilities: { lightning: 2, bomb: 2, freeze: 2, fire: 2 }
+  });
   const [dataLoaded, setDataLoaded] = useState(false);
   const [loadingDirection, setLoadingDirection] = useState<'toFight' | 'toBase'>('toFight');
+
+  const handleLogout = async () => {
+    await BackendService.logout();
+    signOut();
+  };
 
   // Ability inventory
   const [abilityInventory, setAbilityInventory] = useState({
@@ -322,25 +309,49 @@ const Roadmap: React.FC = () => {
             setIsLoading(true);
           }
 
-          // Parallelize data fetching
-          const [userData] = await Promise.all([
-            StorageService.loadUserData(user.uid),
-            StorageService.setCurrentUser(user.uid)
-          ]);
+          // 1. Ensure authenticated with backend using Firebase info
+          console.log('🔄 Ensuring backend authentication for user:', user.email);
+          const isAuthenticated = await BackendService.ensureAuthenticated(user);
 
-          setUserGameData(userData);
-          setScore(userData.score);
-          setCoins(userData.coins);
-          setCurrentLevel(userData.currentLevel);
-          setAbilityInventory(userData.abilityInventory);
-          setDataLoaded(true);
-        } catch (error) {
-          console.error('Error loading user data:', error);
-        } finally {
-          // Only hide loading if we showed it
-          if (!dataLoaded) {
-            setIsLoading(false);
+          if (!isAuthenticated) {
+            console.error('Backend authentication failed');
+            setIsLoading(false); // Stop loading if auth fails
+            return; // Exit early if authentication fails
           }
+
+          // 2. Fetch game data from backend
+          const result = await BackendService.getUserGameData();
+
+          if (result.success && result.data) {
+            const data = result.data;
+            setUserGameData(data);
+            setScore(data.highScore || 0); // Use highScore from backend
+            setCoins(data.totalCoins || 0);
+            setCurrentLevel(data.currentLevel || 1);
+
+            // Ensure 2 abilities for new users if backend returns 0 and it's a fresh start
+            const inventory = data.abilities || { lightning: 2, bomb: 2, freeze: 2, fire: 2 };
+            // If it's a new user (level 1, 0 score) and they have 0 abilities, give them 2
+            if (data.currentLevel <= 1 && data.totalScore === 0 &&
+              inventory.lightning === 0 && inventory.bomb === 0) {
+              inventory.lightning = 2;
+              inventory.bomb = 2;
+              inventory.fire = 2;
+              inventory.freeze = 2;
+              // Sync back to backend
+              await BackendService.updateAbilities(inventory);
+            }
+
+            setAbilityInventory(inventory);
+            setDataLoaded(true);
+          } else {
+            console.warn('Backend data fetch failed, using defaults');
+            // Fallback or initialization
+          }
+        } catch (error) {
+          console.error('Error loading user data from backend:', error);
+        } finally {
+          setIsLoading(false);
         }
       }
     };
@@ -396,85 +407,33 @@ const Roadmap: React.FC = () => {
     }
   };
 
-  // Save user data whenever important state changes
+  // Save user data - removed local StorageService calls, relying on explicit backend calls
   useEffect(() => {
-    const saveUserData = async () => {
-      if (user?.uid && dataLoaded && userGameData) {
-        try {
-          const updatedData: UserGameData = {
-            ...userGameData,
-            score,
-            coins,
-            currentLevel,
-            abilityInventory,
-          };
-          await StorageService.saveUserData(user.uid, updatedData);
-          setUserGameData(updatedData);
+    // No longer auto-saving every state change to avoid excessive API calls
+    // Level complete and Purchases have their own backend calls now.
+  }, []);
 
-          // Update leaderboard with user info
-          await updateLeaderboardEntry();
-        } catch (error) {
-          console.error('Error saving user data:', error);
-        }
-      }
-    };
+  // Update leaderboard entry is now handled by backend during submission
 
-    // Only save if data has been loaded to avoid overwriting with initial values
-    if (dataLoaded) {
-      saveUserData();
-    }
-  }, [score, coins, currentLevel, abilityInventory, user?.uid, dataLoaded]);
-
-  // Update leaderboard entry with current user info
-  const updateLeaderboardEntry = async () => {
-    if (!user?.uid || !userGameData) return;
-
-    try {
-      const leaderboard = await StorageService.getLeaderboard();
-      const existingIndex = leaderboard.findIndex(entry => entry.userId === user.uid);
-
-      const leaderboardEntry = {
-        userId: user.uid,
-        username: user.displayName || user.email?.split('@')[0] || `Player_${user.uid.substring(0, 8)}`,
-        email: user.email || '',
-        score,
-        level: currentLevel,
-        coins,
-        stars: userGameData.totalStars,
-        lastUpdated: new Date().toISOString(),
-      };
-
-      if (existingIndex >= 0) {
-        leaderboard[existingIndex] = leaderboardEntry;
-      } else {
-        leaderboard.push(leaderboardEntry);
-      }
-
-      // Sort and save
-      leaderboard.sort((a, b) => b.score - a.score);
-      await StorageService.getLeaderboard(); // This will trigger the save
-    } catch (error) {
-      console.error('Error updating leaderboard:', error);
-    }
-  };
-
-  // Purchase ability function - no loading screen for shop operations
+  // Purchase ability function - now using BackendService
   const purchaseAbility = async (abilityId: string, price: number) => {
     if (!user?.uid) return;
 
     try {
-      const result = await StorageService.purchaseAbility(
-        user.uid,
-        abilityId as keyof UserGameData['abilityInventory'],
-        price
+      const result = await BackendService.purchaseAbilities(
+        abilityId as any,
+        1
       );
 
       if (result.success) {
-        setCoins(result.newCoins);
-        setAbilityInventory(result.newInventory);
+        setCoins(result.newCoinBalance || 0);
+        setAbilityInventory(prev => ({
+          ...prev,
+          [abilityId]: result.newAbilityCount || (prev[abilityId as keyof typeof prev] + 1)
+        }));
         Alert.alert('Purchase Successful!', `You bought ${abilityId}!`);
       } else {
-        Alert.alert('Insufficient Coins', 'You need more coins to purchase this ability.');
+        Alert.alert('Insufficient Coins', result.error || 'You need more coins to purchase this ability.');
       }
     } catch (error) {
       console.error('Error purchasing ability:', error);
@@ -482,12 +441,14 @@ const Roadmap: React.FC = () => {
     }
   };
 
-  // Generate levels data (100 levels) - memoized for performance
+  // Generate levels data (Infinite Levels)
   const levels = useMemo(() =>
-    Array.from({ length: 100 }, (_, i) => {
+    Array.from({ length: 2000 }, (_, i) => {
       const levelId = i + 1;
-      const isCompleted = userGameData?.completedLevels.includes(levelId) || false;
-      const stars = userGameData?.levelStars[levelId] || 0;
+      const completedLevels = userGameData?.completedLevels || [];
+      const isCompleted = completedLevels.includes(levelId);
+      const levelStars = userGameData?.levelStars || {};
+      const stars = levelStars[levelId] || 0;
       const currentUserLevel = userGameData?.currentLevel || 1;
 
       return {
@@ -510,24 +471,33 @@ const Roadmap: React.FC = () => {
     return baseCoins + starBonus + completionBonus;
   };
 
-  // Auto-scroll to current level on mount and when current level changes
+  // Auto-scroll to current level on mount and when data loads
   useEffect(() => {
     if (dataLoaded && userGameData) {
-      setTimeout(() => {
-        const currentUserLevel = userGameData.currentLevel;
-        const currentIndex = levels.findIndex(level => level.id === currentUserLevel);
-        if (currentIndex !== -1) {
-          // Calculate the reversed index since we're showing levels in reverse order
-          const reversedIndex = levels.length - 1 - currentIndex;
+      const currentUserLevel = userGameData.currentLevel || 1;
+      const currentIndex = levels.findIndex(level => level.id === currentUserLevel);
+      if (currentIndex !== -1) {
+        const reversedIndex = levels.length - 1 - currentIndex;
+
+        // Immediate jump on first load to prevent seeing Level 2000
+        flatListRef.current?.scrollToIndex({
+          index: reversedIndex,
+          animated: false,
+          viewPosition: 0.5
+        });
+
+        // Backup scroll after a short delay in case FlatList wasn't ready
+        const timer = setTimeout(() => {
           flatListRef.current?.scrollToIndex({
             index: reversedIndex,
-            animated: true,
-            viewPosition: 0.5 // Center the current level perfectly
+            animated: false,
+            viewPosition: 0.5
           });
-        }
-      }, 500); // Increased delay to ensure data is loaded
+        }, 100);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [dataLoaded, userGameData?.currentLevel, levels.length]); // Re-run when data loads or current level changes
+  }, [dataLoaded, userGameData?.currentLevel, levels.length]);
 
   useEffect(() => {
     Animated.loop(
@@ -633,40 +603,28 @@ const Roadmap: React.FC = () => {
 
   const handleLevelComplete = async (completedLevel: number, finalScore: number, stars: number) => {
     try {
-      // Update user progress
+      // Backend handles score and level logic when submitGameSession is called (inside GameScreen ideally)
+      // but we update local state for the Roadmap UI
       const newCurrentLevel = Math.max(completedLevel + 1, currentLevel);
-      const newScore = Math.max(finalScore, score);
-      
-      // Update local state
-      setCurrentLevel(newCurrentLevel);
-      setScore(newScore);
 
-      // Save to storage
-      const updatedGameData: UserGameData = {
-        currentLevel: newCurrentLevel,
-        score: newScore,
-        coins: userGameData?.coins || 0,
-        completedLevels: userGameData?.completedLevels || [],
-        levelStars: userGameData?.levelStars || {},
-        abilityInventory: userGameData?.abilityInventory || { lightning: 2, bomb: 2, freeze: 2, fire: 2 },
-        totalStars: userGameData?.totalStars || 0,
-        lastPlayedDate: new Date().toISOString()
-      };
-      
-      await StorageService.saveUserData(user?.uid || 'guest', updatedGameData);
-      setUserGameData(updatedGameData);
+      // Fetch latest data from backend to ensure synchronization
+      const dataResult = await BackendService.getUserGameData();
+      if (dataResult.success && dataResult.data) {
+        const data = dataResult.data;
+        setUserGameData(data);
+        setScore(data.highScore);
+        setCoins(data.totalCoins);
+        setCurrentLevel(data.currentLevel);
+        setAbilityInventory(data.abilities);
+      }
 
       // Progress to next level
       if (completedLevel < levels.length) {
         setSelectedLevel(completedLevel + 1);
-        setLoadingDirection('toFight');
+        setLoadingDirection('toBase'); // Just show loading while refreshing
         setIsLoading(true);
-
-        setTimeout(() => {
-          setIsLoading(false);
-        }, 1000);
+        setTimeout(() => setIsLoading(false), 500);
       } else {
-        // All levels completed - go back to roadmap
         handleBackPress();
       }
     } catch (error) {
@@ -891,10 +849,11 @@ const Roadmap: React.FC = () => {
       {/* GameScreen has its own background, Roadmap has its own. */}
 
       {showGameScreen ? (
-        <GameScreen 
-          onBackPress={handleBackPress} 
-          level={selectedLevel} 
+        <GameScreen
+          onBackPress={handleBackPress}
+          level={selectedLevel}
           onLevelComplete={handleLevelComplete}
+          initialAbilities={abilityInventory}
         />
       ) : (
         <View style={{ flex: 1 }}>
@@ -1007,19 +966,13 @@ const Roadmap: React.FC = () => {
             </View>
           )}
 
-          {/* Unified Dashboard Header */}
-          <RoadmapHeader
+          {/* Top HUD */}
+          <TopHUD
             coins={coins}
             score={score}
-            onShopPress={() => setShowShop(true)}
-            onLeaderboardPress={() => setShowLeaderboard(true)}
-            onRewardedAdPress={handleRewardedAdPress}
+            onProfilePress={() => setShowProfilePopup(true)}
+            onLogout={handleLogout}
           />
-
-          {/* AdMob Banner Ad */}
-          <View style={styles.adBannerContainer}>
-            <AdBanner />
-          </View>
 
           <FlatList
             ref={flatListRef}
@@ -1027,7 +980,7 @@ const Roadmap: React.FC = () => {
             renderItem={({ item, index }) => <LevelItem item={item} index={levels.length - 1 - index} />}
             keyExtractor={(item) => item.id.toString()}
             style={styles.scrollView}
-            contentContainerStyle={[styles.roadmapContainer, { paddingBottom: 180 }]}
+            contentContainerStyle={[styles.roadmapContainer, { paddingBottom: 220, paddingTop: 120 }]}
             showsVerticalScrollIndicator={false}
             initialNumToRender={6}
             maxToRenderPerBatch={3}
@@ -1039,16 +992,53 @@ const Roadmap: React.FC = () => {
               offset: 220 * index,
               index,
             })}
-            initialScrollIndex={dataLoaded && userGameData ? Math.max(0, levels.length - userGameData.currentLevel) : 0}
+            initialScrollIndex={userGameData ? Math.max(0, levels.length - (userGameData.currentLevel || 1)) : levels.length - 1}
             onScrollToIndexFailed={(info) => {
               setTimeout(() => {
                 flatListRef.current?.scrollToIndex({
-                  index: Math.min(info.index, levels.length - 1),
+                  index: info.index,
                   animated: false,
+                  viewPosition: 0.5
                 });
-              }, 100);
+              }, 50);
             }}
           />
+
+          {/* Bottom Navigation Bar */}
+          <BottomNavBar
+            onMap={() => {
+              // Scroll to current level
+              if (userGameData) {
+                const currentUserLevel = userGameData.currentLevel;
+                const currentIndex = levels.findIndex(level => level.id === currentUserLevel);
+                if (currentIndex !== -1) {
+                  const reversedIndex = levels.length - 1 - currentIndex;
+                  flatListRef.current?.scrollToIndex({
+                    index: reversedIndex,
+                    animated: true,
+                    viewPosition: 0.5
+                  });
+                }
+              }
+            }}
+            onLeaderboard={() => setShowLeaderboard(true)}
+            onShop={() => setShowShop(true)}
+            onAd={handleRewardedAdPress}
+            onProfile={() => setShowProfilePopup(true)}
+          />
+
+          {/* Ad Banner - Restored */}
+          <View style={localStyles.adBannerContainer}>
+            <AdBanner />
+          </View>
+
+          {/* Profile Popup */}
+          <ProfilePopup
+            visible={showProfilePopup}
+            onClose={() => setShowProfilePopup(false)}
+            user={user}
+          />
+
         </View>
       )}
 
@@ -1059,3 +1049,196 @@ const Roadmap: React.FC = () => {
 };
 
 export default Roadmap;
+
+const localStyles = StyleSheet.create({
+  topHudContainer: {
+    // Override the generic dashboardContainer positioning/styles where needed
+    // Maintain the container style (styles.dashboardContainer) from RoadmapStyles:
+    // backgroundColor: 'rgba(5, 5, 10, 0.98)', borderWidth: 2, borderColor: '#00E0FF', etc.
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: 85, // Increased height to prevent profile clipping
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    top: 50,
+    zIndex: 100,
+  },
+  profileButton: {
+    padding: 2,
+    borderWidth: 2,
+    borderColor: '#00E0FF',
+    borderRadius: 30, // Circle
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statBadgeNeon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 255, 0.5)', // Neon Blue tint
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  statValue: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 6,
+    fontFamily: 'monospace',
+    textShadowColor: 'rgba(0, 224, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 5,
+  },
+  logoutButton: {
+    padding: 5,
+  },
+  bottomNavGrid: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+    backgroundColor: 'rgba(5, 5, 10, 0.98)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly', // Even distribution of 5 elements
+    paddingHorizontal: 0,
+    paddingBottom: 10,
+    borderTopWidth: 2,
+    borderTopColor: '#00E0FF',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 20,
+    zIndex: 90,
+  },
+  placeholderNavItem: {
+    width: 60, // Match Map button width
+    height: '100%',
+  },
+  centerBtnContainer: {
+    position: 'absolute',
+    left: '50%',
+    top: -25, // Float up
+    marginLeft: -30, // Half of width (60/2)
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  centerMapBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#00E0FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
+    elevation: 10,
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  adBannerContainer: {
+    position: 'absolute',
+    bottom: 110, // Increased more to be safely above the raised Map button and its text
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    zIndex: 95,
+  },
+  // We need to adjust styles for AdBanner container if we want it visible
+  // The original styles.adBannerContainer was bottom: 0. 
+  // I will just let them overlap for now or rely on the user to request adjustment if it looks bad.
+  // Wait, I can override adBannerContainer style in the render.
+
+  navItem: {
+    width: 60, // Fixed width for all items ensures perfectly equal spacing
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 5,
+  },
+  navText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    marginTop: 4,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+  },
+  popupOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+  },
+  popupContent: {
+    width: '90%',
+    backgroundColor: 'rgba(5, 5, 10, 0.98)',
+    borderTopLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 10,
+    borderWidth: 2,
+    borderColor: '#00E0FF',
+    padding: 30,
+    alignItems: 'center',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 25,
+    elevation: 20,
+    overflow: 'hidden',
+  },
+  closePopupBtn: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    padding: 5,
+  },
+  popupAvatar: {
+    marginBottom: 20,
+    shadowColor: ICON_COLORS.PRIMARY,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+  },
+  popupName: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    textAlign: 'center',
+    textShadowColor: '#00E0FF',
+    textShadowRadius: 10,
+  },
+  popupLabel: {
+    color: '#00E0FF',
+    fontSize: 14,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+  }
+});

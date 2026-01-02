@@ -8,9 +8,9 @@ interface AdBannerProps {
   style?: any;
 }
 
-const AdBanner: React.FC<AdBannerProps> = ({ 
+const AdBanner: React.FC<AdBannerProps> = ({
   size = BannerAdSize.BANNER,
-  style 
+  style
 }) => {
   const [adLoaded, setAdLoaded] = useState(false);
   const [adError, setAdError] = useState<string | null>(null);
@@ -38,18 +38,8 @@ const AdBanner: React.FC<AdBannerProps> = ({
         onAdLoaded={handleAdLoaded}
         onAdFailedToLoad={handleAdFailedToLoad}
       />
-      
-      {/* Development info - only shows in debug mode */}
-      {__DEV__ && (
-        <View style={styles.debugInfo}>
-          <Text style={styles.debugText}>
-            {adLoaded ? '✅ Ad Loaded' : adError ? `❌ ${adError}` : '⏳ Loading...'}
-          </Text>
-          <Text style={styles.debugText}>
-            Using: {ADMOB_CONFIG.BANNER_AD_UNIT_ID.includes('3940256099942544') ? 'Test Ads' : 'Live Ads'}
-          </Text>
-        </View>
-      )}
+
+
     </View>
   );
 };

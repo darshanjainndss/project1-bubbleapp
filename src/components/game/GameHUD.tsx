@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import MaterialIcon from "../MaterialIcon";
-import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../../config/icons";
+import HelpButton from "../HelpButton";
+import { GAME_ICONS, ICON_COLORS } from "../../config/icons";
 import { styles } from "../../styles/GameScreenStyles";
 
 interface GameHUDProps {
@@ -17,6 +18,12 @@ interface GameHUDProps {
         freeze: boolean;
         fire: boolean;
     };
+    abilityCounts: {
+        lightning: number;
+        bomb: number;
+        freeze: number;
+        fire: number;
+    };
     onActivateLightning: () => void;
     onActivateBomb: () => void;
     onActivateFreeze: () => void;
@@ -31,6 +38,7 @@ export const GameHUD = ({
     onBackPress,
     onShowInstructions,
     abilities,
+    abilityCounts,
     onActivateLightning,
     onActivateBomb,
     onActivateFreeze,
@@ -49,17 +57,14 @@ export const GameHUD = ({
                     <View style={styles.statItem}>
                         <Text style={styles.statLabel}>SCORE</Text>
                         <Text style={styles.statValue}>{score.toLocaleString()}</Text>
+                        <View style={styles.starProgressContainer}>
+                            <View style={[styles.starProgressDot, score > 100 && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score > 500 && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score > 1000 && styles.starProgressDotActive]} />
+                        </View>
                     </View>
                     <View style={styles.verticalDivider} />
-                    <TouchableOpacity
-                        style={styles.instructionTab}
-                        onPress={onShowInstructions}
-                    >
-                        <View style={styles.helpIcon}>
-                            <Text style={styles.helpIconText}>i</Text>
-                        </View>
-                        <Text style={styles.instructionLabel}>HELP</Text>
-                    </TouchableOpacity>
+                    <HelpButton onPress={onShowInstructions || (() => { })} />
                     <View style={styles.verticalDivider} />
                     <TouchableOpacity
                         style={styles.topExitBtn}
@@ -83,36 +88,47 @@ export const GameHUD = ({
                         <TouchableOpacity
                             style={[styles.abilityBtn, abilities.lightning && styles.abilityBtnActive]}
                             onPress={onActivateLightning}
+                            disabled={abilityCounts.lightning <= 0 && !abilities.lightning}
                         >
                             <MaterialIcon
                                 name={GAME_ICONS.LIGHTNING.name}
                                 family={GAME_ICONS.LIGHTNING.family}
-                                size={ICON_SIZES.MEDIUM}
-                                color={abilities.lightning ? ICON_COLORS.SECONDARY : ICON_COLORS.INFO}
+                                size={22}
+                                color={abilities.lightning ? ICON_COLORS.SECONDARY : (abilityCounts.lightning > 0 ? ICON_COLORS.INFO : ICON_COLORS.DISABLED)}
                             />
+                            {abilityCounts.lightning > 0 && (
+                                <View style={styles.abilityBadge}>
+                                    <Text style={styles.abilityBadgeText}>{abilityCounts.lightning}</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.abilityBtn, abilities.freeze && styles.abilityBtnActive]}
                             onPress={onActivateFreeze}
+                            disabled={abilityCounts.freeze <= 0 && !abilities.freeze}
                         >
                             <MaterialIcon
                                 name={GAME_ICONS.FREEZE.name}
                                 family={GAME_ICONS.FREEZE.family}
-                                size={ICON_SIZES.MEDIUM}
-                                color={abilities.freeze ? ICON_COLORS.SECONDARY : ICON_COLORS.PRIMARY}
+                                size={22}
+                                color={abilities.freeze ? ICON_COLORS.SECONDARY : (abilityCounts.freeze > 0 ? ICON_COLORS.PRIMARY : ICON_COLORS.DISABLED)}
                             />
+                            {abilityCounts.freeze > 0 && (
+                                <View style={styles.abilityBadge}>
+                                    <Text style={styles.abilityBadgeText}>{abilityCounts.freeze}</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
 
-                    {/* Center Ammo Module */}
-                    <View style={styles.uCenterAmmo}>
-                        <View style={styles.ammoRing}>
+                    {/* Raised Center Ammo Module */}
+                    <View style={styles.raisedCenterContainer}>
+                        <View style={styles.raisedAmmoRing}>
                             <View style={[styles.ammoBubble, { backgroundColor: nextColor }]} />
                         </View>
-                        <Text style={[styles.statValue, { textAlign: 'center', marginTop: 8, fontSize: 18, color: moves < 5 ? '#ff4444' : '#fff' }]}>
-                            {moves}
-                        </Text>
-                        <Text style={[styles.statLabel, { textAlign: 'center', fontSize: 9 }]}>AMMO</Text>
+                        <View style={styles.ammoTextContainer}>
+                            <Text style={styles.ammoValue}>{moves}</Text>
+                        </View>
                     </View>
 
                     {/* Right Wing Abilities */}
@@ -120,24 +136,36 @@ export const GameHUD = ({
                         <TouchableOpacity
                             style={[styles.abilityBtn, abilities.fire && styles.abilityBtnActive]}
                             onPress={onActivateFire}
+                            disabled={abilityCounts.fire <= 0 && !abilities.fire}
                         >
                             <MaterialIcon
                                 name={GAME_ICONS.FIRE.name}
                                 family={GAME_ICONS.FIRE.family}
-                                size={ICON_SIZES.MEDIUM}
-                                color={abilities.fire ? ICON_COLORS.SECONDARY : ICON_COLORS.ERROR}
+                                size={22}
+                                color={abilities.fire ? ICON_COLORS.SECONDARY : (abilityCounts.fire > 0 ? ICON_COLORS.ERROR : ICON_COLORS.DISABLED)}
                             />
+                            {abilityCounts.fire > 0 && (
+                                <View style={styles.abilityBadge}>
+                                    <Text style={styles.abilityBadgeText}>{abilityCounts.fire}</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.abilityBtn, abilities.bomb && styles.abilityBtnActive]}
                             onPress={onActivateBomb}
+                            disabled={abilityCounts.bomb <= 0 && !abilities.bomb}
                         >
                             <MaterialIcon
                                 name={GAME_ICONS.BOMB.name}
                                 family={GAME_ICONS.BOMB.family}
-                                size={ICON_SIZES.MEDIUM}
-                                color={abilities.bomb ? ICON_COLORS.SECONDARY : ICON_COLORS.WARNING}
+                                size={22}
+                                color={abilities.bomb ? ICON_COLORS.SECONDARY : (abilityCounts.bomb > 0 ? ICON_COLORS.WARNING : ICON_COLORS.DISABLED)}
                             />
+                            {abilityCounts.bomb > 0 && (
+                                <View style={styles.abilityBadge}>
+                                    <Text style={styles.abilityBadgeText}>{abilityCounts.bomb}</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>

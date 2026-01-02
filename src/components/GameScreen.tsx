@@ -6,7 +6,7 @@ import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
 import BubbleBlast from "./BubbleBlast"; // Import BubbleBlast animation
 import MaterialIcon from "./MaterialIcon";
-import InstructionModal from "./InstructionModal";
+import HelpSlider from "./HelpSlider";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
 import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
 import { GameHUD } from "./game/GameHUD";
@@ -23,6 +23,7 @@ import {
   createShotFromCannonCenter
 } from "../utils/laserUtils";
 import BackendService from "../services/BackendService";
+import ConfirmationModal from "./ConfirmationModal";
 
 import {
   styles,
@@ -47,13 +48,14 @@ const COLOR_MAP: Record<string, any> = {
 
 
 
-const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: { 
-  onBackPress?: () => void, 
+const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities }: {
+  onBackPress?: () => void,
   level?: number,
-  onLevelComplete?: (level: number, score: number, stars: number) => void 
+  onLevelComplete?: (level: number, score: number, stars: number) => void,
+  initialAbilities?: any
 }) => {
   const { user } = useAuth(); // Get Firebase user
-  
+
   const [bubbles, setBubbles] = useState<any[]>([]);
   const [blasts, setBlasts] = useState<any[]>([]); // State for explosion effects
 
@@ -74,7 +76,9 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
 
   const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(Date.now());
+  const [abilityInventory, setAbilityInventory] = useState(initialAbilities || { lightning: 2, bomb: 2, freeze: 2, fire: 2 });
 
   // Shared Animation Values
   const metalPulseAnim = useRef(new Animated.Value(1)).current;
@@ -113,6 +117,26 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
   const [fireActive, setFireActive] = useState(false);
   const [hasFirePower, setHasFirePower] = useState(false);
 
+  const [abilitiesUsedCount, setAbilitiesUsedCount] = useState({
+    lightning: 0,
+    bomb: 0,
+    freeze: 0,
+    fire: 0
+  });
+
+  // Sync abilities from backend if not provided
+  useEffect(() => {
+    if (!initialAbilities && user) {
+      const fetchAbilities = async () => {
+        const result = await BackendService.getUserGameData();
+        if (result.success && result.data?.abilities) {
+          setAbilityInventory(result.data.abilities);
+        }
+      };
+      fetchAbilities();
+    }
+  }, [user, initialAbilities]);
+
   const isProcessing = useRef(false);
   const isAiming = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -146,7 +170,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
     if (lightningActive) {
       setLightningActive(false);
       setHasLightningPower(false);
-    } else {
+    } else if (abilityInventory.lightning > 0) {
       setLightningActive(true);
       setHasLightningPower(true);
       // Deactivate others
@@ -161,7 +185,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
     if (bombActive) {
       setBombActive(false);
       setHasBombPower(false);
-    } else {
+    } else if (abilityInventory.bomb > 0) {
       setBombActive(true);
       setHasBombPower(true);
       // Deactivate others
@@ -175,7 +199,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
     if (freezeActive) {
       setFreezeActive(false);
       setHasFreezePower(false);
-    } else {
+    } else if (abilityInventory.freeze > 0) {
       setFreezeActive(true);
       setHasFreezePower(true);
       // Deactivate others
@@ -189,7 +213,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
     if (fireActive) {
       setFireActive(false);
       setHasFirePower(false);
-    } else {
+    } else if (abilityInventory.fire > 0) {
       setFireActive(true);
       setHasFirePower(true);
       // Deactivate others
@@ -524,22 +548,38 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
       }
     );
 
-    // Reset power-ups after use
+    // Reset power-ups after use and update backend
     if (hasLightningPower) {
       setHasLightningPower(false);
       setLightningActive(false);
+      setAbilitiesUsedCount(prev => ({ ...prev, lightning: prev.lightning + 1 }));
+      const newInv = { ...abilityInventory, lightning: abilityInventory.lightning - 1 };
+      setAbilityInventory(newInv);
+      BackendService.updateAbilities(newInv);
     }
     if (hasBombPower) {
       setHasBombPower(false);
       setBombActive(false);
+      setAbilitiesUsedCount(prev => ({ ...prev, bomb: prev.bomb + 1 }));
+      const newInv = { ...abilityInventory, bomb: abilityInventory.bomb - 1 };
+      setAbilityInventory(newInv);
+      BackendService.updateAbilities(newInv);
     }
     if (hasFreezePower) {
       setHasFreezePower(false);
       setFreezeActive(false);
+      setAbilitiesUsedCount(prev => ({ ...prev, freeze: prev.freeze + 1 }));
+      const newInv = { ...abilityInventory, freeze: abilityInventory.freeze - 1 };
+      setAbilityInventory(newInv);
+      BackendService.updateAbilities(newInv);
     }
     if (hasFirePower) {
       setHasFirePower(false);
       setFireActive(false);
+      setAbilitiesUsedCount(prev => ({ ...prev, fire: prev.fire + 1 }));
+      const newInv = { ...abilityInventory, fire: abilityInventory.fire - 1 };
+      setAbilityInventory(newInv);
+      BackendService.updateAbilities(newInv);
     }
 
     const step = () => {
@@ -634,7 +674,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
   const goToNextLevel = async () => {
     if (onLevelComplete) {
       const stars = score > 1000 ? 3 : score > 500 ? 2 : score > 100 ? 1 : 0;
-      
+
       // Submit game session to backend
       try {
         // Check if user is authenticated with Firebase
@@ -647,7 +687,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
         // Check if BackendService is authenticated, if not, try to authenticate with Firebase user
         if (!BackendService.isAuthenticated()) {
           console.log('BackendService not authenticated, attempting to authenticate with Firebase user...');
-          
+
           // Try to login with Firebase user email (this assumes the user exists in backend)
           // For now, we'll skip backend submission if not authenticated
           console.log('Backend authentication not implemented, skipping submission');
@@ -661,18 +701,12 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
           moves: moves,
           stars,
           duration: Math.floor((Date.now() - gameStartTime) / 1000), // Calculate duration
-          abilitiesUsed: {
-            lightning: hasLightningPower ? 1 : 0,
-            bomb: hasBombPower ? 1 : 0,
-            freeze: hasFreezePower ? 1 : 0,
-            fire: hasFirePower ? 1 : 0
-          },
+          abilitiesUsed: abilitiesUsedCount,
           coinsEarned: 0, // Will be calculated by backend
-          completedAt: new Date().toISOString()
         });
 
         if (sessionResult.success) {
-          console.log('Game session submitted successfully:', sessionResult.sessionId);
+          console.log('Game session submitted successfully:', sessionResult.data?.sessionId);
         } else {
           console.error('Failed to submit game session:', sessionResult.error);
         }
@@ -681,6 +715,14 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
       }
 
       onLevelComplete(level, score, stars);
+    }
+  };
+
+  const handleBackPressWithConfirm = () => {
+    if (gameState === 'playing') {
+      setShowBackConfirm(true);
+    } else {
+      onBackPress && onBackPress();
     }
   };
 
@@ -694,7 +736,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
         moves={moves}
         level={level}
         nextColor={nextColor}
-        onBackPress={onBackPress}
+        onBackPress={handleBackPressWithConfirm}
         onShowInstructions={() => setShowInstructions(true)}
         abilities={{
           lightning: lightningActive,
@@ -702,6 +744,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
           freeze: freezeActive,
           fire: fireActive,
         }}
+        abilityCounts={abilityInventory}
         onActivateLightning={activateLightning}
         onActivateBomb={activateBomb}
         onActivateFreeze={activateFreeze}
@@ -839,8 +882,22 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete }: {
         </View>
       )}
 
-      {/* Instruction Modal */}
-      <InstructionModal
+      {/* Exit Confirmation Modal */}
+      <ConfirmationModal
+        visible={showBackConfirm}
+        title="EXIT MISSION"
+        message="Are you sure you want to abort the current mission? Progress will be lost."
+        confirmLabel="ABORT"
+        cancelLabel="CONTINUE"
+        onConfirm={() => {
+          setShowBackConfirm(false);
+          onBackPress && onBackPress();
+        }}
+        onCancel={() => setShowBackConfirm(false)}
+      />
+
+      {/* Help Slider */}
+      <HelpSlider
         visible={showInstructions}
         onClose={() => setShowInstructions(false)}
       />

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Backend API Configuration
-const API_BASE_URL = __DEV__ 
+const API_BASE_URL = __DEV__
   ? 'http://192.168.1.71:3001/api' // Development - local network IP (for physical devices)
   : 'https://your-production-api.com/api'; // Production URL
 
@@ -20,18 +20,18 @@ const testNetworkConnection = async (): Promise<{ success: boolean; url?: string
   for (const url of urlsToTest) {
     try {
       console.log(`🧪 Testing connection to: ${url}`);
-      
+
       // Create a timeout promise
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout')), 3000)
       );
-      
+
       const fetchPromise = fetch(`${url}/health`, {
         method: 'GET',
       });
-      
+
       const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
-      
+
       if (response.ok) {
         console.log(`✅ Connection successful to: ${url}`);
         return { success: true, url };
@@ -41,7 +41,7 @@ const testNetworkConnection = async (): Promise<{ success: boolean; url?: string
       console.log(`❌ Connection failed to: ${url}`, errorMessage);
     }
   }
-  
+
   return { success: false };
 };
 
@@ -73,6 +73,8 @@ export interface UserGameData {
     fire: number;
   };
   achievements: string[];
+  completedLevels: number[];
+  levelStars: Record<number, number>;
   lastPlayedAt: string;
 }
 
@@ -111,6 +113,18 @@ class BackendService {
 
   constructor() {
     this.loadAuthToken();
+    // Start network test early
+    this.ensureWorkingUrl();
+  }
+
+  private async ensureWorkingUrl(): Promise<string> {
+    if (this.workingApiUrl === API_BASE_URL) {
+      const result = await testNetworkConnection();
+      if (result.success && result.url) {
+        this.workingApiUrl = result.url;
+      }
+    }
+    return this.workingApiUrl;
   }
 
   // ============================================================================
@@ -121,11 +135,11 @@ class BackendService {
     try {
       const token = await AsyncStorage.getItem('authToken');
       const user = await AsyncStorage.getItem('currentUser');
-      
+
       if (token) {
         this.authToken = token;
       }
-      
+
       if (user) {
         this.currentUser = JSON.parse(user);
       }
@@ -145,6 +159,21 @@ class BackendService {
     }
   }
 
+  async ensureAuthenticated(firebaseUser: any): Promise<boolean> {
+    if (this.isAuthenticated()) return true;
+    if (!firebaseUser) return false;
+
+    console.log('🔄 Auto-syncing with backend...', firebaseUser.email);
+    const result = await this.loginWithGoogle(
+      firebaseUser.uid,
+      firebaseUser.email || '',
+      firebaseUser.displayName || 'Commander',
+      firebaseUser.photoURL || undefined
+    );
+
+    return result.success;
+  }
+
   async clearAuthToken(): Promise<void> {
     try {
       await AsyncStorage.removeItem('authToken');
@@ -159,7 +188,8 @@ class BackendService {
   // Register with email/password
   async registerUser(email: string, password: string, displayName: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +198,6 @@ class BackendService {
           email,
           password,
           displayName,
-          isGoogleLogin: false,
         }),
       });
 
@@ -189,7 +218,8 @@ class BackendService {
   // Login with email/password
   async loginUser(email: string, password: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +247,8 @@ class BackendService {
   // Google Login
   async loginWithGoogle(firebaseId: string, email: string, displayName: string, profilePicture?: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/google-login`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/auth/google-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +280,8 @@ class BackendService {
   async logout(): Promise<void> {
     try {
       if (this.authToken) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
+        const baseUrl = await this.ensureWorkingUrl();
+        await fetch(`${baseUrl}/auth/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.authToken}`,
@@ -274,7 +306,8 @@ class BackendService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${this.workingApiUrl}/user/game-data`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/user/game-data`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -301,7 +334,8 @@ class BackendService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${API_BASE_URL}/user/game-data`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/user/game-data`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -333,7 +367,8 @@ class BackendService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${API_BASE_URL}/user/coins`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/user/coins`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -361,7 +396,8 @@ class BackendService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${API_BASE_URL}/user/abilities`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/user/abilities`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -390,13 +426,13 @@ class BackendService {
   async getLeaderboard(limit: number = 100): Promise<{ success: boolean; leaderboard?: LeaderboardEntry[]; error?: string }> {
     try {
       console.log('🌐 Testing network connections...');
-      
+
       // Test network connection and get working URL
       const networkTest = await testNetworkConnection();
       if (!networkTest.success) {
         return { success: false, error: 'Cannot connect to server. Make sure the backend server is running and accessible.' };
       }
-      
+
       // Update working URL if we found a better one
       if (networkTest.url && networkTest.url !== this.workingApiUrl) {
         console.log(`🔄 Switching to working URL: ${networkTest.url}`);
@@ -410,7 +446,7 @@ class BackendService {
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout')), 10000)
       );
-      
+
       const fetchPromise = fetch(url, {
         method: 'GET',
         headers: {
@@ -421,7 +457,7 @@ class BackendService {
       const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
 
       console.log('📊 Leaderboard response status:', response.status);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Leaderboard HTTP error:', response.status, errorText);
@@ -438,11 +474,11 @@ class BackendService {
       }
     } catch (error) {
       console.error('💥 Get leaderboard error:', error);
-      
+
       if (error instanceof TypeError && error.message.includes('Network request failed')) {
         return { success: false, error: 'Network connection failed. Make sure the backend server is running.' };
       }
-      
+
       return { success: false, error: error instanceof Error ? error.message : 'Network error fetching leaderboard' };
     }
   }
@@ -453,7 +489,8 @@ class BackendService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${API_BASE_URL}/user/rank`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/user/rank`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -478,13 +515,14 @@ class BackendService {
   // GAME SESSION METHODS
   // ============================================================================
 
-  async submitGameSession(session: Omit<GameSession, 'sessionId' | 'userId'>): Promise<{ success: boolean; sessionId?: string; error?: string }> {
+  async submitGameSession(session: Omit<GameSession, 'sessionId' | 'userId' | 'completedAt'>): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       if (!this.authToken) {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${API_BASE_URL}/game/session`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/game/session`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -496,7 +534,7 @@ class BackendService {
       const data = await response.json();
 
       if (response.ok) {
-        return { success: true, sessionId: data.sessionId };
+        return { success: true, data: { sessionId: data.sessionId } };
       } else {
         return { success: false, error: data.message || 'Failed to submit game session' };
       }
@@ -516,7 +554,8 @@ class BackendService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      const response = await fetch(`${API_BASE_URL}/user/purchase-abilities`, {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/user/purchase-abilities`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
@@ -528,8 +567,8 @@ class BackendService {
       const data = await response.json();
 
       if (response.ok) {
-        return { 
-          success: true, 
+        return {
+          success: true,
           coinsSpent: data.coinsSpent,
           newCoinBalance: data.newCoinBalance,
           newAbilityCount: data.newAbilityCount

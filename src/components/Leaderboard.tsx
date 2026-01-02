@@ -37,6 +37,8 @@ interface UserGameData {
     fire: number;
   };
   achievements: string[];
+  completedLevels: number[];
+  levelStars: Record<number, number>;
   lastPlayedAt: string;
   rank?: number;
 }
@@ -48,11 +50,11 @@ interface LeaderboardProps {
   userId?: string;
 }
 
-const Leaderboard: React.FC<LeaderboardProps> = ({ 
-  isVisible, 
-  onClose, 
+const Leaderboard: React.FC<LeaderboardProps> = ({
+  isVisible,
+  onClose,
   currentUserScore = 0,
-  userId 
+  userId
 }) => {
   const { user } = useAuth(); // Get Firebase user
   // Dummy data for testing/fallback
@@ -115,12 +117,27 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
       fire: 2,
     },
     achievements: [],
+    completedLevels: [1],
+    levelStars: { 1: 3 },
     lastPlayedAt: new Date().toISOString(),
-    rank: 6,
+    rank: 10,
   };
 
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>(dummyLeaderboardData);
-  const [userGameData, setUserGameData] = useState<UserGameData | null>(dummyUserGameData);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
+  const [userGameData, setUserGameData] = useState<UserGameData>({
+    userId: '',
+    totalScore: 0,
+    highScore: 0,
+    totalCoins: 0,
+    currentLevel: 1,
+    gamesPlayed: 0,
+    gamesWon: 0,
+    abilities: { lightning: 2, bomb: 2, freeze: 2, fire: 2 },
+    achievements: [],
+    completedLevels: [],
+    levelStars: {},
+    lastPlayedAt: new Date().toISOString()
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,20 +147,25 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
       if (isVisible) {
         setLoading(true);
         setError(null);
-        
+
         try {
-          console.log('🔍 Loading leaderboard data...');
-          
-          // Load leaderboard data (public endpoint, no auth required)
+          console.log('🔍 Syncing and loading leaderboard data...');
+
+          // Ensure backend is authenticated with Firebase user
+          if (user) {
+            await BackendService.ensureAuthenticated(user);
+          }
+
+          // Load leaderboard data (public endpoint, no auth required, but better if auth works)
           const leaderboardResult = await BackendService.getLeaderboard(50);
           console.log('📊 Leaderboard result:', leaderboardResult);
-          
-          if (leaderboardResult.success && leaderboardResult.leaderboard && leaderboardResult.leaderboard.length > 0) {
+
+          if (leaderboardResult.success && leaderboardResult.leaderboard) {
             console.log('✅ Leaderboard data loaded:', leaderboardResult.leaderboard.length, 'entries');
-            let leaderboard = leaderboardResult.leaderboard;
-            
-            // If user is authenticated but not in leaderboard, add them
-            if (user && userGameData && !leaderboard.find(entry => entry.userId === user.uid)) {
+            let leaderboard = [...leaderboardResult.leaderboard];
+
+            // If user is authenticated but not in leaderboard, add them locally for display if they have scores
+            if (user && userGameData && !leaderboard.find(entry => entry.userId === user.uid) && userGameData.highScore > 0) {
               const userEntry: LeaderboardEntry = {
                 userId: user.uid,
                 displayName: user.displayName || user.email || 'You',
@@ -154,26 +176,13 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
               };
               leaderboard = [...leaderboard, userEntry];
             }
-            
+
             setLeaderboardData(leaderboard);
-          } else {
-            console.log('⚠️ No backend data, using dummy data');
-            let dummyData = [...dummyLeaderboardData];
-            
-            // Add current user to dummy data if authenticated
-            if (user && userGameData) {
-              const userEntry: LeaderboardEntry = {
-                userId: user.uid,
-                displayName: user.displayName || user.email || 'You',
-                highScore: userGameData.highScore,
-                totalScore: userGameData.totalScore,
-                gamesWon: userGameData.gamesWon,
-                rank: dummyData.length + 1,
-              };
-              dummyData = [...dummyData, userEntry];
-            }
-            
-            setLeaderboardData(dummyData);
+          } else if (leaderboardResult.error) {
+            // Only use dummy if there was an actual error, not just an empty result
+            console.log('⚠️ Error fetching leaderboard, using dummy data');
+            setError(leaderboardResult.error);
+            setLeaderboardData(dummyLeaderboardData);
           }
 
           // Load user game data (requires authentication)
@@ -181,7 +190,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             console.log('🔍 Loading user game data...');
             const userDataResult = await BackendService.getUserGameData();
             console.log('👤 User data result:', userDataResult);
-            
+
             if (userDataResult.success && userDataResult.data) {
               console.log('✅ User game data loaded:', userDataResult.data);
               setUserGameData(userDataResult.data);
@@ -206,17 +215,17 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
         } catch (error) {
           console.error('💥 Error loading data:', error);
           console.log('🔄 Falling back to dummy data');
-          
+
           let dummyData = [...dummyLeaderboardData];
           let userData = { ...dummyUserGameData };
-          
+
           // Personalize dummy data if user is authenticated
           if (user) {
             userData = {
               ...dummyUserGameData,
               userId: user.uid,
             };
-            
+
             const userEntry: LeaderboardEntry = {
               userId: user.uid,
               displayName: user.displayName || user.email || 'You',
@@ -227,7 +236,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             };
             dummyData = [...dummyData, userEntry];
           }
-          
+
           setLeaderboardData(dummyData);
           setUserGameData(userData);
         } finally {
@@ -263,33 +272,36 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
     const rankColor = getRankColor(item.rank);
     const rankIcon = getRankIcon(item.rank);
     const isTopThree = item.rank <= 3;
-    const isCurrentUser = item.userId === (user?.uid || userId); // Use Firebase UID
+    const isCurrentUser = item.userId === (user?.uid || userId);
 
     return (
       <View style={[
-        styles.leaderboardItem, 
+        styles.leaderboardItem,
         isTopThree && styles.topThreeItem,
-        isCurrentUser && styles.currentUserItem
+        isCurrentUser && styles.currentUserItem,
+        { borderLeftColor: rankColor, borderLeftWidth: 4 }
       ]}>
         {/* Rank Section */}
-        <View style={[styles.rankSection, { borderColor: rankColor }]}>
+        <View style={styles.rankSection}>
+          <Text style={[styles.rankNumberText, { color: rankColor }]}>
+            {item.rank}
+          </Text>
           <MaterialIcon
             name={rankIcon.name}
             family={rankIcon.family}
-            size={isTopThree ? ICON_SIZES.LARGE : ICON_SIZES.MEDIUM}
+            size={12}
             color={rankColor}
           />
-          <Text style={[styles.rankText, { color: rankColor }]}>#{item.rank}</Text>
         </View>
 
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatarPlaceholder}>
+          <View style={[styles.avatarPlaceholder, isCurrentUser && { borderColor: '#00FF88', shadowColor: '#00FF88' }]}>
             <MaterialIcon
               name="person"
               family="material"
               size={ICON_SIZES.LARGE}
-              color={isCurrentUser ? ICON_COLORS.SUCCESS : ICON_COLORS.SECONDARY}
+              color={isCurrentUser ? '#00FF88' : '#FFFFFF30'}
             />
           </View>
         </View>
@@ -297,26 +309,20 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
         {/* Player Info Section */}
         <View style={styles.playerInfoSection}>
           <Text style={[styles.username, isCurrentUser && { color: '#00FF88' }]}>
-            {isCurrentUser ? 'You' : item.displayName}
+            {isCurrentUser ? 'YOU' : item.displayName.toUpperCase()}
           </Text>
           <View style={styles.playerStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.levelText}>Games Won: {item.gamesWon}</Text>
-            </View>
-            {item.totalScore && (
-              <View style={styles.statItem}>
-                <Text style={styles.statText}>Total: {item.totalScore.toLocaleString()}</Text>
-              </View>
-            )}
+            <MaterialIcon name="military-tech" family="material" size={14} color="#00E0FF" />
+            <Text style={styles.levelText}>{item.gamesWon} WINS</Text>
           </View>
         </View>
 
-        {/* Score Section - Main focus */}
+        {/* Score Section */}
         <View style={styles.scoreSection}>
           <Text style={[styles.scoreText, { color: rankColor }]}>
             {item.highScore.toLocaleString()}
           </Text>
-          <Text style={styles.scoreLabel}>HIGH SCORE</Text>
+          <Text style={styles.scoreLabel}>PTS</Text>
         </View>
       </View>
     );
@@ -329,7 +335,10 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
       <View style={styles.leaderboardModal}>
         {/* Header */}
         <View style={styles.leaderboardHeader}>
-          <Text style={styles.leaderboardTitle}>LEADERBOARD</Text>
+          <View>
+            <Text style={styles.leaderboardTitle}>LEADERBOARD</Text>
+            <Text style={styles.leaderboardSubtitle}>GALACTIC RANKINGS</Text>
+          </View>
           <TouchableOpacity style={styles.leaderboardCloseBtn} onPress={onClose}>
             <MaterialIcon
               name={GAME_ICONS.CLOSE.name}
@@ -362,8 +371,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             {userGameData && (
               <View style={styles.userAbilities}>
                 <Text style={styles.abilitiesTitle}>Abilities:</Text>
-                <ScrollView 
-                  horizontal 
+                <ScrollView
+                  horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.abilitiesScrollContent}
                 >
@@ -413,7 +422,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             />
             <Text style={styles.errorText}>Failed to load leaderboard</Text>
             <Text style={styles.errorSubtext}>{error}</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.retryButton}
               onPress={() => {
                 if (isVisible) {
@@ -469,7 +478,8 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   leaderboardModal: {
-    width: '92%',
+    width: '94%',
+    maxHeight: '85%',
     backgroundColor: 'rgba(5, 5, 10, 0.98)',
     borderTopLeftRadius: 40,
     borderBottomRightRadius: 40,
@@ -477,17 +487,16 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 10,
     borderWidth: 2,
     borderColor: '#00E0FF',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 15,
     shadowColor: '#00E0FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 25,
-    elevation: 15,
+    shadowOpacity: 0.8,
+    shadowRadius: 30,
+    elevation: 20,
     overflow: 'hidden',
-    maxHeight: 600, // Ensure modal doesn't take full screen
   },
-  
+
   // Header (same as roadmap header)
   leaderboardHeader: {
     flexDirection: 'row',
@@ -499,11 +508,20 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   leaderboardTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '900',
     color: '#fff',
     letterSpacing: 2,
-    lineHeight: 24,
+    lineHeight: 28,
+    textShadowColor: '#00E0FF',
+    textShadowRadius: 15,
+  },
+  leaderboardSubtitle: {
+    fontSize: 10,
+    color: '#00E0FF',
+    fontWeight: 'bold',
+    letterSpacing: 4,
+    marginTop: 2,
   },
   leaderboardCloseBtn: {
     width: 40,
@@ -637,13 +655,17 @@ const styles = StyleSheet.create({
   rankSection: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 60,
-    marginRight: 15,
-    borderRightWidth: 1,
-    paddingRight: 15,
+    width: 45,
+    marginRight: 10,
+  },
+  rankNumberText: {
+    fontSize: 20,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    lineHeight: 22,
   },
   rankText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
     marginTop: 2,
   },
@@ -652,67 +674,56 @@ const styles = StyleSheet.create({
   avatarSection: {
     marginRight: 15,
   },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
   avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
 
   // Player Info Section
   playerInfoSection: {
     flex: 1,
-    marginRight: 15,
   },
   username: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '900',
     color: '#fff',
-    marginBottom: 5,
+    letterSpacing: 1,
+    marginBottom: 2,
   },
   playerStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 15,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 4,
   },
-  statText: {
-    fontSize: 12,
-    color: '#FFD700',
-    fontWeight: 'bold',
-  },
   levelText: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#00E0FF',
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
 
   // Score Section
   scoreSection: {
     alignItems: 'flex-end',
+    minWidth: 70,
   },
   scoreText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 2,
+    fontWeight: '900',
+    fontFamily: 'monospace',
   },
   scoreLabel: {
-    fontSize: 10,
+    fontSize: 8,
     color: '#aaa',
     fontWeight: 'bold',
     letterSpacing: 1,

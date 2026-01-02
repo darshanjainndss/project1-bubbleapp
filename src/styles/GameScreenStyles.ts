@@ -6,8 +6,8 @@ export const GRID_COLS = 9;
 
 export const BUBBLE_SIZE = Math.floor(SCREEN_WIDTH / 10);
 export const ROW_HEIGHT = BUBBLE_SIZE * 0.86;
-export const CANNON_SIZE = 80;
-export const FOOTER_BOTTOM = 200; // Moved down closer to HUD as requested
+export const CANNON_SIZE = 60;
+export const FOOTER_BOTTOM = 150; // Moved down closer to HUD as requested
 export const GRID_TOP = 10;
 
 export const styles = StyleSheet.create({
@@ -24,7 +24,7 @@ export const styles = StyleSheet.create({
     topCard: {
         flexDirection: 'row',
         width: '90%',
-        height: 60,
+        height: 70,
         backgroundColor: 'rgba(20, 20, 30, 0.9)',
         borderRadius: 20,
         borderWidth: 2,
@@ -50,6 +50,29 @@ export const styles = StyleSheet.create({
     starIcon: {
         fontSize: 16,
     },
+    starProgressContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        borderRadius: 10,
+        marginTop: 2,
+        gap: 2,
+    },
+    starProgressDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    starProgressDotActive: {
+        backgroundColor: '#FFD60A',
+        shadowColor: '#FFD60A',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
+    },
     topExitBtn: {
         width: 36,
         height: 36,
@@ -63,61 +86,61 @@ export const styles = StyleSheet.create({
 
     hudBottomContainer: {
         position: 'absolute',
-        bottom: 30, // Reduced from 40 for more compact layout
+        bottom: 50,
         left: 0,
         right: 0,
         alignItems: 'center',
         zIndex: 50,
+        paddingHorizontal: 15,
     },
     uCard: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
-        backgroundColor: 'rgba(20, 20, 30, 0.92)',
-        paddingHorizontal: 25, // Increased for wider look
-        paddingTop: 10,
-        paddingBottom: 12,
-        borderRadius: 30,
-        borderWidth: 2,
-        borderColor: '#00E0FF',
-        gap: 20, // Increased gap for wider distribution
+        alignItems: 'center',
+        backgroundColor: 'rgba(5, 10, 20, 0.95)',
+        width: '100%',
+        maxWidth: 420,
+        height: 75,
+        borderRadius: 40,
+        borderWidth: 1.5,
+        borderColor: 'rgba(0, 224, 255, 0.4)',
+        justifyContent: 'space-between',
+        paddingHorizontal: 10,
         shadowColor: '#00E0FF',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
+        shadowOpacity: 0.4,
         shadowRadius: 15,
-        elevation: 20,
+        elevation: 15,
     },
     uWingLeft: {
         flexDirection: 'row',
-        gap: 10,
-        paddingBottom: 5,
+        gap: 8,
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        height: 55,
+        marginVertical: 10,
+        borderRadius: 30,
+        marginLeft: 5,
+        paddingHorizontal: 5,
     },
     uWingRight: {
         flexDirection: 'row',
-        gap: 10,
-        paddingBottom: 5,
-    },
-    uCenterAmmo: {
-        marginBottom: 6, // Reduced from 10
-    },
-    ammoRing: {
-        width: 50, // Reduced from 60
-        height: 50, // Reduced from 60
-        borderRadius: 25,
-        backgroundColor: 'rgba(0, 224, 255, 0.1)',
-        alignItems: 'center',
+        gap: 8,
+        flex: 1,
         justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#00E0FF',
-        shadowColor: '#00E0FF',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
-        elevation: 10,
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        height: 55,
+        marginVertical: 10,
+        borderRadius: 30,
+        marginRight: 5,
+        paddingHorizontal: 5,
     },
     ammoBubble: {
-        width: 36, // Reduced from 44
-        height: 36, // Reduced from 44
-        borderRadius: 18,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         borderWidth: 2,
         borderColor: '#fff',
         shadowColor: '#fff',
@@ -126,12 +149,51 @@ export const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 8,
     },
-
     statValue: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '800',
         fontFamily: 'monospace',
+    },
+    raisedCenterContainer: {
+        width: 85,
+        height: 85,
+        marginTop: -35, // Push it up above the card
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 100,
+    },
+    raisedAmmoRing: {
+        width: 75,
+        height: 75,
+        borderRadius: 37.5,
+        backgroundColor: 'rgba(5, 10, 20, 0.98)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#00E0FF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.9,
+        shadowRadius: 15,
+        elevation: 20,
+        borderWidth: 2,
+        borderColor: '#00E0FF',
+    },
+    ammoTextContainer: {
+        position: 'absolute',
+        bottom: -5,
+        backgroundColor: '#00E0FF',
+        paddingHorizontal: 10,
+        paddingVertical: 1,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#FFF',
+        minWidth: 40,
+        alignItems: 'center',
+    },
+    ammoValue: {
+        color: '#000',
+        fontSize: 14,
+        fontWeight: '900',
     },
     instructionTab: {
         alignItems: 'center',
@@ -174,21 +236,43 @@ export const styles = StyleSheet.create({
         color: '#fff',
     },
     abilityBtn: {
-        width: 38, // Reduced from 42
-        height: 38, // Reduced from 42
-        borderRadius: 12, // Reduced from 14
-        backgroundColor: 'rgba(0, 224, 255, 0.1)',
+        width: 44,
+        height: 44,
+        borderRadius: 15,
+        backgroundColor: 'rgba(0, 224, 255, 0.05)',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: '#00E0FF',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 224, 255, 0.3)',
+        shadowColor: '#00E0FF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 5,
     },
     abilityBtnActive: {
-        backgroundColor: 'rgba(255, 214, 10, 0.3)',
+        backgroundColor: 'rgba(255, 214, 10, 0.2)',
         borderColor: '#FFD60A',
+        shadowOpacity: 0.6,
     },
-    abilityText: {
-        fontSize: 18, // Reduced from 20
+    abilityBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        backgroundColor: '#FF3B30',
+        paddingHorizontal: 6,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#fff',
+        zIndex: 10,
+    },
+    abilityBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '900',
+        textAlign: 'center',
     },
 
     borderContainer: {
@@ -345,7 +429,7 @@ export const styles = StyleSheet.create({
     },
     hintContainer: {
         position: 'absolute',
-        bottom: 120, // Adjusted from 150 to match new layout
+        bottom: 180, // Adjusted higher to clear the raised HUD
         width: SCREEN_WIDTH,
         alignItems: 'center',
     },
