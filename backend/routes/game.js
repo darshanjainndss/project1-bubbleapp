@@ -44,7 +44,11 @@ const validateGameSession = [
   body('perfectShots')
     .optional()
     .isInt({ min: 0 })
-    .withMessage('perfectShots must be a non-negative integer')
+    .withMessage('perfectShots must be a non-negative integer'),
+  body('coinsEarned')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('coinsEarned must be a non-negative integer')
 ];
 
 // ============================================================================
@@ -66,6 +70,77 @@ const handleValidationErrors = (req, res, next) => {
 // ============================================================================
 // ROUTES
 // ============================================================================
+
+// @route   POST /api/game/progress
+// @desc    Update game progress during gameplay (not just completion)
+// @access  Private
+router.post('/progress', auth, async (req, res) => {
+  try {
+    const {
+      level,
+      score,
+      moves,
+      stars,
+      isPartial = true // Flag to indicate this is mid-game progress
+    } = req.body;
+
+    // Get user
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Update progress data
+    user.gameData.lastPlayedAt = new Date();
+    
+    // Update level stars if this is better than previous attempt
+    const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
+    if (stars > currentStars) {
+      user.gameData.levelStars.set(level.toString(), stars);
+      
+      // Add to completed levels if not already there
+      if (!user.gameData.completedLevels.includes(level)) {
+        user.gameData.completedLevels.push(level);
+      }
+    }
+
+    // Update high score if this is better
+    if (score > user.gameData.highScore) {
+      user.gameData.highScore = score;
+    }
+
+    // Check if next level should be unlocked (2+ stars required)
+    if (stars >= 2 && level >= user.gameData.currentLevel) {
+      user.gameData.currentLevel = level + 1;
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Progress updated successfully',
+      updatedGameData: {
+        totalScore: user.gameData.totalScore,
+        highScore: user.gameData.highScore,
+        totalCoins: user.gameData.totalCoins,
+        currentLevel: user.gameData.currentLevel,
+        completedLevels: user.gameData.completedLevels,
+        levelStars: Object.fromEntries(user.gameData.levelStars),
+        abilities: user.gameData.abilities
+      }
+    });
+
+  } catch (error) {
+    console.error('Update progress error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating progress'
+    });
+  }
+});
 
 // @route   POST /api/game/session
 // @desc    Submit a completed game session
@@ -125,6 +200,17 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     user.gameData.totalScore += score;
     user.gameData.lastPlayedAt = new Date();
 
+    // Update level stars (always update, even on loss)
+    const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
+    if (stars > currentStars) {
+      user.gameData.levelStars.set(level.toString(), stars);
+    }
+
+    // Add to completed levels if not already there and has at least 1 star
+    if (stars > 0 && !user.gameData.completedLevels.includes(level)) {
+      user.gameData.completedLevels.push(level);
+    }
+
     if (isWin) {
       user.gameData.gamesWon += 1;
       
@@ -132,11 +218,11 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       if (score > user.gameData.highScore) {
         user.gameData.highScore = score;
       }
-      
-      // Update current level if this level is higher
-      if (level >= user.gameData.currentLevel) {
-        user.gameData.currentLevel = level + 1;
-      }
+    }
+
+    // Check if next level should be unlocked (2+ stars required)
+    if (stars >= 2 && level >= user.gameData.currentLevel) {
+      user.gameData.currentLevel = level + 1;
     }
 
     // Add coins earned
@@ -171,6 +257,8 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
         currentLevel: user.gameData.currentLevel,
         gamesPlayed: user.gameData.gamesPlayed,
         gamesWon: user.gameData.gamesWon,
+        completedLevels: user.gameData.completedLevels,
+        levelStars: Object.fromEntries(user.gameData.levelStars),
         abilities: user.gameData.abilities
       }
     });

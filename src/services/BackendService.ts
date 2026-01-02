@@ -2,19 +2,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Backend API Configuration
 const API_BASE_URL = __DEV__
-  ? 'http://192.168.1.71:3001/api' // Development - local network IP (for physical devices)
+  ? 'http://localhost:3001/api' // Development - localhost first
   : 'https://your-production-api.com/api'; // Production URL
 
-// Fallback URL for emulators
+// Fallback URL for emulators and devices
 const API_FALLBACK_URL = 'http://10.0.2.2:3001/api'; // Android emulator localhost
-const API_LOCALHOST_URL = 'http://localhost:3001/api'; // iOS simulator localhost
+const API_DEVICE_URL = 'http://192.168.1.71:3001/api'; // For physical devices on network
 
 // Network test function with fallback URLs
 const testNetworkConnection = async (): Promise<{ success: boolean; url?: string }> => {
   const urlsToTest = [
     API_BASE_URL,
     API_FALLBACK_URL,
-    API_LOCALHOST_URL
+    API_DEVICE_URL
   ];
 
   for (const url of urlsToTest) {
@@ -425,36 +425,20 @@ class BackendService {
 
   async getLeaderboard(limit: number = 100): Promise<{ success: boolean; leaderboard?: LeaderboardEntry[]; error?: string }> {
     try {
-      console.log('🌐 Testing network connections...');
+      console.log('🌐 Fetching leaderboard...');
 
-      // Test network connection and get working URL
-      const networkTest = await testNetworkConnection();
-      if (!networkTest.success) {
-        return { success: false, error: 'Cannot connect to server. Make sure the backend server is running and accessible.' };
-      }
-
-      // Update working URL if we found a better one
-      if (networkTest.url && networkTest.url !== this.workingApiUrl) {
-        console.log(`🔄 Switching to working URL: ${networkTest.url}`);
-        this.workingApiUrl = networkTest.url;
-      }
-
-      const url = `${this.workingApiUrl}/leaderboard?limit=${limit}`;
+      // Use the working URL directly, or test if needed
+      const baseUrl = await this.ensureWorkingUrl();
+      const url = `${baseUrl}/leaderboard?limit=${limit}`;
       console.log('📡 Fetching leaderboard from:', url);
 
-      // Create timeout promise
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      );
-
-      const fetchPromise = fetch(url, {
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        // Add a reasonable timeout
       });
-
-      const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
 
       console.log('📊 Leaderboard response status:', response.status);
 
@@ -541,6 +525,35 @@ class BackendService {
     } catch (error) {
       console.error('Submit game session error:', error);
       return { success: false, error: 'Network error submitting game session' };
+    }
+  }
+
+  async updateGameProgress(progress: { level: number; score: number; moves: number; stars: number }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/game/progress`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(progress),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.updatedGameData };
+      } else {
+        return { success: false, error: data.message || 'Failed to update game progress' };
+      }
+    } catch (error) {
+      console.error('Update game progress error:', error);
+      return { success: false, error: 'Network error updating game progress' };
     }
   }
 

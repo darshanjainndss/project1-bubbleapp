@@ -87,6 +87,14 @@ const userSchema = new mongoose.Schema({
     achievements: [{
       type: String
     }],
+    completedLevels: [{
+      type: Number
+    }],
+    levelStars: {
+      type: Map,
+      of: Number,
+      default: new Map()
+    },
     lastPlayedAt: {
       type: Date,
       default: Date.now
@@ -170,9 +178,18 @@ userSchema.methods.getPublicProfile = function() {
 
 // Instance method to get game data
 userSchema.methods.getGameData = function() {
+  const gameData = this.gameData.toObject();
+  
+  // Convert levelStars Map to plain object
+  if (gameData.levelStars instanceof Map) {
+    gameData.levelStars = Object.fromEntries(gameData.levelStars);
+  } else if (!gameData.levelStars) {
+    gameData.levelStars = {};
+  }
+  
   return {
     userId: this._id,
-    ...this.gameData.toObject(),
+    ...gameData,
     rank: null // Will be calculated separately
   };
 };

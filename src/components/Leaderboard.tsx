@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,19 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
+  SafeAreaView,
+  Animated,
+  Dimensions,
+  StatusBar,
+  RefreshControl,
 } from 'react-native';
 import MaterialIcon from './MaterialIcon';
+import SpaceBackground from './SpaceBackground';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import BackendService from '../services/BackendService';
 import { useAuth } from '../context/AuthContext';
+
+const { width } = Dimensions.get('window');
 
 interface LeaderboardEntry {
   userId: string;
@@ -56,745 +64,479 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
   currentUserScore = 0,
   userId
 }) => {
-  const { user } = useAuth(); // Get Firebase user
-  // Dummy data for testing/fallback
-  const dummyLeaderboardData: LeaderboardEntry[] = [
-    {
-      userId: 'dummy1',
-      displayName: 'Charlie Pro',
-      highScore: 3000,
-      totalScore: 18000,
-      gamesWon: 12,
-      rank: 1,
-    },
-    {
-      userId: 'dummy2',
-      displayName: 'Alice Champion',
-      highScore: 2500,
-      totalScore: 15000,
-      gamesWon: 8,
-      rank: 2,
-    },
-    {
-      userId: 'dummy3',
-      displayName: 'Bob Master',
-      highScore: 2200,
-      totalScore: 12000,
-      gamesWon: 6,
-      rank: 3,
-    },
-    {
-      userId: 'dummy4',
-      displayName: 'Diana Expert',
-      highScore: 1800,
-      totalScore: 9000,
-      gamesWon: 5,
-      rank: 4,
-    },
-    {
-      userId: 'dummy5',
-      displayName: 'Eve Rookie',
-      highScore: 1200,
-      totalScore: 5000,
-      gamesWon: 3,
-      rank: 5,
-    },
-  ];
+  const { user } = useAuth();
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
+  const [userGameData, setUserGameData] = useState<UserGameData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [fadeAnim] = useState(new Animated.Value(0));
 
-  // Dummy user game data
-  const dummyUserGameData: UserGameData = {
-    userId: 'current-user',
-    totalScore: 850,
-    highScore: 850,
-    totalCoins: 150,
-    currentLevel: 2,
-    gamesPlayed: 3,
-    gamesWon: 2,
-    abilities: {
-      lightning: 2,
-      bomb: 2,
-      freeze: 2,
-      fire: 2,
-    },
-    achievements: [],
-    completedLevels: [1],
-    levelStars: { 1: 3 },
-    lastPlayedAt: new Date().toISOString(),
-    rank: 10,
+  // Get current user ID from backend service (MongoDB ObjectId)
+  const getCurrentUserId = () => {
+    const backendUser = BackendService.getCurrentUser();
+    return backendUser?.id || userId;
   };
 
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
-  const [userGameData, setUserGameData] = useState<UserGameData>({
-    userId: '',
-    totalScore: 0,
-    highScore: 0,
-    totalCoins: 0,
-    currentLevel: 1,
-    gamesPlayed: 0,
-    gamesWon: 0,
-    abilities: { lightning: 2, bomb: 2, freeze: 2, fire: 2 },
-    achievements: [],
-    completedLevels: [],
-    levelStars: {},
-    lastPlayedAt: new Date().toISOString()
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!isVisible) return;
 
-  // Load leaderboard data and user game data from backend
-  useEffect(() => {
-    const loadData = async () => {
-      if (isVisible) {
-        setLoading(true);
-        setError(null);
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
 
-        try {
-          console.log('🔍 Syncing and loading leaderboard data...');
+    setError(null);
 
-          // Ensure backend is authenticated with Firebase user
-          if (user) {
-            await BackendService.ensureAuthenticated(user);
-          }
+    try {
+      if (user) {
+        await BackendService.ensureAuthenticated(user);
+      }
 
-          // Load leaderboard data (public endpoint, no auth required, but better if auth works)
-          const leaderboardResult = await BackendService.getLeaderboard(50);
-          console.log('📊 Leaderboard result:', leaderboardResult);
+      const limit = 1000;
+      const leaderboardResult = await BackendService.getLeaderboard(limit);
 
-          if (leaderboardResult.success && leaderboardResult.leaderboard) {
-            console.log('✅ Leaderboard data loaded:', leaderboardResult.leaderboard.length, 'entries');
-            let leaderboard = [...leaderboardResult.leaderboard];
+      if (leaderboardResult.success && leaderboardResult.leaderboard) {
+        let data = [...leaderboardResult.leaderboard];
+        const currentUserId = getCurrentUserId();
 
-            // If user is authenticated but not in leaderboard, add them locally for display if they have scores
-            if (user && userGameData && !leaderboard.find(entry => entry.userId === user.uid) && userGameData.highScore > 0) {
-              const userEntry: LeaderboardEntry = {
-                userId: user.uid,
-                displayName: user.displayName || user.email || 'You',
-                highScore: userGameData.highScore,
-                totalScore: userGameData.totalScore,
-                gamesWon: userGameData.gamesWon,
-                rank: leaderboard.length + 1,
-              };
-              leaderboard = [...leaderboard, userEntry];
-            }
-
-            setLeaderboardData(leaderboard);
-          } else if (leaderboardResult.error) {
-            // Only use dummy if there was an actual error, not just an empty result
-            console.log('⚠️ Error fetching leaderboard, using dummy data');
-            setError(leaderboardResult.error);
-            setLeaderboardData(dummyLeaderboardData);
-          }
-
-          // Load user game data (requires authentication)
-          if (BackendService.isAuthenticated()) {
-            console.log('🔍 Loading user game data...');
-            const userDataResult = await BackendService.getUserGameData();
-            console.log('👤 User data result:', userDataResult);
-
-            if (userDataResult.success && userDataResult.data) {
-              console.log('✅ User game data loaded:', userDataResult.data);
-              setUserGameData(userDataResult.data);
-            } else {
-              console.log('⚠️ No user data, using dummy data');
-              setUserGameData(dummyUserGameData);
+        if (currentUserId && currentUserScore > 0) {
+          const userIndex = data.findIndex(entry => entry.userId === currentUserId);
+          if (userIndex !== -1) {
+            if (currentUserScore > data[userIndex].totalScore) {
+              data[userIndex] = { ...data[userIndex], totalScore: currentUserScore };
             }
           } else {
-            console.log('⚠️ User not authenticated, using dummy data');
-            // If we have a Firebase user, create personalized dummy data
-            if (user) {
-              const personalizedData = {
-                ...dummyUserGameData,
-                userId: user.uid,
-                displayName: user.displayName || user.email || 'You',
-              };
-              setUserGameData(personalizedData);
-            } else {
-              setUserGameData(dummyUserGameData);
-            }
+            // Get user email for display name
+            const userEmail = user?.email || 'User';
+            const displayName = userEmail.split('@')[0];
+            
+            data.push({
+              userId: currentUserId,
+              displayName: displayName,
+              totalScore: currentUserScore,
+              highScore: currentUserScore,
+              gamesWon: 0,
+              rank: 999
+            });
           }
-        } catch (error) {
-          console.error('💥 Error loading data:', error);
-          console.log('🔄 Falling back to dummy data');
+          data.sort((a, b) => b.totalScore - a.totalScore);
+          data = data.map((entry, index) => ({
+            ...entry,
+            rank: index + 1
+          }));
+        }
+        
+        setLeaderboardData(data);
+        setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      } else {
+        setError(leaderboardResult.error || 'Failed to sync with galactic servers');
+      }
 
-          let dummyData = [...dummyLeaderboardData];
-          let userData = { ...dummyUserGameData };
-
-          // Personalize dummy data if user is authenticated
-          if (user) {
-            userData = {
-              ...dummyUserGameData,
-              userId: user.uid,
-            };
-
-            const userEntry: LeaderboardEntry = {
-              userId: user.uid,
-              displayName: user.displayName || user.email || 'You',
-              highScore: userData.highScore,
-              totalScore: userData.totalScore,
-              gamesWon: userData.gamesWon,
-              rank: dummyData.length + 1,
-            };
-            dummyData = [...dummyData, userEntry];
-          }
-
-          setLeaderboardData(dummyData);
-          setUserGameData(userData);
-        } finally {
-          setLoading(false);
+      if (BackendService.isAuthenticated()) {
+        const userDataResult = await BackendService.getUserGameData();
+        if (userDataResult.success && userDataResult.data) {
+          setUserGameData(userDataResult.data);
         }
       }
-    };
+    } catch (error) {
+      setError('Communication link failure');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [isVisible, user, userId, currentUserScore]);
 
+  useEffect(() => {
     if (isVisible) {
       loadData();
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      fadeAnim.setValue(0);
     }
-  }, [isVisible]);
+  }, [isVisible, loadData]);
 
-  const getRankColor = (rank: number) => {
-    switch (rank) {
-      case 1: return '#FFD700'; // Gold
-      case 2: return '#C0C0C0'; // Silver  
-      case 3: return '#CD7F32'; // Bronze
-      default: return '#00E0FF'; // Cyan
-    }
-  };
+  const onRefresh = () => loadData(true);
 
-  const getRankIcon = (rank: number) => {
-    switch (rank) {
-      case 1: return { name: 'emoji-events', family: 'material' as const }; // Gold trophy
-      case 2: return { name: 'emoji-events', family: 'material' as const }; // Silver trophy  
-      case 3: return { name: 'emoji-events', family: 'material' as const }; // Bronze trophy
-      default: return { name: 'person', family: 'material' as const };
-    }
+  const getRankStyle = (rank: number) => {
+    if (rank === 1) return { color: '#FFD700', icon: 'military-tech', label: 'CHAMPION' };
+    if (rank === 2) return { color: '#C0C0C0', icon: 'emoji-events', label: 'ELITE' };
+    if (rank === 3) return { color: '#CD7F32', icon: 'emoji-events', label: 'PRO' };
+    return { color: '#00E0FF', icon: 'person', label: 'EXPLORER' };
   };
 
   const renderLeaderboardItem = ({ item }: { item: LeaderboardEntry }) => {
-    const rankColor = getRankColor(item.rank);
-    const rankIcon = getRankIcon(item.rank);
-    const isTopThree = item.rank <= 3;
-    const isCurrentUser = item.userId === (user?.uid || userId);
+    const { color, icon } = getRankStyle(item.rank);
+    const currentUserId = getCurrentUserId();
+    const isCurrentUser = item.userId === currentUserId;
 
     return (
       <View style={[
-        styles.leaderboardItem,
-        isTopThree && styles.topThreeItem,
-        isCurrentUser && styles.currentUserItem,
-        { borderLeftColor: rankColor, borderLeftWidth: 4 }
+        styles.itemContainer,
+        isCurrentUser && styles.currentUserItem
       ]}>
-        {/* Rank Section */}
-        <View style={styles.rankSection}>
-          <Text style={[styles.rankNumberText, { color: rankColor }]}>
-            {item.rank}
-          </Text>
-          <MaterialIcon
-            name={rankIcon.name}
-            family={rankIcon.family}
-            size={12}
-            color={rankColor}
-          />
+        <View style={styles.rankBadge}>
+          <Text style={[styles.rankNumber, { color }]}>{item.rank}</Text>
         </View>
 
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          <View style={[styles.avatarPlaceholder, isCurrentUser && { borderColor: '#00FF88', shadowColor: '#00FF88' }]}>
-            <MaterialIcon
-              name="person"
-              family="material"
-              size={ICON_SIZES.LARGE}
-              color={isCurrentUser ? '#00FF88' : '#FFFFFF30'}
-            />
-          </View>
-        </View>
-
-        {/* Player Info Section */}
-        <View style={styles.playerInfoSection}>
-          <Text style={[styles.username, isCurrentUser && { color: '#00FF88' }]}>
+        <View style={styles.userInfo}>
+          <Text style={[styles.userName, isCurrentUser && { color: '#00FF88' }]} numberOfLines={1}>
             {isCurrentUser ? 'YOU' : item.displayName.toUpperCase()}
           </Text>
-          <View style={styles.playerStats}>
-            <MaterialIcon name="military-tech" family="material" size={14} color="#00E0FF" />
-            <Text style={styles.levelText}>{item.gamesWon} WINS</Text>
-          </View>
         </View>
 
-        {/* Score Section */}
-        <View style={styles.scoreSection}>
-          <Text style={[styles.scoreText, { color: rankColor }]}>
-            {item.highScore.toLocaleString()}
+        <View style={styles.scoreInfo}>
+          <Text style={[styles.totalScoreText, { color: isCurrentUser ? '#00FF88' : '#FFF' }]}>
+            {item.totalScore.toLocaleString()}
           </Text>
-          <Text style={styles.scoreLabel}>PTS</Text>
+          <Text style={styles.ptsText}>PTS</Text>
         </View>
       </View>
     );
   };
 
+  // Removed TopThreePodium for simplified UI
+
   if (!isVisible) return null;
 
   return (
-    <View style={styles.leaderboardOverlay}>
-      <View style={styles.leaderboardModal}>
-        {/* Header */}
-        <View style={styles.leaderboardHeader}>
-          <View>
-            <Text style={styles.leaderboardTitle}>LEADERBOARD</Text>
-            <Text style={styles.leaderboardSubtitle}>GALACTIC RANKINGS</Text>
-          </View>
-          <TouchableOpacity style={styles.leaderboardCloseBtn} onPress={onClose}>
-            <MaterialIcon
-              name={GAME_ICONS.CLOSE.name}
-              family={GAME_ICONS.CLOSE.family}
-              size={ICON_SIZES.MEDIUM}
-              color={ICON_COLORS.WHITE}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Current User Score and Abilities */}
-        <View style={styles.currentUserSection}>
-          <MaterialIcon
-            name="person"
-            family="material"
-            size={ICON_SIZES.MEDIUM}
-            color={ICON_COLORS.SUCCESS}
-          />
-          <View style={styles.currentUserInfo}>
-            <Text style={styles.currentUserText}>
-              Your Score: {userGameData?.highScore?.toLocaleString() || currentUserScore.toLocaleString()}
-            </Text>
-            {userGameData && (
-              <View style={styles.userStatsRow}>
-                <Text style={styles.userStatText}>Rank: #{userGameData.rank || 'Unranked'}</Text>
-                <Text style={styles.userStatText}>Games Won: {userGameData.gamesWon}</Text>
-                <Text style={styles.userStatText}>Level: {userGameData.currentLevel}</Text>
-              </View>
-            )}
-            {userGameData && (
-              <View style={styles.userAbilities}>
-                <Text style={styles.abilitiesTitle}>Abilities:</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.abilitiesScrollContent}
-                >
-                  <View style={styles.abilitiesRow}>
-                    <View style={styles.abilityItem}>
-                      <MaterialIcon name="flash-on" family="material" size={16} color="#FFD700" />
-                      <Text style={styles.abilityCount}>{userGameData.abilities.lightning}</Text>
-                    </View>
-                    <View style={styles.abilityItem}>
-                      <MaterialIcon name="whatshot" family="material" size={16} color="#FF4500" />
-                      <Text style={styles.abilityCount}>{userGameData.abilities.bomb}</Text>
-                    </View>
-                    <View style={styles.abilityItem}>
-                      <MaterialIcon name="ac-unit" family="material" size={16} color="#00BFFF" />
-                      <Text style={styles.abilityCount}>{userGameData.abilities.freeze}</Text>
-                    </View>
-                    <View style={styles.abilityItem}>
-                      <MaterialIcon name="local-fire-department" family="material" size={16} color="#FF6347" />
-                      <Text style={styles.abilityCount}>{userGameData.abilities.fire}</Text>
-                    </View>
-                  </View>
-                </ScrollView>
-                <Text style={styles.coinsText}>Coins: {userGameData.totalCoins}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Leaderboard List */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <MaterialIcon
-              name="refresh"
-              family="material"
-              size={ICON_SIZES.LARGE}
-              color={ICON_COLORS.PRIMARY}
-            />
-            <Text style={styles.loadingText}>Loading leaderboard...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <MaterialIcon
-              name="error"
-              family="material"
-              size={ICON_SIZES.LARGE}
-              color={ICON_COLORS.ERROR}
-            />
-            <Text style={styles.errorText}>Failed to load leaderboard</Text>
-            <Text style={styles.errorSubtext}>{error}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={() => {
-                if (isVisible) {
-                  setError(null);
-                  // Trigger reload by toggling loading state
-                  setLoading(true);
-                  setTimeout(() => setLoading(false), 100);
-                }
-              }}
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
+    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <StatusBar barStyle="light-content" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backBtn} onPress={onClose}>
+              <MaterialIcon name="arrow-back-ios" family="material" size={20} color="#FFF" />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>GALACTIC RANKINGS</Text>
+              <Text style={styles.headerSubtitle}>
+                GLOBAL LEADERBOARD {lastUpdated ? `• ${lastUpdated}` : ''}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.refreshBtn} onPress={() => loadData()}>
+              <MaterialIcon name="refresh" family="material" size={24} color="#00E0FF" />
             </TouchableOpacity>
           </View>
-        ) : (
-          <FlatList
-            data={leaderboardData}
-            renderItem={renderLeaderboardItem}
-            keyExtractor={(item, index) => item.userId || `leaderboard-${index}`}
-            style={styles.leaderboardList}
-            contentContainerStyle={styles.leaderboardListContent}
-            showsVerticalScrollIndicator={true}
-            nestedScrollEnabled={true}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <MaterialIcon
-                  name="leaderboard"
-                  family="material"
-                  size={ICON_SIZES.XLARGE}
-                  color={ICON_COLORS.DISABLED}
-                />
-                <Text style={styles.emptyText}>No players yet!</Text>
-                <Text style={styles.emptySubtext}>Be the first to set a score!</Text>
+
+          {/* User Summary Card */}
+          {userGameData && (
+            <View style={styles.userSummaryCard}>
+              <View style={styles.userMainInfo}>
+                <View style={styles.userAvatar}>
+                  <MaterialIcon name="account-circle" family="material" size={60} color="#00FF88" />
+                  <View style={styles.levelBadge}>
+                    <Text style={styles.levelBadgeText}>{userGameData.currentLevel}</Text>
+                  </View>
+                </View>
+                <View style={styles.userTexts}>
+                  <Text style={styles.greeting}>{(user?.email || 'User').split('@')[0]}</Text>
+                  <View style={styles.rankRow}>
+                    <Text style={styles.rankLabel}>CURRENT RANK</Text>
+                    <Text style={styles.rankValue}>#{userGameData.rank || '---'}</Text>
+                  </View>
+                </View>
               </View>
-            }
-          />
-        )}
-      </View>
-    </View>
+              <View style={styles.userStatsGrid}>
+                <View style={styles.userGridItem}>
+                  <Text style={styles.gridLabel}>TOTAL SCORE</Text>
+                  <Text style={styles.gridValue}>{userGameData.totalScore.toLocaleString()}</Text>
+                </View>
+                <View style={styles.userGridItem}>
+                  <Text style={styles.gridLabel}>WINS</Text>
+                  <Text style={styles.gridValue}>{userGameData.gamesWon}</Text>
+                </View>
+                <View style={styles.userGridItem}>
+                  <Text style={styles.gridLabel}>COINS</Text>
+                  <Text style={[styles.gridValue, { color: '#FFD700' }]}>{userGameData.totalCoins}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Leaderboard List */}
+          {loading ? (
+            <View style={styles.centered}>
+              <Animated.View style={styles.loadingPulse}>
+                <MaterialIcon name="rocket-launch" family="material" size={50} color="#00E0FF" />
+              </Animated.View>
+              <Text style={styles.loadingText}>SYNCING WITH SPACE COMMAND...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.centered}>
+              <MaterialIcon name="error-outline" family="material" size={60} color="#FF6B6B" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => loadData()}>
+                <Text style={styles.retryText}>RETRY LINK</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={leaderboardData}
+              renderItem={renderLeaderboardItem}
+              keyExtractor={(item) => item.userId}
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#00E0FF"
+                  colors={["#00E0FF"]}
+                />
+              }
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  // Modal Overlay (same as shop)
-  leaderboardOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#05050A',
+    zIndex: 2000,
   },
-  leaderboardModal: {
-    width: '94%',
-    maxHeight: '85%',
-    backgroundColor: 'rgba(5, 5, 10, 0.98)',
-    borderTopLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    borderTopRightRadius: 10,
-    borderBottomLeftRadius: 10,
-    borderWidth: 2,
-    borderColor: '#00E0FF',
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
     paddingHorizontal: 15,
-    paddingVertical: 15,
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 30,
-    elevation: 20,
-    overflow: 'hidden',
   },
-
-  // Header (same as roadmap header)
-  leaderboardHeader: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 15,
-    marginBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'space-between',
+    paddingVertical: 20,
+    marginTop: 10,
   },
-  leaderboardTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#fff',
-    letterSpacing: 2,
-    lineHeight: 28,
-    textShadowColor: '#00E0FF',
-    textShadowRadius: 15,
-  },
-  leaderboardSubtitle: {
-    fontSize: 10,
-    color: '#00E0FF',
-    fontWeight: 'bold',
-    letterSpacing: 4,
-    marginTop: 2,
-  },
-  leaderboardCloseBtn: {
+  backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.5)',
+    paddingLeft: 5,
   },
-
-  // Current User Section (roadmap card style)
-  currentUserSection: {
-    flexDirection: 'row',
+  headerTitleContainer: {
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginBottom: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 136, 0.3)',
-    gap: 12,
-  },
-  currentUserInfo: {
     flex: 1,
   },
-  currentUserText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00FF88',
-    marginBottom: 8,
+  headerTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
-  userStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingHorizontal: 5,
-  },
-  userStatText: {
-    fontSize: 12,
+  headerSubtitle: {
     color: '#00E0FF',
+    fontSize: 10,
     fontWeight: 'bold',
+    letterSpacing: 3,
+    marginTop: 2,
   },
-  userAbilities: {
-    gap: 8,
-  },
-  abilitiesScrollContent: {
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 5,
-  },
-  abilitiesTitle: {
-    fontSize: 12,
-    color: '#aaa',
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  abilitiesRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 4,
-    alignItems: 'center',
-  },
-  abilityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    gap: 4,
-    minWidth: 50,
-  },
-  abilityCount: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-  coinsText: {
-    fontSize: 12,
-    color: '#FFD700',
-    fontWeight: '700',
-    fontFamily: 'monospace',
   },
 
-  // Leaderboard List
-  leaderboardList: {
-    flex: 1,
-    maxHeight: 350, // Limit height to ensure scrolling works
-  },
-  leaderboardListContent: {
-    paddingBottom: 10,
-    flexGrow: 1,
-  },
-  leaderboardItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    marginBottom: 10,
+  // User Card
+  userSummaryCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 16,
   },
-  topThreeItem: {
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    borderColor: 'rgba(255, 215, 0, 0.4)',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+  userMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  currentUserItem: {
-    backgroundColor: 'rgba(0, 255, 136, 0.15)',
-    borderColor: 'rgba(0, 255, 136, 0.4)',
-    shadowColor: '#00FF88',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+  userAvatar: {
+    position: 'relative',
+    marginRight: 15,
+  },
+  levelBadge: {
+    position: 'absolute',
+    bottom: -5,
+    right: -5,
+    backgroundColor: '#00E0FF',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 2,
+    borderColor: '#05050A',
+  },
+  levelBadgeText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  userTexts: {
+    flex: 1,
+  },
+  greeting: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rankLabel: {
+    color: '#888',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginRight: 8,
+  },
+  rankValue: {
+    color: '#00FF88',
+    fontSize: 14,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+  },
+  userStatsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingTop: 15,
+  },
+  userGridItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  gridLabel: {
+    color: '#666',
+    fontSize: 9,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  gridValue: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '900',
+    fontFamily: 'monospace',
   },
 
-  // Rank Section
-  rankSection: {
+  // Podium styles removed as component was removed
+
+  // List Items
+  listContent: {
+    paddingBottom: 30,
+  },
+  itemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  currentUserItem: {
+    backgroundColor: 'rgba(0, 255, 136, 0.12)',
+    borderColor: 'rgba(0, 255, 136, 0.4)',
+    borderWidth: 2,
+  },
+  rankBadge: {
+    width: 50,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 45,
-    marginRight: 10,
+    marginRight: 15,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 25,
   },
-  rankNumberText: {
+  rankNumber: {
+    fontSize: 18,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    color: '#FFF',
+  },
+  userInfo: {
+    flex: 1,
+    paddingHorizontal: 5,
+  },
+  userName: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  scoreInfo: {
+    alignItems: 'flex-end',
+    minWidth: 100,
+  },
+  totalScoreText: {
     fontSize: 20,
     fontWeight: '900',
     fontFamily: 'monospace',
-    lineHeight: 22,
+    color: '#FFF',
   },
-  rankText: {
+  ptsText: {
+    color: '#888',
     fontSize: 10,
     fontWeight: 'bold',
+    letterSpacing: 1,
     marginTop: 2,
   },
 
-  // Avatar Section
-  avatarSection: {
-    marginRight: 15,
-  },
-  avatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-  },
-
-  // Player Info Section
-  playerInfoSection: {
-    flex: 1,
-  },
-  username: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#fff',
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  playerStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  levelText: {
-    fontSize: 10,
-    color: '#00E0FF',
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-
-  // Score Section
-  scoreSection: {
-    alignItems: 'flex-end',
-    minWidth: 70,
-  },
-  scoreText: {
-    fontSize: 18,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-  },
-  scoreLabel: {
-    fontSize: 8,
-    color: '#aaa',
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-
-  // Loading and Empty States
-  loadingContainer: {
+  // States
+  centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
-    minHeight: 200,
+    paddingVertical: 100,
+  },
+  loadingPulse: {
+    marginBottom: 20,
+    opacity: 0.8,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#aaa',
-    marginTop: 10,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-    minHeight: 200,
+    color: '#00E0FF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 3,
   },
   errorText: {
-    fontSize: 18,
     color: '#FF6B6B',
-    fontWeight: 'bold',
-    marginTop: 15,
-    textAlign: 'center',
-  },
-  errorSubtext: {
     fontSize: 14,
-    color: '#aaa',
-    marginTop: 5,
+    fontWeight: 'bold',
     textAlign: 'center',
-    paddingHorizontal: 20,
+    marginVertical: 20,
+    paddingHorizontal: 40,
   },
-  retryButton: {
-    marginTop: 15,
+  retryBtn: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: 'rgba(0, 224, 255, 0.2)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.5)',
+    borderRadius: 12,
   },
-  retryButtonText: {
-    color: '#00E0FF',
+  retryText: {
+    color: '#FF6B6B',
     fontWeight: 'bold',
-    fontSize: 14,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-    minHeight: 200,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#fff',
-    fontWeight: 'bold',
-    marginTop: 15,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#aaa',
-    marginTop: 5,
-  },
+    letterSpacing: 2,
+  }
 });
 
 export default Leaderboard;

@@ -24,6 +24,7 @@ import {
 } from "../utils/laserUtils";
 import BackendService from "../services/BackendService";
 import ConfirmationModal from "./ConfirmationModal";
+import ToastNotification, { ToastRef } from "./ToastNotification";
 
 import {
   styles,
@@ -51,7 +52,7 @@ const COLOR_MAP: Record<string, any> = {
 const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities }: {
   onBackPress?: () => void,
   level?: number,
-  onLevelComplete?: (level: number, score: number, stars: number) => void,
+  onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home') => void,
   initialAbilities?: any
 }) => {
   const { user } = useAuth(); // Get Firebase user
@@ -79,6 +80,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(Date.now());
   const [abilityInventory, setAbilityInventory] = useState(initialAbilities || { lightning: 2, bomb: 2, freeze: 2, fire: 2 });
+  const toastRef = useRef<ToastRef>(null);
 
   // Shared Animation Values
   const metalPulseAnim = useRef(new Animated.Value(1)).current;
@@ -123,6 +125,106 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     freeze: 0,
     fire: 0
   });
+
+  // Progress tracking
+  const lastProgressUpdate = useRef(0);
+  const PROGRESS_UPDATE_INTERVAL = 3000; // Send progress every 3 seconds
+
+  // Function to send progress updates to backend
+  const sendProgressUpdate = useCallback(async (currentScore: number, currentMoves: number) => {
+    if (!user || !BackendService.isAuthenticated()) return;
+
+    const now = Date.now();
+    if (now - lastProgressUpdate.current < PROGRESS_UPDATE_INTERVAL) return;
+
+    const stars = currentScore > 1000 ? 3 : currentScore > 500 ? 2 : currentScore > 100 ? 1 : 0;
+
+    try {
+      const result = await BackendService.updateGameProgress({
+        level,
+        score: currentScore,
+        moves: currentMoves,
+        stars
+      });
+
+      if (result.success) {
+        console.log('Progress updated successfully');
+        lastProgressUpdate.current = now;
+      }
+    } catch (error) {
+      console.error('Failed to update progress:', error);
+    }
+  }, [user, level]);
+
+  // Track score changes and send progress updates
+  useEffect(() => {
+    if (score > 0 && gameState === 'playing') {
+      sendProgressUpdate(score, moves);
+    }
+  }, [score, moves, gameState, sendProgressUpdate]);
+
+  // Submit game session when game ends (won or lost)
+  useEffect(() => {
+    const submitGameSession = async () => {
+      if (gameState === 'won' || gameState === 'lost') {
+        console.log(`🎮 Game ${gameState}! Submitting session...`);
+
+        try {
+          // Check if user is authenticated with Firebase
+          if (!user) {
+            console.log('User not authenticated with Firebase, skipping backend submission');
+            return;
+          }
+
+          // Check if BackendService is authenticated
+          if (!BackendService.isAuthenticated()) {
+            console.log('BackendService not authenticated, attempting to authenticate...');
+            const authResult = await BackendService.ensureAuthenticated(user);
+            if (!authResult) {
+              console.log('Failed to authenticate with backend, skipping submission');
+              return;
+            }
+          }
+
+          // Consistent logic with UI
+          const stars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
+
+          // Calculate coins earned
+          const baseCoins = Math.floor(10 + (level * 2.5));
+          const starBonus = stars * Math.floor(5 + (level * 0.5));
+          const completionBonus = Math.floor(level * 1.2);
+          const coinsEarned = gameState === 'won' ? (baseCoins + starBonus + completionBonus) : 0;
+
+          const sessionData = {
+            level,
+            score,
+            moves: moves,
+            stars,
+            duration: Math.floor((Date.now() - gameStartTime) / 1000),
+            isWin: gameState === 'won',
+            abilitiesUsed: abilitiesUsedCount,
+            bubblesDestroyed: 0,
+            chainReactions: 0,
+            perfectShots: 0,
+            coinsEarned: coinsEarned
+          };
+
+          console.log('Submitting game session:', sessionData);
+          const sessionResult = await BackendService.submitGameSession(sessionData);
+
+          if (sessionResult.success) {
+            console.log('Game session submitted successfully:', sessionResult.data?.sessionId);
+          } else {
+            console.error('Failed to submit game session:', sessionResult.error);
+          }
+        } catch (error) {
+          console.error('Error submitting game session:', error);
+        }
+      }
+    };
+
+    submitGameSession();
+  }, [gameState, level, score, moves, gameStartTime, abilitiesUsedCount, user]);
 
   // Sync abilities from backend if not provided
   useEffect(() => {
@@ -173,6 +275,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     } else if (abilityInventory.lightning > 0) {
       setLightningActive(true);
       setHasLightningPower(true);
+      toastRef.current?.show('Lightning Ability Activated!', 'info');
       // Deactivate others
       setBombActive(false); setHasBombPower(false);
       setFreezeActive(false); setHasFreezePower(false);
@@ -188,6 +291,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     } else if (abilityInventory.bomb > 0) {
       setBombActive(true);
       setHasBombPower(true);
+      toastRef.current?.show('Bomb Ability Activated!', 'info');
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setFreezeActive(false); setHasFreezePower(false);
@@ -202,6 +306,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     } else if (abilityInventory.freeze > 0) {
       setFreezeActive(true);
       setHasFreezePower(true);
+      toastRef.current?.show('Freeze Ability Activated!', 'info');
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setBombActive(false); setHasBombPower(false);
@@ -216,6 +321,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     } else if (abilityInventory.fire > 0) {
       setFireActive(true);
       setHasFirePower(true);
+      toastRef.current?.show('Fire Ability Activated!', 'info');
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setBombActive(false); setHasBombPower(false);
@@ -674,52 +780,42 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
   const goToNextLevel = async () => {
     if (onLevelComplete) {
       const stars = score > 1000 ? 3 : score > 500 ? 2 : score > 100 ? 1 : 0;
-
-      // Submit game session to backend
-      try {
-        // Check if user is authenticated with Firebase
-        if (!user) {
-          console.log('User not authenticated with Firebase, skipping backend submission');
-          onLevelComplete(level, score, stars);
-          return;
-        }
-
-        // Check if BackendService is authenticated, if not, try to authenticate with Firebase user
-        if (!BackendService.isAuthenticated()) {
-          console.log('BackendService not authenticated, attempting to authenticate with Firebase user...');
-
-          // Try to login with Firebase user email (this assumes the user exists in backend)
-          // For now, we'll skip backend submission if not authenticated
-          console.log('Backend authentication not implemented, skipping submission');
-          onLevelComplete(level, score, stars);
-          return;
-        }
-
-        const sessionResult = await BackendService.submitGameSession({
-          level,
-          score,
-          moves: moves,
-          stars,
-          duration: Math.floor((Date.now() - gameStartTime) / 1000), // Calculate duration
-          abilitiesUsed: abilitiesUsedCount,
-          coinsEarned: 0, // Will be calculated by backend
-        });
-
-        if (sessionResult.success) {
-          console.log('Game session submitted successfully:', sessionResult.data?.sessionId);
-        } else {
-          console.error('Failed to submit game session:', sessionResult.error);
-        }
-      } catch (error) {
-        console.error('Error submitting game session:', error);
-      }
-
+      // Session submission is now handled by useEffect when gameState changes
       onLevelComplete(level, score, stars);
     }
   };
 
-  const handleBackPressWithConfirm = () => {
+  const handleBackPressWithConfirm = async () => {
     if (gameState === 'playing') {
+      // Submit session for incomplete game before showing confirmation
+      try {
+        if (user && BackendService.isAuthenticated() && score > 0) {
+          console.log('🚪 User exiting game, submitting incomplete session...');
+
+          const stars = score > 1000 ? 3 : score > 500 ? 2 : score > 100 ? 1 : 0;
+          const sessionData = {
+            level,
+            score,
+            moves: moves,
+            stars,
+            duration: Math.floor((Date.now() - gameStartTime) / 1000),
+            isWin: false, // Game was not completed
+            abilitiesUsed: abilitiesUsedCount,
+            bubblesDestroyed: 0,
+            chainReactions: 0,
+            perfectShots: 0,
+            coinsEarned: 0
+          };
+
+          const sessionResult = await BackendService.submitGameSession(sessionData);
+          if (sessionResult.success) {
+            console.log('Incomplete game session submitted:', sessionResult.data?.sessionId);
+          }
+        }
+      } catch (error) {
+        console.error('Error submitting incomplete session:', error);
+      }
+
       setShowBackConfirm(true);
     } else {
       onBackPress && onBackPress();
@@ -818,69 +914,109 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       </View>
 
       {/* Game Over / Win Modal */}
-      {gameState !== 'playing' && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {gameState === 'won' ? 'LEVEL CLEARED!' : 'OUT OF MOVES'}
-            </Text>
+      {gameState !== 'playing' && (() => {
+        // Pre-calculate results for consistency
+        const earnedStars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
 
-            {gameState === 'won' && (
-              <View style={styles.modalStars}>
-                <MaterialIcon
-                  name={score > 100 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
-                  family={GAME_ICONS.STAR.family}
-                  size={40}
-                  color={score > 100 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
-                />
-                <MaterialIcon
-                  name={score > 500 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
-                  family={GAME_ICONS.STAR.family}
-                  size={50}
-                  color={score > 500 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
-                />
-                <MaterialIcon
-                  name={score > 1000 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
-                  family={GAME_ICONS.STAR.family}
-                  size={40}
-                  color={score > 1000 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
-                />
-              </View>
-            )}
+        // Coin Calculation Strategy:
+        // Base: 10 + (2.5 * level)
+        // Star Bonus: Stars * (5 + (0.5 * level))
+        // Completion Bonus: 1.2 * level
+        const baseCoins = Math.floor(10 + (level * 2.5));
+        const starBonus = earnedStars * Math.floor(5 + (level * 0.5));
+        const completionBonus = Math.floor(level * 1.2);
+        const earnedCoins = baseCoins + starBonus + completionBonus;
 
-            <Text style={styles.modalScore}>SCORE: {score}</Text>
+        return (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {gameState === 'won' ? 'LEVEL CLEARED!' : 'OUT OF MOVES'}
+              </Text>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalBtnSecondary} onPress={onBackPress}>
-                <MaterialIcon
-                  name={GAME_ICONS.HOME.name}
-                  family={GAME_ICONS.HOME.family}
-                  size={ICON_SIZES.LARGE}
-                  color={ICON_COLORS.WHITE}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
-                <MaterialIcon
-                  name={GAME_ICONS.RESTART.name}
-                  family={GAME_ICONS.RESTART.family}
-                  size={ICON_SIZES.LARGE}
-                  color={ICON_COLORS.WHITE}
-                />
-              </TouchableOpacity>
               {gameState === 'won' && (
-                <TouchableOpacity style={styles.modalBtnPrimary} onPress={goToNextLevel}>
+                <View style={styles.modalStars}>
                   <MaterialIcon
-                    name={GAME_ICONS.NEXT.name}
-                    family={GAME_ICONS.NEXT.family}
+                    name={earnedStars >= 1 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
+                    family={GAME_ICONS.STAR.family}
+                    size={40}
+                    color={earnedStars >= 1 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
+                  />
+                  <MaterialIcon
+                    name={earnedStars >= 2 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
+                    family={GAME_ICONS.STAR.family}
+                    size={50}
+                    color={earnedStars >= 2 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
+                  />
+                  <MaterialIcon
+                    name={earnedStars >= 3 ? GAME_ICONS.STAR.name : GAME_ICONS.STAR_OUTLINE.name}
+                    family={GAME_ICONS.STAR.family}
+                    size={40}
+                    color={earnedStars >= 3 ? ICON_COLORS.GOLD : ICON_COLORS.DISABLED}
+                  />
+                </View>
+              )}
+
+              <Text style={styles.modalScore}>SCORE: {score}</Text>
+
+              {gameState === 'won' && (
+                <View style={styles.modalCoins}>
+                  <MaterialIcon
+                    name={GAME_ICONS.COIN.name}
+                    family={GAME_ICONS.COIN.family}
+                    size={24}
+                    color={ICON_COLORS.GOLD}
+                  />
+                  <Text style={styles.modalCoinsText}>
+                    +{earnedCoins} COINS
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => {
+                  if (gameState === 'won' && onLevelComplete) {
+                    // If won, report completion with 'home' action so parent updates data but goes back
+                    onLevelComplete(level, score, earnedStars, earnedCoins, 'home');
+                  } else {
+                    onBackPress && onBackPress();
+                  }
+                }}>
+                  <MaterialIcon
+                    name={GAME_ICONS.HOME.name}
+                    family={GAME_ICONS.HOME.family}
                     size={ICON_SIZES.LARGE}
                     color={ICON_COLORS.WHITE}
                   />
                 </TouchableOpacity>
-              )}
+                <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
+                  <MaterialIcon
+                    name={GAME_ICONS.RESTART.name}
+                    family={GAME_ICONS.RESTART.family}
+                    size={ICON_SIZES.LARGE}
+                    color={ICON_COLORS.WHITE}
+                  />
+                </TouchableOpacity>
+                {gameState === 'won' && (
+                  <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {
+                    if (onLevelComplete) {
+                      // Pass reliable calculated data including coins and 'next' action
+                      onLevelComplete(level, score, earnedStars, earnedCoins, 'next');
+                    }
+                  }}>
+                    <MaterialIcon
+                      name={GAME_ICONS.NEXT.name}
+                      family={GAME_ICONS.NEXT.family}
+                      size={ICON_SIZES.LARGE}
+                      color={ICON_COLORS.WHITE}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
-        </View>
-      )}
+        );
+      })()}
 
       {/* Exit Confirmation Modal */}
       <ConfirmationModal
@@ -902,6 +1038,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
         onClose={() => setShowInstructions(false)}
       />
 
+      <ToastNotification ref={toastRef} />
     </View>
   );
 };

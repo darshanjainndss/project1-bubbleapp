@@ -17,6 +17,7 @@ import SpaceBackground from './SpaceBackground';
 import MaterialIcon from './MaterialIcon';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { AuthService } from '../services/AuthService';
+import ToastNotification, { ToastRef } from './ToastNotification';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -32,6 +33,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [loading, setLoading] = useState(false);
+  const toastRef = React.useRef<ToastRef>(null);
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -44,17 +46,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
   const handleEmailAuth = async () => {
     if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      toastRef.current?.show('Please enter a valid email address', 'warning');
       return;
     }
 
     if (!validatePassword(password)) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      toastRef.current?.show('Password must be at least 6 characters long', 'warning');
       return;
     }
 
     if (isSignUp && password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      toastRef.current?.show('Passwords do not match', 'error');
       return;
     }
 
@@ -62,13 +64,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     try {
       if (isSignUp) {
         await AuthService.signUpWithEmail(email, password);
-        Alert.alert('Success', 'Account created successfully!');
+        toastRef.current?.show('Account created successfully!', 'success');
       } else {
         await AuthService.signInWithEmail(email, password);
+        toastRef.current?.show('Welcome commander!', 'success');
       }
       onLoginSuccess();
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      toastRef.current?.show(error.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -78,9 +81,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setLoading(true);
     try {
       await AuthService.signInWithGoogle();
+      toastRef.current?.show('Google Sign-In Successful!', 'success');
       onLoginSuccess();
     } catch (error: any) {
-      Alert.alert('Google Sign-In Error', error.message);
+      toastRef.current?.show(error.message || 'Google Sign-In Failed', 'error');
     } finally {
       setLoading(false);
     }
@@ -88,12 +92,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
   const handleQuickPlay = async () => {
     if (!playerName.trim()) {
-      Alert.alert('Enter Your Name', 'Please enter your commander name to start playing');
+      toastRef.current?.show('Please enter your commander name', 'warning');
       return;
     }
 
     if (playerName.trim().length < 2) {
-      Alert.alert('Invalid Name', 'Commander name must be at least 2 characters long');
+      toastRef.current?.show('Commander name must be at least 2 characters long', 'warning');
       return;
     }
 
@@ -102,10 +106,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       // Create a temporary guest account or use anonymous auth
       // For now, we'll simulate a quick login
       await new Promise<void>(resolve => setTimeout(() => resolve(), 1000)); // Simulate loading
-      
+
       // TODO: Set up guest/anonymous authentication with the player name
       // This could store the name locally and create a temporary session
-      
+
       onLoginSuccess();
     } catch (error: any) {
       Alert.alert('Error', 'Failed to start game. Please try again.');
@@ -115,14 +119,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <SpaceBackground />
-      
-      <ScrollView 
+
+      <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -146,14 +150,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               style={[styles.tab, activeTab === 'quickplay' && styles.activeTab]}
               onPress={() => setActiveTab('quickplay')}
             >
-              <MaterialIcon 
-                name={GAME_ICONS.PLAY.name} 
+              <MaterialIcon
+                name={GAME_ICONS.PLAY.name}
                 family={GAME_ICONS.PLAY.family}
-                size={ICON_SIZES.MEDIUM} 
-                color={activeTab === 'quickplay' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY} 
+                size={ICON_SIZES.MEDIUM}
+                color={activeTab === 'quickplay' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY}
               />
               <Text style={[
-                styles.tabText, 
+                styles.tabText,
                 { color: activeTab === 'quickplay' ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
               ]}>
                 QUICK PLAY
@@ -164,11 +168,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               style={[styles.tab, activeTab === 'login' && styles.activeTab]}
               onPress={() => setActiveTab('login')}
             >
-              <MaterialIcon 
-                name="login" 
+              <MaterialIcon
+                name="login"
                 family="material"
-                size={ICON_SIZES.MEDIUM} 
-                color={activeTab === 'login' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY} 
+                size={ICON_SIZES.MEDIUM}
+                color={activeTab === 'login' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY}
               />
               <Text style={[
                 styles.tabText,
@@ -187,11 +191,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <Text style={styles.contentTitle}>QUICK PLAY</Text>
 
                 <View style={styles.inputContainer}>
-                  <MaterialIcon 
-                    name="person" 
+                  <MaterialIcon
+                    name="person"
                     family="material"
-                    size={ICON_SIZES.MEDIUM} 
-                    color={ICON_COLORS.SUCCESS} 
+                    size={ICON_SIZES.MEDIUM}
+                    color={ICON_COLORS.SUCCESS}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -215,11 +219,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     <ActivityIndicator color="#000" size="small" />
                   ) : (
                     <>
-                      <MaterialIcon 
-                        name={GAME_ICONS.PLAY.name} 
+                      <MaterialIcon
+                        name={GAME_ICONS.PLAY.name}
                         family={GAME_ICONS.PLAY.family}
-                        size={ICON_SIZES.MEDIUM} 
-                        color="#000" 
+                        size={ICON_SIZES.MEDIUM}
+                        color="#000"
                       />
                       <Text style={styles.quickPlayButtonText}>START ADVENTURE</Text>
                     </>
@@ -238,11 +242,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 </Text>
 
                 <View style={styles.inputContainer}>
-                  <MaterialIcon 
-                    name="email" 
+                  <MaterialIcon
+                    name="email"
                     family="material"
-                    size={ICON_SIZES.MEDIUM} 
-                    color={ICON_COLORS.SECONDARY} 
+                    size={ICON_SIZES.MEDIUM}
+                    color={ICON_COLORS.SECONDARY}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -258,11 +262,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <MaterialIcon 
-                    name="lock" 
+                  <MaterialIcon
+                    name="lock"
                     family="material"
-                    size={ICON_SIZES.MEDIUM} 
-                    color={ICON_COLORS.SECONDARY} 
+                    size={ICON_SIZES.MEDIUM}
+                    color={ICON_COLORS.SECONDARY}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -278,11 +282,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
                 {isSignUp && (
                   <View style={styles.inputContainer}>
-                    <MaterialIcon 
-                      name="lock" 
+                    <MaterialIcon
+                      name="lock"
                       family="material"
-                      size={ICON_SIZES.MEDIUM} 
-                      color={ICON_COLORS.SECONDARY} 
+                      size={ICON_SIZES.MEDIUM}
+                      color={ICON_COLORS.SECONDARY}
                       style={styles.inputIcon}
                     />
                     <TextInput
@@ -306,11 +310,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <>
-                      <MaterialIcon 
-                        name={isSignUp ? "person-add" : "login"} 
+                      <MaterialIcon
+                        name={isSignUp ? "person-add" : "login"}
                         family="material"
-                        size={ICON_SIZES.MEDIUM} 
-                        color={ICON_COLORS.WHITE} 
+                        size={ICON_SIZES.MEDIUM}
+                        color={ICON_COLORS.WHITE}
                       />
                       <Text style={styles.loginButtonText}>
                         {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
@@ -337,8 +341,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   onPress={() => setIsSignUp(!isSignUp)}
                 >
                   <Text style={styles.switchButtonText}>
-                    {isSignUp 
-                      ? 'Already a commander? Sign In' 
+                    {isSignUp
+                      ? 'Already a commander? Sign In'
                       : "New recruit? Join the Fleet"
                     }
                   </Text>
@@ -348,6 +352,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </View>
         </View>
       </ScrollView>
+      <ToastNotification ref={toastRef} />
     </KeyboardAvoidingView>
   );
 };
@@ -367,7 +372,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: SCREEN_HEIGHT - 40, // Account for padding
   },
-  
+
   // Title Section - Compact
   titleSection: {
     alignItems: 'center',
@@ -527,7 +532,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
-  
+
   googleButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,

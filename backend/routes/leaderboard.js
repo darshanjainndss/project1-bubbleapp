@@ -33,18 +33,19 @@ router.get('/', async (req, res) => {
       {
         $match: { 
           isActive: true,
-          'gameData.gamesPlayed': { $gt: 0 }
+          $or: [
+            { 'gameData.gamesPlayed': { $gt: 0 } },
+            { 'gameData.highScore': { $gt: 0 } }
+          ]
         }
       },
       {
         $sort: sortField
       },
       {
-        $limit: parseInt(limit)
-      },
-      {
         $project: {
           userId: '$_id',
+          email: 1,
           displayName: 1,
           profilePicture: 1,
           highScore: '$gameData.highScore',
@@ -57,6 +58,14 @@ router.get('/', async (req, res) => {
       },
       {
         $addFields: {
+          // Use email without @gmail.com as display name
+          displayName: {
+            $cond: {
+              if: { $regexMatch: { input: '$email', regex: /@gmail\.com$/i } },
+              then: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] },
+              else: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] }
+            }
+          },
           rank: { $add: [{ $indexOfArray: [[], null] }, 1] },
           winRate: {
             $cond: {
@@ -70,6 +79,43 @@ router.get('/', async (req, res) => {
               }
             }
           }
+        }
+      },
+      {
+        // Group by email to remove duplicates, keeping the one with highest score
+        $group: {
+          _id: '$email',
+          userId: { $first: '$userId' },
+          displayName: { $first: '$displayName' },
+          profilePicture: { $first: '$profilePicture' },
+          highScore: { $max: '$highScore' },
+          totalScore: { $max: '$totalScore' },
+          gamesWon: { $max: '$gamesWon' },
+          gamesPlayed: { $max: '$gamesPlayed' },
+          currentLevel: { $max: '$currentLevel' },
+          createdAt: { $first: '$createdAt' },
+          winRate: { $first: '$winRate' }
+        }
+      },
+      {
+        $sort: sortField
+      },
+      {
+        $limit: parseInt(limit)
+      },
+      {
+        $project: {
+          userId: 1,
+          displayName: 1,
+          profilePicture: 1,
+          highScore: 1,
+          totalScore: 1,
+          gamesWon: 1,
+          gamesPlayed: 1,
+          currentLevel: 1,
+          createdAt: 1,
+          winRate: 1,
+          _id: 0
         }
       }
     ]);
@@ -141,6 +187,7 @@ router.get('/weekly', async (req, res) => {
       {
         $project: {
           userId: '$_id',
+          email: '$user.email',
           displayName: '$user.displayName',
           profilePicture: '$user.profilePicture',
           totalScore: 1,
@@ -150,10 +197,47 @@ router.get('/weekly', async (req, res) => {
         }
       },
       {
+        $addFields: {
+          // Use email without @gmail.com as display name
+          displayName: {
+            $cond: {
+              if: { $regexMatch: { input: '$email', regex: /@gmail\.com$/i } },
+              then: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] },
+              else: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] }
+            }
+          }
+        }
+      },
+      {
+        // Group by email to remove duplicates, keeping the one with highest score
+        $group: {
+          _id: '$email',
+          userId: { $first: '$userId' },
+          displayName: { $first: '$displayName' },
+          profilePicture: { $first: '$profilePicture' },
+          totalScore: { $max: '$totalScore' },
+          highScore: { $max: '$highScore' },
+          gamesWon: { $max: '$gamesWon' },
+          gamesPlayed: { $max: '$gamesPlayed' }
+        }
+      },
+      {
         $sort: { totalScore: -1, highScore: -1 }
       },
       {
         $limit: parseInt(limit)
+      },
+      {
+        $project: {
+          userId: 1,
+          displayName: 1,
+          profilePicture: 1,
+          totalScore: 1,
+          highScore: 1,
+          gamesWon: 1,
+          gamesPlayed: 1,
+          _id: 0
+        }
       }
     ]);
 
@@ -224,6 +308,7 @@ router.get('/monthly', async (req, res) => {
       {
         $project: {
           userId: '$_id',
+          email: '$user.email',
           displayName: '$user.displayName',
           profilePicture: '$user.profilePicture',
           totalScore: 1,
@@ -233,10 +318,47 @@ router.get('/monthly', async (req, res) => {
         }
       },
       {
+        $addFields: {
+          // Use email without @gmail.com as display name
+          displayName: {
+            $cond: {
+              if: { $regexMatch: { input: '$email', regex: /@gmail\.com$/i } },
+              then: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] },
+              else: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] }
+            }
+          }
+        }
+      },
+      {
+        // Group by email to remove duplicates, keeping the one with highest score
+        $group: {
+          _id: '$email',
+          userId: { $first: '$userId' },
+          displayName: { $first: '$displayName' },
+          profilePicture: { $first: '$profilePicture' },
+          totalScore: { $max: '$totalScore' },
+          highScore: { $max: '$highScore' },
+          gamesWon: { $max: '$gamesWon' },
+          gamesPlayed: { $max: '$gamesPlayed' }
+        }
+      },
+      {
         $sort: { totalScore: -1, highScore: -1 }
       },
       {
         $limit: parseInt(limit)
+      },
+      {
+        $project: {
+          userId: 1,
+          displayName: 1,
+          profilePicture: 1,
+          totalScore: 1,
+          highScore: 1,
+          gamesWon: 1,
+          gamesPlayed: 1,
+          _id: 0
+        }
       }
     ]);
 
@@ -329,10 +451,8 @@ router.get('/top-players', async (req, res) => {
         }
       },
       {
-        $limit: parseInt(limit)
-      },
-      {
         $project: {
+          email: 1,
           displayName: 1,
           profilePicture: 1,
           highScore: '$gameData.highScore',
@@ -343,6 +463,59 @@ router.get('/top-players', async (req, res) => {
           winRate: { $multiply: ['$winRate', 100] },
           averageScore: { $round: ['$averageScore', 0] },
           createdAt: 1
+        }
+      },
+      {
+        $addFields: {
+          // Use email without @gmail.com as display name
+          displayName: {
+            $cond: {
+              if: { $regexMatch: { input: '$email', regex: /@gmail\.com$/i } },
+              then: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] },
+              else: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] }
+            }
+          }
+        }
+      },
+      {
+        // Group by email to remove duplicates, keeping the one with highest score
+        $group: {
+          _id: '$email',
+          displayName: { $first: '$displayName' },
+          profilePicture: { $first: '$profilePicture' },
+          highScore: { $max: '$highScore' },
+          totalScore: { $max: '$totalScore' },
+          gamesWon: { $max: '$gamesWon' },
+          gamesPlayed: { $max: '$gamesPlayed' },
+          currentLevel: { $max: '$currentLevel' },
+          winRate: { $first: '$winRate' },
+          averageScore: { $first: '$averageScore' },
+          createdAt: { $first: '$createdAt' }
+        }
+      },
+      {
+        $sort: { 
+          highScore: -1, 
+          winRate: -1,
+          totalScore: -1 
+        }
+      },
+      {
+        $limit: parseInt(limit)
+      },
+      {
+        $project: {
+          displayName: 1,
+          profilePicture: 1,
+          highScore: 1,
+          totalScore: 1,
+          gamesWon: 1,
+          gamesPlayed: 1,
+          currentLevel: 1,
+          winRate: 1,
+          averageScore: 1,
+          createdAt: 1,
+          _id: 0
         }
       }
     ]);

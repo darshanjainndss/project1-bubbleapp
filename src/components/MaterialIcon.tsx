@@ -39,6 +39,7 @@ const FALLBACK_ICONS: Record<string, string> = {
   'whatshot': '🔥',
   'bomb': '💣',
   'monetization-on': '🪙',
+  'toll': '🪙',
   'leaderboard': '🏆',
   'person': '👤',
   'refresh': '🔄',

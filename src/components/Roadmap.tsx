@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from "../styles/RoadmapStyles";
 import BackendService from '../services/BackendService';
 import ConfirmationModal from './ConfirmationModal';
+import ToastNotification, { ToastRef } from './ToastNotification';
 
 // Sub-component for Wave effect that emits from the circle edge
 const WavePulse = ({ color, duration, delay = 0, size = 100 }: any) => {
@@ -181,7 +182,12 @@ const TopHUD = ({ coins, score, onProfilePress, onLogout }: any) => (
         <Text style={localStyles.statValue}>{score.toLocaleString()}</Text>
       </View>
       <View style={[localStyles.statBadgeNeon, { marginLeft: 10 }]}>
-        <MaterialIcon name="monetization-on" family="material" size={20} color={ICON_COLORS.GOLD} />
+        <MaterialIcon
+          name={GAME_ICONS.COIN.name}
+          family={GAME_ICONS.COIN.family}
+          size={20}
+          color={ICON_COLORS.GOLD}
+        />
         <Text style={localStyles.statValue}>{coins}</Text>
       </View>
     </View>
@@ -278,6 +284,7 @@ const Roadmap: React.FC = () => {
   });
   const [dataLoaded, setDataLoaded] = useState(false);
   const [loadingDirection, setLoadingDirection] = useState<'toFight' | 'toBase'>('toFight');
+  const toastRef = useRef<ToastRef>(null);
 
   const handleLogout = async () => {
     await BackendService.logout();
@@ -301,63 +308,39 @@ const Roadmap: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   // Load user data when component mounts or user changes
-  useEffect(() => {
-    const loadUserData = async () => {
-      if (user?.uid) {
-        try {
-          if (!dataLoaded) {
-            setIsLoading(true);
-          }
-
-          // 1. Ensure authenticated with backend using Firebase info
-          console.log('🔄 Ensuring backend authentication for user:', user.email);
-          const isAuthenticated = await BackendService.ensureAuthenticated(user);
-
-          if (!isAuthenticated) {
-            console.error('Backend authentication failed');
-            setIsLoading(false); // Stop loading if auth fails
-            return; // Exit early if authentication fails
-          }
-
-          // 2. Fetch game data from backend
-          const result = await BackendService.getUserGameData();
-
-          if (result.success && result.data) {
-            const data = result.data;
-            setUserGameData(data);
-            setScore(data.highScore || 0); // Use highScore from backend
-            setCoins(data.totalCoins || 0);
-            setCurrentLevel(data.currentLevel || 1);
-
-            // Ensure 2 abilities for new users if backend returns 0 and it's a fresh start
-            const inventory = data.abilities || { lightning: 2, bomb: 2, freeze: 2, fire: 2 };
-            // If it's a new user (level 1, 0 score) and they have 0 abilities, give them 2
-            if (data.currentLevel <= 1 && data.totalScore === 0 &&
-              inventory.lightning === 0 && inventory.bomb === 0) {
-              inventory.lightning = 2;
-              inventory.bomb = 2;
-              inventory.fire = 2;
-              inventory.freeze = 2;
-              // Sync back to backend
-              await BackendService.updateAbilities(inventory);
-            }
-
-            setAbilityInventory(inventory);
-            setDataLoaded(true);
-          } else {
-            console.warn('Backend data fetch failed, using defaults');
-            // Fallback or initialization
-          }
-        } catch (error) {
-          console.error('Error loading user data from backend:', error);
-        } finally {
-          setIsLoading(false);
-        }
+  const loadUserData = useCallback(async (showLoading = true) => {
+    if (!user?.uid) return;
+    try {
+      if (showLoading && !dataLoaded) setIsLoading(true);
+      const isAuth = await BackendService.ensureAuthenticated(user);
+      if (!isAuth) {
+        if (showLoading) setIsLoading(false);
+        return;
       }
-    };
+      const result = await BackendService.getUserGameData();
+      if (result.success && result.data) {
+        setUserGameData(result.data);
+        setScore(result.data.totalScore || 0);
+        setCoins(result.data.totalCoins || 0);
+        setCurrentLevel(result.data.currentLevel || 1);
+        const inv = result.data.abilities || { lightning: 2, bomb: 2, freeze: 2, fire: 2 };
+        if (result.data.currentLevel <= 1 && result.data.totalScore === 0 && inv.lightning === 0) {
+          inv.lightning = 2; inv.bomb = 2; inv.fire = 2; inv.freeze = 2;
+          await BackendService.updateAbilities(inv);
+        }
+        setAbilityInventory(inv);
+        setDataLoaded(true);
+      }
+    } catch (err) {
+      console.error('Data load error:', err);
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
+  }, [user?.uid, dataLoaded]);
 
+  useEffect(() => {
     loadUserData();
-  }, [user?.uid]);
+  }, [user?.uid, loadUserData]);
 
   // Initialize rewarded ad
   useEffect(() => {
@@ -375,8 +358,8 @@ const Roadmap: React.FC = () => {
 
     const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: any) => {
       console.log('🎉 User earned reward:', reward);
-      setCoins(prev => prev + 50);
-      Alert.alert('Reward Earned!', 'You earned 50 coins!', [{ text: 'OK' }]);
+      setCoins((prev: any) => prev + 50);
+      toastRef.current?.show('Earned 50 bonus coins!', 'success');
     });
 
     const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error: any) => {
@@ -399,11 +382,7 @@ const Roadmap: React.FC = () => {
     if (rewardedAd && isAdLoaded) {
       rewardedAd.show();
     } else {
-      Alert.alert(
-        'Ad Not Ready',
-        'The rewarded ad is still loading. Please try again in a moment.',
-        [{ text: 'OK' }]
-      );
+      toastRef.current?.show('Ad not ready. Try again in a moment.', 'info');
     }
   };
 
@@ -427,17 +406,17 @@ const Roadmap: React.FC = () => {
 
       if (result.success) {
         setCoins(result.newCoinBalance || 0);
-        setAbilityInventory(prev => ({
+        setAbilityInventory((prev: any) => ({
           ...prev,
           [abilityId]: result.newAbilityCount || (prev[abilityId as keyof typeof prev] + 1)
         }));
-        Alert.alert('Purchase Successful!', `You bought ${abilityId}!`);
+        toastRef.current?.show(`Successfully purchased ${abilityId}!`, 'success');
       } else {
-        Alert.alert('Insufficient Coins', result.error || 'You need more coins to purchase this ability.');
+        toastRef.current?.show(result.error || 'Insufficient coins.', 'error');
       }
     } catch (error) {
       console.error('Error purchasing ability:', error);
-      Alert.alert('Error', 'Failed to purchase ability. Please try again.');
+      toastRef.current?.show('Failed to purchase ability.', 'error');
     }
   };
 
@@ -451,9 +430,18 @@ const Roadmap: React.FC = () => {
       const stars = levelStars[levelId] || 0;
       const currentUserLevel = userGameData?.currentLevel || 1;
 
+      // Check if level should be unlocked based on previous level having 2+ stars
+      let isLocked = false;
+      if (levelId > 1) {
+        const previousLevelStars = levelStars[levelId - 1] || 0;
+        isLocked = levelId > currentUserLevel && previousLevelStars < 2;
+      } else {
+        isLocked = false; // Level 1 is always unlocked
+      }
+
       return {
         id: levelId,
-        isLocked: levelId > currentUserLevel,
+        isLocked,
         isCompleted,
         stars: isCompleted ? stars : 0,
       };
@@ -549,10 +537,12 @@ const Roadmap: React.FC = () => {
   const handleLevelPress = (level: number, isLocked: boolean) => {
     if (isLocked) {
       // Show message for locked levels without loading
-      Alert.alert(
-        'Level Locked',
-        `Complete level ${level - 1} first to unlock this level!`,
-        [{ text: 'OK', style: 'default' }]
+      const previousLevel = level - 1;
+      const previousLevelStars = userGameData?.levelStars?.[previousLevel] || 0;
+
+      toastRef.current?.show(
+        `Level Locked! Need 2 starts on Level ${previousLevel} (You have ${previousLevelStars})`,
+        'warning'
       );
       return;
     }
@@ -581,6 +571,8 @@ const Roadmap: React.FC = () => {
     // Wait for loading screen to appear before switching
     setTimeout(() => {
       setShowGameScreen(false);
+      // Refresh data to ensure accuracy
+      if (typeof loadUserData === 'function') loadUserData(false);
 
       // Scroll to current level when returning
       setTimeout(() => {
@@ -601,32 +593,66 @@ const Roadmap: React.FC = () => {
     }, 100);
   };
 
-  const handleLevelComplete = async (completedLevel: number, finalScore: number, stars: number) => {
+  const handleLevelComplete = async (completedLevel: number, finalScore: number, stars: number, coinsEarned?: number, action: 'next' | 'home' = 'next') => {
     try {
-      // Backend handles score and level logic when submitGameSession is called (inside GameScreen ideally)
-      // but we update local state for the Roadmap UI
+      console.log('🏆 Level Complete:', completedLevel, 'Score:', finalScore, 'Stars:', stars, 'Coins:', coinsEarned, 'Action:', action);
+
+      // 1. OPTIMISTIC UPDATE: Update local state immediately for instant UI feedback
       const newCurrentLevel = Math.max(completedLevel + 1, currentLevel);
 
-      // Fetch latest data from backend to ensure synchronization
-      const dataResult = await BackendService.getUserGameData();
-      if (dataResult.success && dataResult.data) {
-        const data = dataResult.data;
-        setUserGameData(data);
-        setScore(data.highScore);
-        setCoins(data.totalCoins);
-        setCurrentLevel(data.currentLevel);
-        setAbilityInventory(data.abilities);
-      }
+      // SWITCH TO CUMULATIVE SCORE DISPLAY
+      // Optimistically add the new level score to the total score
+      const currentTotalScore = userGameData?.totalScore || score || 0;
+      const newTotalScore = currentTotalScore + finalScore;
 
-      // Progress to next level
-      if (completedLevel < levels.length) {
-        setSelectedLevel(completedLevel + 1);
-        setLoadingDirection('toBase'); // Just show loading while refreshing
-        setIsLoading(true);
-        setTimeout(() => setIsLoading(false), 500);
+      // Calculate new total coins optimistically
+      const currentTotalCoins = userGameData?.totalCoins || coins || 0;
+      const newTotalCoins = currentTotalCoins + (coinsEarned || 0);
+
+      // Create updated data object
+      const updatedGameData = {
+        ...userGameData,
+        currentLevel: newCurrentLevel,
+        totalScore: newTotalScore, // Optimistic update
+        // We also want to update highScore (single best run) if applicable, though typically less visible
+        highScore: Math.max(userGameData?.highScore || 0, finalScore),
+        totalCoins: newTotalCoins,
+        levelStars: {
+          ...userGameData.levelStars,
+          [completedLevel]: Math.max(userGameData.levelStars?.[completedLevel] || 0, stars)
+        },
+        completedLevels: userGameData.completedLevels.includes(completedLevel)
+          ? userGameData.completedLevels
+          : [...userGameData.completedLevels, completedLevel]
+      };
+
+      // Set State Immediately
+      setUserGameData(updatedGameData);
+      setScore(newTotalScore); // Show TOTAL score in HUD
+      setCoins(newTotalCoins);
+      setCurrentLevel(newCurrentLevel);
+
+      // 2. Trigger Background Sync
+      loadUserData(false);
+
+
+      // 3. Navigate UI based on Action
+      if (action === 'next') {
+        // Progress to next level logic
+        if (completedLevel < levels.length) {
+          // Prepare to move to next level
+          setSelectedLevel(completedLevel + 1);
+          setLoadingDirection('toBase'); // Show loading briefly
+          setIsLoading(true);
+          setTimeout(() => setIsLoading(false), 500);
+        } else {
+          handleBackPress();
+        }
       } else {
+        // Action is 'home' - user wants to quit to map directly
         handleBackPress();
       }
+
     } catch (error) {
       console.error('Error handling level completion:', error);
       handleBackPress();
@@ -853,7 +879,7 @@ const Roadmap: React.FC = () => {
           onBackPress={handleBackPress}
           level={selectedLevel}
           onLevelComplete={handleLevelComplete}
-          initialAbilities={abilityInventory}
+          initialAbilities={{ lightning: 2, bomb: 2, freeze: 2, fire: 2 }}
         />
       ) : (
         <View style={{ flex: 1 }}>
@@ -956,7 +982,7 @@ const Roadmap: React.FC = () => {
                   <Text style={styles.shopRewardTitle}>GET FREE COINS</Text>
                   <RewardedAdButton
                     onReward={(amount) => {
-                      setCoins(prev => prev + amount);
+                      setCoins((prev: any) => prev + amount);
                       console.log(`🎉 Rewarded ${amount} coins from ad!`);
                     }}
                     rewardAmount={50}
@@ -1044,6 +1070,7 @@ const Roadmap: React.FC = () => {
 
       {/* Loading Overlay - Visible on top during transitions */}
       {isLoading && <LoadingIndicator />}
+      <ToastNotification ref={toastRef} />
     </View>
   );
 };
