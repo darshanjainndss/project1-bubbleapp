@@ -106,6 +106,41 @@ export interface GameSession {
   completedAt: string;
 }
 
+export interface AbilityConfig {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  icon: string;
+  effect: 'destroyRow' | 'destroyNeighbors' | 'freezeColumn' | 'burnObstacles';
+  pointsPerBubble: number;
+  price: number;
+  startingCount: number;
+  sortOrder: number;
+}
+
+export interface AdConfig {
+  platform: 'android' | 'ios';
+  appId: string;
+  bannerAdUnitId: string;
+  rewardedAdUnitId: string;
+  interstitialAdUnitId?: string;
+  maxAdContentRating: 'G' | 'PG' | 'T' | 'MA';
+  tagForUnderAgeOfConsent: boolean;
+  tagForChildDirectedTreatment: boolean;
+  rewardConfig: {
+    coinsPerAd: number;
+    abilitiesPerAd: number;
+  };
+}
+
+export interface GameConfig {
+  abilities: AbilityConfig[];
+  ads: AdConfig | null;
+  platform: 'android' | 'ios';
+  isDevelopment: boolean;
+}
+
 class BackendService {
   private authToken: string | null = null;
   private currentUser: UserProfile | null = null;
@@ -592,6 +627,79 @@ class BackendService {
     } catch (error) {
       console.error('Purchase abilities error:', error);
       return { success: false, error: 'Network error purchasing abilities' };
+    }
+  }
+
+  // ============================================================================
+  // CONFIG METHODS
+  // ============================================================================
+
+  async getAbilitiesConfig(): Promise<{ success: boolean; abilities?: AbilityConfig[]; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/config/abilities`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, abilities: data.abilities };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch abilities config' };
+      }
+    } catch (error) {
+      console.error('Get abilities config error:', error);
+      return { success: false, error: 'Network error fetching abilities config' };
+    }
+  }
+
+  async getAdConfig(platform: 'android' | 'ios' = 'android', isDev: boolean = __DEV__): Promise<{ success: boolean; adConfig?: AdConfig; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/config/ads?platform=${platform}&dev=${isDev}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, adConfig: data.adConfig };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch ad config' };
+      }
+    } catch (error) {
+      console.error('Get ad config error:', error);
+      return { success: false, error: 'Network error fetching ad config' };
+    }
+  }
+
+  async getGameConfig(platform: 'android' | 'ios' = 'android', isDev: boolean = __DEV__): Promise<{ success: boolean; config?: GameConfig; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/config/game?platform=${platform}&dev=${isDev}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, config: data.config };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch game config' };
+      }
+    } catch (error) {
+      console.error('Get game config error:', error);
+      return { success: false, error: 'Network error fetching game config' };
     }
   }
 

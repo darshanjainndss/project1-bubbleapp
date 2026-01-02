@@ -62,26 +62,12 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
-    gamesWon: {
-      type: Number,
-      default: 0
-    },
     abilities: {
-      lightning: {
-        type: Number,
-        default: 2 // Starting abilities
-      },
-      bomb: {
-        type: Number,
-        default: 2
-      },
-      freeze: {
-        type: Number,
-        default: 2
-      },
-      fire: {
-        type: Number,
-        default: 2
+      type: Map,
+      of: Number,
+      default: function() {
+        // Default abilities will be set by the initializeUserAbilities method
+        return new Map();
       }
     },
     achievements: [{
@@ -149,6 +135,23 @@ userSchema.pre('save', async function(next) {
   }
 });
 
+// Initialize abilities for new users
+userSchema.pre('save', async function(next) {
+  // Only initialize abilities for new users
+  if (!this.isNew) return next();
+  
+  try {
+    // Initialize abilities if they don't exist
+    if (!this.gameData.abilities || this.gameData.abilities.size === 0) {
+      await this.initializeUserAbilities();
+    }
+    next();
+  } catch (error) {
+    console.error('Error initializing abilities for new user:', error);
+    next(error);
+  }
+});
+
 // Instance method to check password
 userSchema.methods.comparePassword = async function(candidatePassword) {
   if (this.isGoogleLogin) {
@@ -187,11 +190,81 @@ userSchema.methods.getGameData = function() {
     gameData.levelStars = {};
   }
   
+  // Convert abilities Map to plain object
+  if (gameData.abilities instanceof Map) {
+    gameData.abilities = Object.fromEntries(gameData.abilities);
+  } else if (!gameData.abilities) {
+    gameData.abilities = {};
+  }
+  
   return {
     userId: this._id,
     ...gameData,
     rank: null // Will be calculated separately
   };
+};
+
+// Instance method to initialize user abilities from Ability model
+userSchema.methods.initializeUserAbilities = async function() {
+  const Ability = require('./Ability');
+  
+  try {
+    const abilities = await Ability.getActiveAbilities();
+    
+    // Initialize abilities map if it doesn't exist
+    if (!this.gameData.abilities) {
+      this.gameData.abilities = new Map();
+    }
+    
+    // Set starting counts for each ability
+    abilities.forEach(ability => {
+      if (!this.gameData.abilities.has(ability.name)) {
+        this.gameData.abilities.set(ability.name, ability.startingCount);
+      }
+    });
+    
+    // Don't save here - let the calling code handle the save
+    return this;
+  } catch (error) {
+    console.error('Error initializing user abilities:', error);
+    throw error;
+  }
+};
+
+// Instance method to get ability count
+userSchema.methods.getAbilityCount = function(abilityName) {
+  if (!this.gameData.abilities || !this.gameData.abilities.has(abilityName)) {
+    return 0;
+  }
+  return this.gameData.abilities.get(abilityName);
+};
+
+// Instance method to update ability count
+userSchema.methods.updateAbilityCount = function(abilityName, count) {
+  if (!this.gameData.abilities) {
+    this.gameData.abilities = new Map();
+  }
+  
+  this.gameData.abilities.set(abilityName, Math.max(0, count));
+  return this;
+};
+
+// Instance method to use ability (decrement count)
+userSchema.methods.useAbility = function(abilityName, count = 1) {
+  const currentCount = this.getAbilityCount(abilityName);
+  if (currentCount < count) {
+    throw new Error(`Insufficient ${abilityName} abilities. Current: ${currentCount}, Required: ${count}`);
+  }
+  
+  this.updateAbilityCount(abilityName, currentCount - count);
+  return this;
+};
+
+// Instance method to add abilities
+userSchema.methods.addAbilities = function(abilityName, count) {
+  const currentCount = this.getAbilityCount(abilityName);
+  this.updateAbilityCount(abilityName, currentCount + count);
+  return this;
 };
 
 // Static method to get leaderboard
@@ -212,7 +285,6 @@ userSchema.statics.getLeaderboard = async function(limit = 100) {
         profilePicture: 1,
         highScore: '$gameData.highScore',
         totalScore: '$gameData.totalScore',
-        gamesWon: '$gameData.gamesWon',
         gamesPlayed: '$gameData.gamesPlayed'
       }
     },
@@ -259,10 +331,9 @@ userSchema.statics.getUserRank = async function(userId) {
   return result.length > 0 ? result[0].rank : null;
 };
 
-// Virtual for win rate
-userSchema.virtual('gameData.winRate').get(function() {
-  if (this.gameData.gamesPlayed === 0) return 0;
-  return (this.gameData.gamesWon / this.gameData.gamesPlayed * 100).toFixed(1);
+// Virtual for games played
+userSchema.virtual('gameData.totalGames').get(function() {
+  return this.gameData.gamesPlayed || 0;
 });
 
 module.exports = mongoose.model('User', userSchema);

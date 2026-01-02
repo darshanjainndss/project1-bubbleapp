@@ -1,6 +1,7 @@
 import { Animated } from "react-native";
 import { BUBBLE_SIZE, ROW_HEIGHT, SCREEN_WIDTH, GRID_TOP, SCREEN_HEIGHT } from "../styles/GameScreenStyles";
 import { COLORS } from "../data/levelPatterns";
+import SettingsService from '../services/SettingsService';
 
 export const getPos = (row: number, col: number) => {
     const rowWidth = (row % 2 === 0) ? 9 : 8;
@@ -86,8 +87,10 @@ export const updateCommonState = (
     const remaining = grid.filter(b => b.visible).length;
     if (remaining === 0) {
         setGameState('won');
+        SettingsService.vibrateSuccess(); // Victory vibration
     } else if (moves - 1 <= 0) {
         setGameState('lost');
+        SettingsService.vibrateError(); // Defeat vibration
     }
 
     const visible = grid.filter(b => b.visible);

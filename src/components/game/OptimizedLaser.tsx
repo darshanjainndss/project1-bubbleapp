@@ -1,6 +1,15 @@
 import React, { useRef, useEffect, memo } from 'react';
-import { View, Animated } from 'react-native';
+import { View, Animated, Image } from 'react-native';
 import LottieView from 'lottie-react-native';
+
+const COLOR_MAP: Record<string, any> = {
+  "#ff3b30": require("../../images/red.webp"),
+  "#ff9500": require("../../images/orange.webp"),
+  "#ffd60a": require("../../images/yellow.webp"),
+  "#34c759": require("../../images/green.webp"),
+  "#007aff": require("../../images/blue.webp"),
+  "#af52de": require("../../images/purple.webp"),
+};
 
 // ============================================================================
 // OPTIMIZED LASER SYSTEM - ALL-IN-ONE COMPONENT
@@ -198,9 +207,29 @@ const OptimizedLaser = memo(({
           width: cannonSize * 0.2,
           height: cannonSize * 0.2,
           borderRadius: (cannonSize * 0.2) / 2,
-          backgroundColor: nextColor,
           opacity: 0.8,
-        }} />
+          overflow: 'hidden',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          {COLOR_MAP[nextColor.toLowerCase()] ? (
+            <Image
+              source={COLOR_MAP[nextColor.toLowerCase()]}
+              style={{
+                width: '150%',
+                height: '150%',
+              }}
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: (cannonSize * 0.2) / 2,
+              backgroundColor: nextColor,
+            }} />
+          )}
+        </View>
       </View>
 
       {/* ================================================================== */}
@@ -607,7 +636,6 @@ const BurningLaserBall = memo(({ color }: { color: string }) => {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: color,
         borderWidth: 2,
         borderColor: '#fff',
         shadowColor: color,
@@ -618,13 +646,32 @@ const BurningLaserBall = memo(({ color }: { color: string }) => {
         transform: [{ scale: coreAnim }],
         justifyContent: 'center',
         alignItems: 'center',
+        overflow: 'hidden',
       }}>
+        {COLOR_MAP[color.toLowerCase()] ? (
+          <Image
+            source={COLOR_MAP[color.toLowerCase()]}
+            style={{
+              width: '120%',
+              height: '120%',
+            }}
+            resizeMode="contain"
+          />
+        ) : (
+          <View style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: 16,
+            backgroundColor: color,
+          }} />
+        )}
         {/* Inner glow core */}
         <View style={{
+          position: 'absolute',
           width: 24,
           height: 24,
           borderRadius: 12,
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backgroundColor: 'rgba(255, 255, 255, 0.3)',
         }} />
       </Animated.View>
 

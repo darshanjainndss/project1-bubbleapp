@@ -16,11 +16,18 @@ import TransitionScreen from './src/components/TransitionScreen';
 import Roadmap from './src/components/Roadmap';
 import LoginScreen from './src/components/LoginScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import ConfigService from './src/services/ConfigService';
 
-// Initialize AdMob
-mobileAds()
-  .initialize()
-  .then(adapterStatuses => {
+// Initialize AdMob with dynamic configuration
+const initializeAdMob = async () => {
+  try {
+    console.log('🔧 Initializing AdMob with dynamic configuration...');
+    
+    // Get ad configuration from backend
+    const adConfig = await ConfigService.getAdConfig();
+    
+    // Initialize AdMob
+    const adapterStatuses = await mobileAds().initialize();
     console.log('✅ AdMob initialized successfully');
     
     // Log adapter statuses for debugging
@@ -28,20 +35,40 @@ mobileAds()
       const status = adapterStatuses[adapter];
       console.log(`📱 ${adapter}: ${status.state} (${status.description})`);
     });
-  })
-  .catch(error => {
+    
+    // Set request configuration from backend config
+    await mobileAds().setRequestConfiguration({
+      maxAdContentRating: adConfig.maxAdContentRating,
+      tagForUnderAgeOfConsent: adConfig.tagForUnderAgeOfConsent,
+      tagForChildDirectedTreatment: adConfig.tagForChildDirectedTreatment,
+    });
+    
+    console.log('🎯 AdMob request configuration set:', {
+      maxAdContentRating: adConfig.maxAdContentRating,
+      tagForUnderAgeOfConsent: adConfig.tagForUnderAgeOfConsent,
+      tagForChildDirectedTreatment: adConfig.tagForChildDirectedTreatment,
+    });
+    
+  } catch (error) {
     console.error('❌ AdMob initialization failed:', error);
-  });
+    
+    // Fallback to basic initialization
+    try {
+      await mobileAds().initialize();
+      await mobileAds().setRequestConfiguration({
+        maxAdContentRating: 'G',
+        tagForUnderAgeOfConsent: false,
+        tagForChildDirectedTreatment: false,
+      });
+      console.log('✅ AdMob initialized with fallback configuration');
+    } catch (fallbackError) {
+      console.error('❌ AdMob fallback initialization failed:', fallbackError);
+    }
+  }
+};
 
-// Set request configuration for better ad serving
-mobileAds().setRequestConfiguration({
-  // Max ad content rating
-  maxAdContentRating: 'G',
-  // Tag for under age of consent
-  tagForUnderAgeOfConsent: false,
-  // Tag for child directed treatment
-  tagForChildDirectedTreatment: false,
-});
+// Initialize AdMob on app start
+initializeAdMob();
 
 function App() {
   return (

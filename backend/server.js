@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const gameRoutes = require('./routes/game');
 const leaderboardRoutes = require('./routes/leaderboard');
+const configRoutes = require('./routes/config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,6 +80,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/config', configRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -116,6 +118,9 @@ app.listen(PORT, () => {
   console.log('   GET  /api/user/game-data - Get user game data');
   console.log('   GET  /api/leaderboard - Get leaderboard');
   console.log('   POST /api/game/session - Submit game session');
+  console.log('   GET  /api/config/abilities - Get abilities config');
+  console.log('   GET  /api/config/ads - Get ads config');
+  console.log('   GET  /api/config/game - Get complete game config');
 });
 
 // Graceful shutdown

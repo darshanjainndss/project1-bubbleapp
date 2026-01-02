@@ -1,9 +1,18 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import MaterialIcon from "../MaterialIcon";
 import HelpButton from "../HelpButton";
 import { GAME_ICONS, ICON_COLORS } from "../../config/icons";
 import { styles } from "../../styles/GameScreenStyles";
+
+const COLOR_MAP: Record<string, any> = {
+  "#ff3b30": require("../../images/red.webp"),
+  "#ff9500": require("../../images/orange.webp"),
+  "#ffd60a": require("../../images/yellow.webp"),
+  "#34c759": require("../../images/green.webp"),
+  "#007aff": require("../../images/blue.webp"),
+  "#af52de": require("../../images/purple.webp"),
+};
 
 interface GameHUDProps {
     score: number;
@@ -124,7 +133,17 @@ export const GameHUD = ({
                     {/* Raised Center Ammo Module */}
                     <View style={styles.raisedCenterContainer}>
                         <View style={styles.raisedAmmoRing}>
-                            <View style={[styles.ammoBubble, { backgroundColor: nextColor }]} />
+                            <View style={styles.ammoBubble}>
+                                {COLOR_MAP[nextColor.toLowerCase()] ? (
+                                    <Image
+                                        source={COLOR_MAP[nextColor.toLowerCase()]}
+                                        style={styles.ammoBubbleImage}
+                                        resizeMode="contain"
+                                    />
+                                ) : (
+                                    <View style={[styles.ammoBubbleFallback, { backgroundColor: nextColor }]} />
+                                )}
+                            </View>
                         </View>
                         <View style={styles.ammoTextContainer}>
                             <Text style={styles.ammoValue}>{moves}</Text>

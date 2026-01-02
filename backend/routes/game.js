@@ -26,9 +26,6 @@ const validateGameSession = [
   body('duration')
     .isInt({ min: 1 })
     .withMessage('Duration must be a positive integer'),
-  body('isWin')
-    .isBoolean()
-    .withMessage('isWin must be a boolean'),
   body('abilitiesUsed')
     .optional()
     .isObject()
@@ -153,7 +150,6 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       moves,
       stars,
       duration,
-      isWin,
       abilitiesUsed = {},
       bubblesDestroyed = 0,
       chainReactions = 0,
@@ -177,7 +173,6 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       moves,
       stars,
       duration,
-      isWin,
       abilitiesUsed: {
         lightning: abilitiesUsed.lightning || 0,
         bomb: abilitiesUsed.bomb || 0,
@@ -211,13 +206,9 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       user.gameData.completedLevels.push(level);
     }
 
-    if (isWin) {
-      user.gameData.gamesWon += 1;
-      
-      // Update high score if this is better
-      if (score > user.gameData.highScore) {
-        user.gameData.highScore = score;
-      }
+    // Update high score if this is better
+    if (score > user.gameData.highScore) {
+      user.gameData.highScore = score;
     }
 
     // Check if next level should be unlocked (2+ stars required)
@@ -256,7 +247,6 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
         totalCoins: user.gameData.totalCoins,
         currentLevel: user.gameData.currentLevel,
         gamesPlayed: user.gameData.gamesPlayed,
-        gamesWon: user.gameData.gamesWon,
         completedLevels: user.gameData.completedLevels,
         levelStars: Object.fromEntries(user.gameData.levelStars),
         abilities: user.gameData.abilities
@@ -375,14 +365,9 @@ function checkAchievements(user, gameSession) {
   const achievements = [];
   const existingAchievements = user.gameData.achievements;
 
-  // First Win
-  if (gameSession.isWin && user.gameData.gamesWon === 1 && !existingAchievements.includes('first_win')) {
-    achievements.push('first_win');
-  }
-
   // Perfect Game (no abilities used)
   const totalAbilities = Object.values(gameSession.abilitiesUsed).reduce((sum, count) => sum + count, 0);
-  if (gameSession.isWin && totalAbilities === 0 && !existingAchievements.includes('perfect_game')) {
+  if (totalAbilities === 0 && !existingAchievements.includes('perfect_game')) {
     achievements.push('perfect_game');
   }
 
@@ -397,24 +382,13 @@ function checkAchievements(user, gameSession) {
   }
 
   // Speed Demon (complete level in under 60 seconds)
-  if (gameSession.isWin && gameSession.duration < 60 && !existingAchievements.includes('speed_demon')) {
+  if (gameSession.duration < 60 && !existingAchievements.includes('speed_demon')) {
     achievements.push('speed_demon');
   }
 
   // Bubble Destroyer
   if (gameSession.bubblesDestroyed >= 100 && !existingAchievements.includes('bubble_destroyer')) {
     achievements.push('bubble_destroyer');
-  }
-
-  // Win Streak achievements
-  if (user.gameData.gamesWon >= 10 && !existingAchievements.includes('winner_10')) {
-    achievements.push('winner_10');
-  }
-  if (user.gameData.gamesWon >= 50 && !existingAchievements.includes('winner_50')) {
-    achievements.push('winner_50');
-  }
-  if (user.gameData.gamesWon >= 100 && !existingAchievements.includes('winner_100')) {
-    achievements.push('winner_100');
   }
 
   // Level achievements

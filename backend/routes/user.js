@@ -185,7 +185,7 @@ router.put('/game-data', auth, async (req, res) => {
 
     const allowedUpdates = [
       'totalScore', 'highScore', 'currentLevel', 'gamesPlayed', 
-      'gamesWon', 'achievements', 'lastPlayedAt'
+      'achievements', 'lastPlayedAt'
     ];
 
     // Update only allowed fields
@@ -324,8 +324,8 @@ router.post('/purchase-abilities', auth, [
     const abilityCosts = {
       lightning: 50,
       bomb: 75,
-      freeze: 60,
-      fire: 65
+      freeze: 30,
+      fire: 40
     };
 
     const totalCost = abilityCosts[ability] * quantity;

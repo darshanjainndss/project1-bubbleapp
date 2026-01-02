@@ -25,6 +25,16 @@ import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from "../styles/RoadmapStyles";
 import BackendService from '../services/BackendService';
 import ConfirmationModal from './ConfirmationModal';
 import ToastNotification, { ToastRef } from './ToastNotification';
+import SettingsService from '../services/SettingsService';
+
+// Helper function to safely call vibration
+const safeVibrate = () => {
+  try {
+    SettingsService.vibrateClick();
+  } catch (error) {
+    console.warn('Vibration failed:', error);
+  }
+};
 
 // Sub-component for Wave effect that emits from the circle edge
 const WavePulse = ({ color, duration, delay = 0, size = 100 }: any) => {
@@ -219,7 +229,7 @@ const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) =>
     {/* Right Side */}
     <TouchableOpacity style={localStyles.navItem} onPress={onAd}>
       <MaterialIcon name="play-circle-filled" family="material" size={26} color={ICON_COLORS.WARNING} />
-      <Text style={localStyles.navText}>Free</Text>
+      <Text style={localStyles.navText}>Earn</Text>
     </TouchableOpacity>
 
     <TouchableOpacity style={localStyles.navItem} onPress={onProfile}>
@@ -238,7 +248,50 @@ const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) =>
 );
 
 // Profile Popup Component
-const ProfilePopup = ({ visible, onClose, user }: any) => {
+const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel }: any) => {
+  const [vibrationEnabled, setVibrationEnabled] = useState(true);
+  const [vibrationSupported, setVibrationSupported] = useState(true);
+
+  // Load vibration setting on mount
+  useEffect(() => {
+    const loadVibrationSetting = async () => {
+      try {
+        await SettingsService.ensureLoaded();
+        setVibrationEnabled(SettingsService.getSetting('vibrationEnabled'));
+        setVibrationSupported(SettingsService.isVibrationSupported());
+      } catch (error) {
+        console.error('Error loading vibration setting:', error);
+        // Set safe defaults if loading fails
+        setVibrationEnabled(true);
+        setVibrationSupported(true);
+      }
+    };
+    if (visible) {
+      loadVibrationSetting();
+    }
+  }, [visible]);
+
+  const toggleVibration = async () => {
+    if (!vibrationSupported) return;
+    
+    try {
+      const newValue = !vibrationEnabled;
+      setVibrationEnabled(newValue);
+      await SettingsService.setVibrationEnabled(newValue);
+      
+      // Give feedback when enabling vibration
+      if (newValue) {
+        try {
+          SettingsService.vibrateClick();
+        } catch (error) {
+          console.warn('Vibration feedback failed:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling vibration:', error);
+    }
+  };
+
   if (!visible || !user) return null;
 
   // Get name without @gmail.com or domain
@@ -258,6 +311,139 @@ const ProfilePopup = ({ visible, onClose, user }: any) => {
 
         <Text style={localStyles.popupName}>{cleanName}</Text>
         <Text style={localStyles.popupLabel}>Space Commander</Text>
+
+        {/* Stats Section */}
+        <View style={localStyles.profileStatsContainer}>
+          <View style={localStyles.profileStatItem}>
+            <MaterialIcon name="trending-up" family="material" size={24} color={ICON_COLORS.SUCCESS} />
+            <Text style={localStyles.profileStatLabel}>Level</Text>
+            <Text style={localStyles.profileStatValue}>{currentLevel}</Text>
+          </View>
+          
+          <View style={localStyles.profileStatItem}>
+            <MaterialIcon
+              name={GAME_ICONS.COIN.name}
+              family={GAME_ICONS.COIN.family}
+              size={24}
+              color={ICON_COLORS.GOLD}
+            />
+            <Text style={localStyles.profileStatLabel}>Coins</Text>
+            <Text style={localStyles.profileStatValue}>{coins.toLocaleString()}</Text>
+          </View>
+
+          <View style={localStyles.profileStatItem}>
+            <MaterialIcon name="stars" family="material" size={24} color={ICON_COLORS.WARNING} />
+            <Text style={localStyles.profileStatLabel}>Score</Text>
+            <Text style={localStyles.profileStatValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
+          </View>
+        </View>
+
+        {/* Settings Section */}
+        <View style={localStyles.profileSettingsContainer}>
+          <Text style={localStyles.profileSectionTitle}>Settings</Text>
+          
+          <TouchableOpacity 
+            style={[
+              localStyles.profileSettingItem,
+              !vibrationSupported && localStyles.profileSettingDisabled
+            ]} 
+            onPress={toggleVibration}
+            disabled={!vibrationSupported}
+          >
+            <View style={localStyles.profileSettingLeft}>
+              <MaterialIcon 
+                name={GAME_ICONS.VIBRATION.name} 
+                family={GAME_ICONS.VIBRATION.family} 
+                size={24} 
+                color={
+                  !vibrationSupported 
+                    ? ICON_COLORS.DISABLED 
+                    : vibrationEnabled 
+                      ? ICON_COLORS.SUCCESS 
+                      : ICON_COLORS.DISABLED
+                } 
+              />
+              <Text style={[
+                localStyles.profileSettingLabel,
+                !vibrationSupported && localStyles.profileSettingLabelDisabled
+              ]}>
+                Vibration {!vibrationSupported && '(Not Available)'}
+              </Text>
+            </View>
+            <View style={[
+              localStyles.profileToggle,
+              vibrationEnabled && vibrationSupported && localStyles.profileToggleActive,
+              !vibrationSupported && localStyles.profileToggleDisabled
+            ]}>
+              <View style={[
+                localStyles.profileToggleThumb,
+                vibrationEnabled && vibrationSupported && localStyles.profileToggleThumbActive
+              ]} />
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// Earn Coins Popup Component
+const EarnCoinsPopup = ({ visible, onClose, onWatchAd, isAdLoaded }: any) => {
+  if (!visible) return null;
+
+  return (
+    <View style={localStyles.popupOverlay}>
+      <View style={localStyles.earnCoinsPopupContent}>
+        <TouchableOpacity style={localStyles.closePopupBtn} onPress={onClose}>
+          <MaterialIcon name="close" family="material" size={24} color="#FFF" />
+        </TouchableOpacity>
+
+        {/* Coin Icon */}
+        <View style={localStyles.earnCoinsIcon}>
+          <MaterialIcon
+            name={GAME_ICONS.COIN.name}
+            family={GAME_ICONS.COIN.family}
+            size={80}
+            color={ICON_COLORS.GOLD}
+          />
+        </View>
+
+        <Text style={localStyles.earnCoinsTitle}>Earn Free Coins!</Text>
+        <Text style={localStyles.earnCoinsDescription}>
+          Watch a short video ad to earn coins that you can use to buy power-ups and abilities.
+        </Text>
+
+        {/* Reward Info */}
+        <View style={localStyles.earnCoinsRewardBox}>
+          <MaterialIcon
+            name={GAME_ICONS.COIN.name}
+            family={GAME_ICONS.COIN.family}
+            size={32}
+            color={ICON_COLORS.GOLD}
+          />
+          <Text style={localStyles.earnCoinsRewardText}>+50 Coins</Text>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={localStyles.earnCoinsButtons}>
+          <TouchableOpacity 
+            style={[
+              localStyles.earnCoinsWatchBtn,
+              !isAdLoaded && localStyles.earnCoinsWatchBtnDisabled
+            ]} 
+            onPress={onWatchAd}
+            disabled={!isAdLoaded}
+          >
+            <MaterialIcon name="play-circle-filled" family="material" size={24} color="#000" />
+            <Text style={localStyles.earnCoinsWatchBtnText}>
+              {isAdLoaded ? 'Watch Ad' : 'Loading...'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={localStyles.earnCoinsLaterBtn} onPress={onClose}>
+            <Text style={localStyles.earnCoinsLaterBtnText}>Maybe Later</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -274,6 +460,7 @@ const Roadmap: React.FC = () => {
   const [showShop, setShowShop] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [showEarnCoinsPopup, setShowEarnCoinsPopup] = useState(false);
   const [userGameData, setUserGameData] = useState<any>({
     completedLevels: [],
     levelStars: {},
@@ -377,9 +564,16 @@ const Roadmap: React.FC = () => {
     };
   }, []);
 
-  // Handle rewarded ad button press
+  // Handle rewarded ad button press - show popup first
   const handleRewardedAdPress = () => {
+    safeVibrate();
+    setShowEarnCoinsPopup(true);
+  };
+
+  // Handle watching the ad from popup
+  const handleWatchAd = () => {
     if (rewardedAd && isAdLoaded) {
+      setShowEarnCoinsPopup(false);
       rewardedAd.show();
     } else {
       toastRef.current?.show('Ad not ready. Try again in a moment.', 'info');
@@ -398,11 +592,21 @@ const Roadmap: React.FC = () => {
   const purchaseAbility = async (abilityId: string, price: number) => {
     if (!user?.uid) return;
 
+    console.log(`🛒 Attempting to purchase ${abilityId} for ${price} coins. Current balance: ${coins}`);
+    
+    // Add client-side validation
+    if (coins < price) {
+      toastRef.current?.show(`Insufficient coins. Need ${price}, have ${coins}.`, 'error');
+      return;
+    }
+
     try {
       const result = await BackendService.purchaseAbilities(
         abilityId as any,
         1
       );
+
+      console.log('🛒 Purchase result:', result);
 
       if (result.success) {
         setCoins(result.newCoinBalance || 0);
@@ -609,6 +813,15 @@ const Roadmap: React.FC = () => {
       const currentTotalCoins = userGameData?.totalCoins || coins || 0;
       const newTotalCoins = currentTotalCoins + (coinsEarned || 0);
 
+      // Add ability rewards: 2 of each ability per level completion
+      const abilityRewards = { lightning: 2, bomb: 2, freeze: 2, fire: 2 };
+      const newAbilityInventory = {
+        lightning: (abilityInventory.lightning || 0) + abilityRewards.lightning,
+        bomb: (abilityInventory.bomb || 0) + abilityRewards.bomb,
+        freeze: (abilityInventory.freeze || 0) + abilityRewards.freeze,
+        fire: (abilityInventory.fire || 0) + abilityRewards.fire,
+      };
+
       // Create updated data object
       const updatedGameData = {
         ...userGameData,
@@ -617,6 +830,7 @@ const Roadmap: React.FC = () => {
         // We also want to update highScore (single best run) if applicable, though typically less visible
         highScore: Math.max(userGameData?.highScore || 0, finalScore),
         totalCoins: newTotalCoins,
+        abilities: newAbilityInventory, // Update abilities
         levelStars: {
           ...userGameData.levelStars,
           [completedLevel]: Math.max(userGameData.levelStars?.[completedLevel] || 0, stars)
@@ -630,7 +844,18 @@ const Roadmap: React.FC = () => {
       setUserGameData(updatedGameData);
       setScore(newTotalScore); // Show TOTAL score in HUD
       setCoins(newTotalCoins);
+      setAbilityInventory(newAbilityInventory); // Update ability inventory
       setCurrentLevel(newCurrentLevel);
+
+      // Show ability rewards notification
+      toastRef.current?.show(`Level Complete! +2 of each ability earned!`, 'success');
+
+      // Update abilities in backend
+      try {
+        await BackendService.updateAbilities(newAbilityInventory);
+      } catch (error) {
+        console.error('Failed to sync abilities to backend:', error);
+      }
 
       // 2. Trigger Background Sync
       loadUserData(false);
@@ -879,7 +1104,7 @@ const Roadmap: React.FC = () => {
           onBackPress={handleBackPress}
           level={selectedLevel}
           onLevelComplete={handleLevelComplete}
-          initialAbilities={{ lightning: 2, bomb: 2, freeze: 2, fire: 2 }}
+          initialAbilities={abilityInventory}
         />
       ) : (
         <View style={{ flex: 1 }}>
@@ -979,7 +1204,7 @@ const Roadmap: React.FC = () => {
 
                 {/* Rewarded Ad Section */}
                 <View style={styles.shopRewardSection}>
-                  <Text style={styles.shopRewardTitle}>GET FREE COINS</Text>
+                  <Text style={styles.shopRewardTitle}>EARN COINS</Text>
                   <RewardedAdButton
                     onReward={(amount) => {
                       setCoins((prev: any) => prev + amount);
@@ -996,8 +1221,14 @@ const Roadmap: React.FC = () => {
           <TopHUD
             coins={coins}
             score={score}
-            onProfilePress={() => setShowProfilePopup(true)}
-            onLogout={handleLogout}
+            onProfilePress={() => {
+              safeVibrate();
+              setShowProfilePopup(true);
+            }}
+            onLogout={() => {
+              safeVibrate();
+              handleLogout();
+            }}
           />
 
           <FlatList
@@ -1033,6 +1264,7 @@ const Roadmap: React.FC = () => {
           {/* Bottom Navigation Bar */}
           <BottomNavBar
             onMap={() => {
+              safeVibrate();
               // Scroll to current level
               if (userGameData) {
                 const currentUserLevel = userGameData.currentLevel;
@@ -1047,10 +1279,19 @@ const Roadmap: React.FC = () => {
                 }
               }
             }}
-            onLeaderboard={() => setShowLeaderboard(true)}
-            onShop={() => setShowShop(true)}
+            onLeaderboard={() => {
+              safeVibrate();
+              setShowLeaderboard(true);
+            }}
+            onShop={() => {
+              safeVibrate();
+              setShowShop(true);
+            }}
             onAd={handleRewardedAdPress}
-            onProfile={() => setShowProfilePopup(true)}
+            onProfile={() => {
+              safeVibrate();
+              setShowProfilePopup(true);
+            }}
           />
 
           {/* Ad Banner - Restored */}
@@ -1063,6 +1304,17 @@ const Roadmap: React.FC = () => {
             visible={showProfilePopup}
             onClose={() => setShowProfilePopup(false)}
             user={user}
+            userGameData={userGameData}
+            coins={coins}
+            currentLevel={currentLevel}
+          />
+
+          {/* Earn Coins Popup */}
+          <EarnCoinsPopup
+            visible={showEarnCoinsPopup}
+            onClose={() => setShowEarnCoinsPopup(false)}
+            onWatchAd={handleWatchAd}
+            isAdLoaded={isAdLoaded}
           />
 
         </View>
@@ -1267,5 +1519,216 @@ const localStyles = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
     fontWeight: '600',
-  }
+    marginBottom: 20,
+  },
+  profileStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 25,
+    paddingHorizontal: 10,
+  },
+  profileStatItem: {
+    alignItems: 'center',
+    flex: 1,
+    paddingVertical: 15,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)',
+    borderRadius: 15,
+    marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 255, 0.3)',
+  },
+  profileStatLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 5,
+    marginBottom: 3,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  profileStatValue: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textShadowColor: '#00E0FF',
+    textShadowRadius: 5,
+  },
+  profileSettingsContainer: {
+    width: '100%',
+    marginTop: 10,
+  },
+  profileSectionTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+    textShadowColor: '#00E0FF',
+    textShadowRadius: 5,
+  },
+  profileSettingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0, 224, 255, 0.05)',
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 255, 0.2)',
+  },
+  profileSettingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileSettingLabel: {
+    color: '#FFF',
+    fontSize: 16,
+    marginLeft: 12,
+    fontWeight: '600',
+  },
+  profileToggle: {
+    width: 50,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(148, 163, 184, 0.3)',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.5)',
+  },
+  profileToggleActive: {
+    backgroundColor: 'rgba(0, 224, 255, 0.3)',
+    borderColor: '#00E0FF',
+  },
+  profileToggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#94A3B8',
+    alignSelf: 'flex-start',
+  },
+  profileToggleThumbActive: {
+    backgroundColor: '#00E0FF',
+    alignSelf: 'flex-end',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+  },
+  profileSettingDisabled: {
+    opacity: 0.5,
+  },
+  profileSettingLabelDisabled: {
+    color: '#94A3B8',
+  },
+  profileToggleDisabled: {
+    opacity: 0.3,
+  },
+  // Earn Coins Popup Styles
+  earnCoinsPopupContent: {
+    width: '85%',
+    backgroundColor: 'rgba(5, 5, 10, 0.98)',
+    borderTopLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 10,
+    borderWidth: 2,
+    borderColor: ICON_COLORS.GOLD,
+    padding: 30,
+    alignItems: 'center',
+    shadowColor: ICON_COLORS.GOLD,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 25,
+    elevation: 20,
+    overflow: 'hidden',
+  },
+  earnCoinsIcon: {
+    marginBottom: 20,
+    shadowColor: ICON_COLORS.GOLD,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+  },
+  earnCoinsTitle: {
+    color: '#FFF',
+    fontSize: 26,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+    textShadowColor: ICON_COLORS.GOLD,
+    textShadowRadius: 10,
+  },
+  earnCoinsDescription: {
+    color: '#94A3B8',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 25,
+    paddingHorizontal: 10,
+  },
+  earnCoinsRewardBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  earnCoinsRewardText: {
+    color: ICON_COLORS.GOLD,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 10,
+    textShadowColor: ICON_COLORS.GOLD,
+    textShadowRadius: 5,
+  },
+  earnCoinsButtons: {
+    width: '100%',
+    gap: 15,
+  },
+  earnCoinsWatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: ICON_COLORS.GOLD,
+    borderRadius: 25,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    shadowColor: ICON_COLORS.GOLD,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  earnCoinsWatchBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowColor: '#94A3B8',
+  },
+  earnCoinsWatchBtnText: {
+    color: '#000',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  earnCoinsLaterBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.5)',
+  },
+  earnCoinsLaterBtnText: {
+    color: '#94A3B8',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });

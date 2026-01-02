@@ -12,6 +12,7 @@ import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
 import { GameHUD } from "./game/GameHUD";
 import OptimizedLaser from "./game/OptimizedLaser";
 import { useAuth } from '../context/AuthContext';
+import SettingsService from '../services/SettingsService';
 
 import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
 import { getPos, getHexNeighbors } from "../utils/gameUtils";
@@ -201,7 +202,6 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             moves: moves,
             stars,
             duration: Math.floor((Date.now() - gameStartTime) / 1000),
-            isWin: gameState === 'won',
             abilitiesUsed: abilitiesUsedCount,
             bubblesDestroyed: 0,
             chainReactions: 0,
@@ -267,6 +267,28 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     setBlasts(prev => prev.filter(b => b.id !== id));
   }, []);
 
+  // Function to trigger screen shake on bubble blast
+  const triggerScreenShake = useCallback(() => {
+    shakeAnim.setValue(0);
+    Animated.timing(shakeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => shakeAnim.setValue(0));
+  }, [shakeAnim]);
+
+  // Enhanced setBlasts that triggers screen shake
+  const setBlastsWithShake = useCallback((update: any) => {
+    setBlasts((prev: any[]) => {
+      const newBlasts = typeof update === 'function' ? update(prev) : update;
+      // Only trigger shake if new blasts are being added
+      if (Array.isArray(newBlasts) && newBlasts.length > prev.length) {
+        triggerScreenShake();
+      }
+      return newBlasts;
+    });
+  }, [triggerScreenShake]);
+
   // Lightning power-up activation
   const activateLightning = () => {
     if (lightningActive) {
@@ -276,6 +298,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setLightningActive(true);
       setHasLightningPower(true);
       toastRef.current?.show('Lightning Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setBombActive(false); setHasBombPower(false);
       setFreezeActive(false); setHasFreezePower(false);
@@ -292,6 +315,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setBombActive(true);
       setHasBombPower(true);
       toastRef.current?.show('Bomb Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setFreezeActive(false); setHasFreezePower(false);
@@ -307,6 +331,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setFreezeActive(true);
       setHasFreezePower(true);
       toastRef.current?.show('Freeze Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setBombActive(false); setHasBombPower(false);
@@ -322,6 +347,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setFireActive(true);
       setHasFirePower(true);
       toastRef.current?.show('Fire Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setBombActive(false); setHasBombPower(false);
@@ -606,6 +632,9 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
 
     isProcessing.current = true;
 
+    // Vibration feedback for shooting
+    SettingsService.vibrateClick();
+
     // Set the current shot color for the wave effect
     setCurrentShotColor(nextColor);
 
@@ -623,13 +652,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setCurrentShotColor('');
     });
 
-    // Trigger Screen Shake
-    shakeAnim.setValue(0);
-    Animated.timing(shakeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true
-    }).start(() => shakeAnim.setValue(0));
+    // Screen shake moved to bubble blast events
 
     Animated.sequence([
       Animated.timing(recoilAnim, { toValue: 20, duration: 40, useNativeDriver: true }),
@@ -761,7 +784,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       bubblesRef,
       setBubbles,
       setScore,
-      setBlasts,
+      setBlasts: setBlastsWithShake,
       setShootingBubble,
       setNextColor,
       setMoves,
@@ -799,7 +822,6 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             moves: moves,
             stars,
             duration: Math.floor((Date.now() - gameStartTime) / 1000),
-            isWin: false, // Game was not completed
             abilitiesUsed: abilitiesUsedCount,
             bubblesDestroyed: 0,
             chainReactions: 0,
@@ -858,6 +880,8 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
           if (pageY < cannonPos.y + 100 && pageY > GRID_TOP - 50) {
             isAiming.current = true;
             updateAim(pageX, pageY);
+            // Light vibration feedback when starting to aim
+            SettingsService.vibrateClick();
           }
         }}
         onResponderMove={(e) => {
@@ -975,6 +999,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => {
+                  SettingsService.vibrateClick(); // Button feedback
                   if (gameState === 'won' && onLevelComplete) {
                     // If won, report completion with 'home' action so parent updates data but goes back
                     onLevelComplete(level, score, earnedStars, earnedCoins, 'home');
@@ -989,7 +1014,10 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                     color={ICON_COLORS.WHITE}
                   />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
+                <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {
+                  SettingsService.vibrateClick(); // Button feedback
+                  restartLevel();
+                }}>
                   <MaterialIcon
                     name={GAME_ICONS.RESTART.name}
                     family={GAME_ICONS.RESTART.family}
@@ -999,6 +1027,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                 </TouchableOpacity>
                 {gameState === 'won' && (
                   <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {
+                    SettingsService.vibrateClick(); // Button feedback
                     if (onLevelComplete) {
                       // Pass reliable calculated data including coins and 'next' action
                       onLevelComplete(level, score, earnedStars, earnedCoins, 'next');
