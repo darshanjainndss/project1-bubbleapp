@@ -3,6 +3,7 @@ import { Animated } from 'react-native';
 import { BUBBLE_SIZE, SCREEN_HEIGHT, GRID_TOP, ROW_HEIGHT } from '../styles/GameScreenStyles';
 import { getPos, getHexNeighbors, handleFloating, updateCommonState } from '../utils/gameUtils';
 import { COLORS } from '../data/levelPatterns';
+import SettingsService from '../services/SettingsService';
 
 export const resolveLanding = (
     shot: any,
@@ -65,7 +66,11 @@ export const resolveLanding = (
                 id: `blast-${b.id}-${Date.now()}`,
                 x: b.x, y: b.y, color: b.color, delay: i * 120
             }));
-            if (newBlasts.length > 0) setBlasts((prev: any[]) => [...prev, ...newBlasts]);
+            if (newBlasts.length > 0) {
+                setBlasts((prev: any[]) => [...prev, ...newBlasts]);
+                // Vibration for lightning power destroying bubbles
+                SettingsService.vibratePowerUp('lightning');
+            }
 
             // Float check
             const connected = new Set();
@@ -93,6 +98,8 @@ export const resolveLanding = (
                     x: b.x, y: b.y, color: b.color, delay: (newBlasts.length * 120) + (i * 100)
                 }));
                 setBlasts((prev: any[]) => [...prev, ...floatBlasts]);
+                // Vibration for chain reaction (floating bubbles)
+                SettingsService.vibrateChainReaction();
             }
 
             updateCommonState(grid, setBubbles, bubblesRef, setShootingBubble, setNextColor, setMoves, moves, setGameState, currentScrollY, scrollY, isProcessing);
@@ -129,7 +136,11 @@ export const resolveLanding = (
                 id: `blast-${b.id}-${Date.now()}`,
                 x: b.x, y: b.y, color: b.color, delay: i * 20
             }));
-            if (newBlasts.length > 0) setBlasts((prev: any[]) => [...prev, ...newBlasts]);
+            if (newBlasts.length > 0) {
+                setBlasts((prev: any[]) => [...prev, ...newBlasts]);
+                // Vibration for bomb power destroying bubbles
+                SettingsService.vibratePowerUp('bomb');
+            }
 
             handleFloating(grid, destroyed, setScore, setBlasts, newBlasts.length * 100);
             updateCommonState(grid, setBubbles, bubblesRef, setShootingBubble, setNextColor, setMoves, moves, setGameState, currentScrollY, scrollY, isProcessing);
@@ -139,13 +150,17 @@ export const resolveLanding = (
 
     // 3. FREEZE POWER
     if (shot.hasFreeze) {
+        console.log('❄️ Freeze power activated!');
         const hitBubble = grid.find(b =>
             b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
         );
         if (hitBubble) {
-            const targetBubbles = grid.filter(b => b.visible && Math.abs(b.x - hitBubble.x) < BUBBLE_SIZE * 0.3 && b.row <= hitBubble.row && b.row >= hitBubble.row - 3);
+            console.log('🎯 Freeze ball hit bubble at:', hitBubble.row, hitBubble.col);
+            const targetBubbles = grid.filter(b => b.visible && Math.abs(b.x - hitBubble.x) < BUBBLE_SIZE * 0.6 && b.row <= hitBubble.row && b.row >= hitBubble.row - 3);
+            console.log('❄️ Freezing', targetBubbles.length, 'bubbles in column');
             targetBubbles.forEach(b => {
                 b.isFrozen = true;
+                console.log('🧊 Bubble at', b.row, b.col, 'is now frozen');
                 if (b.anim) {
                     Animated.sequence([
                         Animated.timing(b.anim, { toValue: 1.2, duration: 150, useNativeDriver: true }),
@@ -160,22 +175,33 @@ export const resolveLanding = (
 
     // 4. FIRE POWER
     if (shot.hasFire) {
+        console.log('🔥 Fire power activated!');
         const hitBubble = grid.find(b =>
             b.visible && Math.sqrt((shot.x - b.x) ** 2 + (shot.y - (b.y + currentScrollY.current)) ** 2) < BUBBLE_SIZE * 0.82
         );
         if (hitBubble) {
-            if (hitBubble.hasMetalGrid && !hitBubble.isFrozen) {
-                if (hitBubble.anim) {
-                    Animated.sequence([
-                        Animated.timing(hitBubble.anim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
-                        Animated.spring(hitBubble.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
-                    ]).start();
-                }
-            } else {
-                const destroyed = [hitBubble];
-                const frozenInColumn = grid.filter(b => b.visible && b.isFrozen && Math.abs(b.x - hitBubble.x) < BUBBLE_SIZE * 0.3);
-                destroyed.push(...frozenInColumn);
+            console.log('🎯 Fire ball hit bubble at:', hitBubble.row, hitBubble.col, 'isFrozen:', hitBubble.isFrozen);
+            const destroyed = [];
+            
+            // Always destroy the hit bubble (unless it's a non-frozen metal grid)
+            if (hitBubble.isFrozen || !hitBubble.hasMetalGrid) {
+                destroyed.push(hitBubble);
+                console.log('💥 Hit bubble will be destroyed');
+            }
+            
+            // Find and destroy ALL frozen bubbles in the same column (wider range)
+            const frozenInColumn = grid.filter(b => 
+                b.visible && 
+                b.isFrozen && 
+                b.id !== hitBubble.id && 
+                Math.abs(b.x - hitBubble.x) < BUBBLE_SIZE * 0.6
+            );
+            console.log('❄️ Found', frozenInColumn.length, 'ice bubbles in column to destroy');
+            destroyed.push(...frozenInColumn);
 
+            // If we have bubbles to destroy, destroy them
+            if (destroyed.length > 0) {
+                console.log('🔥 Fire destroying', destroyed.length, 'bubbles total');
                 destroyed.forEach(b => {
                     b.visible = false;
                     if (b.anim) {
@@ -192,8 +218,22 @@ export const resolveLanding = (
                     x: b.x, y: b.y, color: b.color, delay: i * 120
                 }));
                 setBlasts((prev: any[]) => [...prev, ...newBlasts]);
+                // Vibration for fire power destroying bubbles
+                SettingsService.vibratePowerUp('fire');
 
                 handleFloating(grid, destroyed, setScore, setBlasts, 300);
+                updateCommonState(grid, setBubbles, bubblesRef, setShootingBubble, setNextColor, setMoves, moves, setGameState, currentScrollY, scrollY, isProcessing);
+                return;
+            }
+            // If hit bubble is non-frozen metal grid, just bounce off
+            else if (hitBubble.hasMetalGrid && !hitBubble.isFrozen) {
+                console.log('🛡️ Fire bounced off metal grid');
+                if (hitBubble.anim) {
+                    Animated.sequence([
+                        Animated.timing(hitBubble.anim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
+                        Animated.spring(hitBubble.anim, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true })
+                    ]).start();
+                }
                 updateCommonState(grid, setBubbles, bubblesRef, setShootingBubble, setNextColor, setMoves, moves, setGameState, currentScrollY, scrollY, isProcessing);
                 return;
             }
@@ -255,9 +295,44 @@ export const resolveLanding = (
             x: b.x, y: b.y, color: b.color, delay: i * 100
         }));
         setBlasts((prev: any[]) => [...prev, ...mainBlasts]);
+        // Vibration for bomb landing destroying bubbles
+        SettingsService.vibratePowerUp('bomb');
 
         handleFloating(grid, destroyed, setScore, setBlasts, destroyed.length * 100);
-    } else {
+    } 
+    // FIRE LANDING (Normal path but with fire power active)
+    else if (shot.hasFire) {
+        const destroyed = [newB];
+        // Find all frozen bubbles in the same column (wider range)
+        const frozenInColumn = grid.filter(b => 
+            b.visible && 
+            b.isFrozen && 
+            Math.abs(b.x - newB.x) < BUBBLE_SIZE * 0.6
+        );
+        destroyed.push(...frozenInColumn);
+
+        destroyed.forEach(b => {
+            b.visible = false;
+            if (b.anim) {
+                Animated.sequence([
+                    Animated.timing(b.anim, { toValue: 1.4, duration: 150, useNativeDriver: true }),
+                    Animated.timing(b.anim, { toValue: 0, duration: 200, useNativeDriver: true })
+                ]).start();
+            }
+        });
+
+        setScore((s: number) => s + destroyed.length * 12);
+        const fireBlasts = destroyed.map((b, i) => ({
+            id: `blast-fire-landing-${b.id}-${Date.now()}`,
+            x: b.x, y: b.y, color: b.color, delay: i * 120
+        }));
+        setBlasts((prev: any[]) => [...prev, ...fireBlasts]);
+        // Vibration for fire landing destroying bubbles
+        SettingsService.vibratePowerUp('fire');
+
+        handleFloating(grid, destroyed, setScore, setBlasts, destroyed.length * 120);
+    } 
+    else {
         // Normal match checks
         const match = [newB];
         const stack = [newB];
@@ -304,6 +379,8 @@ export const resolveLanding = (
                     x: b.x, y: b.y, color: b.color, delay: i * 150
                 }));
                 setBlasts((prev: any[]) => [...prev, ...blastsArr]);
+                // Vibration for normal bubble matching
+                SettingsService.vibrateBubbleBlast(destroyed.length);
                 handleFloating(grid, destroyed, setScore, setBlasts, destroyed.length * 150);
             }
         }

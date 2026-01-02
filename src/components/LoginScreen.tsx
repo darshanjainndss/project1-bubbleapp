@@ -103,16 +103,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
     setLoading(true);
     try {
-      // Create a temporary guest account or use anonymous auth
-      // For now, we'll simulate a quick login
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 1000)); // Simulate loading
-
-      // TODO: Set up guest/anonymous authentication with the player name
-      // This could store the name locally and create a temporary session
-
+      // Use Firebase Anonymous Authentication for Quick Play
+      await AuthService.signInAnonymously(playerName.trim());
+      toastRef.current?.show(`Welcome, Commander ${playerName}!`, 'success');
       onLoginSuccess();
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to start game. Please try again.');
+      toastRef.current?.show(error.message || 'Failed to start game. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -231,7 +227,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 </TouchableOpacity>
 
                 <Text style={styles.quickPlayNote}>
-                  Progress won't be saved without an account
+                  Your progress will be saved locally
                 </Text>
               </View>
             ) : (

@@ -745,7 +745,7 @@ const Roadmap: React.FC = () => {
       const previousLevelStars = userGameData?.levelStars?.[previousLevel] || 0;
 
       toastRef.current?.show(
-        `Level Locked! Need 2 starts on Level ${previousLevel} (You have ${previousLevelStars})`,
+        `Level Locked! Need 2 stars on Level ${previousLevel} (You have ${previousLevelStars})`,
         'warning'
       );
       return;
@@ -797,12 +797,14 @@ const Roadmap: React.FC = () => {
     }, 100);
   };
 
-  const handleLevelComplete = async (completedLevel: number, finalScore: number, stars: number, coinsEarned?: number, action: 'next' | 'home' = 'next') => {
+  const handleLevelComplete = async (completedLevel: number, finalScore: number, stars: number, coinsEarned?: number, action: 'next' | 'home' = 'next', sessionData?: any) => {
     try {
       console.log('🏆 Level Complete:', completedLevel, 'Score:', finalScore, 'Stars:', stars, 'Coins:', coinsEarned, 'Action:', action);
 
       // 1. OPTIMISTIC UPDATE: Update local state immediately for instant UI feedback
-      const newCurrentLevel = Math.max(completedLevel + 1, currentLevel);
+      // Only advance to next level if we got 2+ stars OR if it's the current level
+      const shouldAdvanceLevel = stars >= 2 || completedLevel === currentLevel;
+      const newCurrentLevel = shouldAdvanceLevel ? Math.max(completedLevel + 1, currentLevel) : currentLevel;
 
       // SWITCH TO CUMULATIVE SCORE DISPLAY
       // Optimistically add the new level score to the total score
@@ -847,8 +849,49 @@ const Roadmap: React.FC = () => {
       setAbilityInventory(newAbilityInventory); // Update ability inventory
       setCurrentLevel(newCurrentLevel);
 
-      // Show ability rewards notification
-      toastRef.current?.show(`Level Complete! +2 of each ability earned!`, 'success');
+      // Show appropriate completion message
+      if (stars >= 2) {
+        toastRef.current?.show(`Level Complete! Next level unlocked! +2 of each ability earned!`, 'success');
+      } else {
+        toastRef.current?.show(`Level Complete! Need 2+ stars to unlock next level. +2 of each ability earned!`, 'info');
+      }
+
+      // 2. BACKEND SYNC: Submit game session to backend
+      try {
+        const sessionDataToSubmit = sessionData || {
+          level: completedLevel,
+          score: finalScore,
+          moves: 0,
+          stars,
+          duration: 0,
+          abilitiesUsed: { lightning: 0, bomb: 0, freeze: 0, fire: 0 },
+          bubblesDestroyed: 0,
+          chainReactions: 0,
+          perfectShots: 0,
+          coinsEarned: coinsEarned || 0,
+          isWin: stars > 0
+        };
+
+        console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
+        const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
+        
+        if (sessionResult.success) {
+          console.log('✅ Game session submitted successfully:', sessionResult.data?.sessionId);
+        } else {
+          console.error('❌ Failed to submit game session:', sessionResult.error);
+        }
+
+        // Update user game data in backend
+        const updateResult = await BackendService.updateUserGameData(updatedGameData);
+        if (updateResult.success) {
+          console.log('✅ User game data updated in backend');
+        } else {
+          console.error('❌ Failed to update user game data:', updateResult.error);
+        }
+
+      } catch (error) {
+        console.error('❌ Backend sync error:', error);
+      }
 
       // Update abilities in backend
       try {
@@ -857,13 +900,12 @@ const Roadmap: React.FC = () => {
         console.error('Failed to sync abilities to backend:', error);
       }
 
-      // 2. Trigger Background Sync
+      // 3. Trigger Background Sync
       loadUserData(false);
 
-
-      // 3. Navigate UI based on Action
-      if (action === 'next') {
-        // Progress to next level logic
+      // 4. Navigate UI based on Action and Stars
+      if (action === 'next' && stars >= 2) {
+        // Progress to next level only if we got 2+ stars
         if (completedLevel < levels.length) {
           // Prepare to move to next level
           setSelectedLevel(completedLevel + 1);
@@ -874,7 +916,7 @@ const Roadmap: React.FC = () => {
           handleBackPress();
         }
       } else {
-        // Action is 'home' - user wants to quit to map directly
+        // Action is 'home' or didn't get enough stars - user wants to quit to map directly
         handleBackPress();
       }
 
@@ -884,7 +926,7 @@ const Roadmap: React.FC = () => {
     }
   };
 
-  // Loading Indicator Component - Full Screen Overlay
+  // Loading Indicator Component - Battle Transition Loading (Different from app loading)
   const LoadingIndicator = () => (
     <View style={styles.loadingContainer}>
       <LottieView
@@ -895,12 +937,46 @@ const Roadmap: React.FC = () => {
       />
       <Text style={styles.loadingText}>
         {loadingDirection === 'toFight'
-          ? `Going for Fight - Level ${selectedLevel}...`
-          : 'Returning to Base...'
+          ? `Preparing for Battle - Level ${selectedLevel}...`
+          : 'Mission Complete - Returning to Base...'
         }
       </Text>
+      <View style={{ marginTop: 20 }}>
+        <BattleLoadingDots />
+      </View>
     </View>
   );
+
+  // Simple battle loading dots
+  const BattleLoadingDots = () => {
+    const dot1 = useRef(new Animated.Value(0)).current;
+    const dot2 = useRef(new Animated.Value(0)).current;
+    const dot3 = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      const animateDots = () => {
+        Animated.sequence([
+          Animated.timing(dot1, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.timing(dot2, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.timing(dot3, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.parallel([
+            Animated.timing(dot1, { toValue: 0, duration: 200, useNativeDriver: true }),
+            Animated.timing(dot2, { toValue: 0, duration: 200, useNativeDriver: true }),
+            Animated.timing(dot3, { toValue: 0, duration: 200, useNativeDriver: true }),
+          ]),
+        ]).start(() => animateDots());
+      };
+      animateDots();
+    }, []);
+
+    return (
+      <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20 }}>
+        <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00E0FF', marginHorizontal: 4 }, { opacity: dot1 }]} />
+        <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00E0FF', marginHorizontal: 4 }, { opacity: dot2 }]} />
+        <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00E0FF', marginHorizontal: 4 }, { opacity: dot3 }]} />
+      </View>
+    );
+  };
 
   // Individual Level Item Component for better performance
   const LevelItem = React.memo(({ item, index }: { item: any, index: number }) => {

@@ -26,6 +26,9 @@ const validateGameSession = [
   body('duration')
     .isInt({ min: 1 })
     .withMessage('Duration must be a positive integer'),
+  body('isWin')
+    .isBoolean()
+    .withMessage('isWin must be a boolean'),
   body('abilitiesUsed')
     .optional()
     .isObject()
@@ -150,6 +153,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       moves,
       stars,
       duration,
+      isWin,
       abilitiesUsed = {},
       bubblesDestroyed = 0,
       chainReactions = 0,
@@ -173,6 +177,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       moves,
       stars,
       duration,
+      isWin,
       abilitiesUsed: {
         lightning: abilitiesUsed.lightning || 0,
         bomb: abilitiesUsed.bomb || 0,

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Image, Dimensions, Animated, Easing } from 'react-native';
 import LottieView from 'lottie-react-native';
+import SettingsService from '../services/SettingsService';
 
 interface BubbleBlastProps {
     x: number;
@@ -59,6 +60,9 @@ const BubbleBlast = React.memo(({ x, y, color, delay = 0, onComplete }: BubbleBl
     }, [delay]);
 
     const runPopAnimation = () => {
+        // Light vibration feedback for individual bubble blast
+        SettingsService.vibrateClick();
+        
         Animated.parallel([
             // 1. Bubble "Pop" (Scale Up -> Shrink & Fade)
             Animated.sequence([

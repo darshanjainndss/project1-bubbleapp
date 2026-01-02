@@ -24,6 +24,29 @@ export class AuthService {
     }
   }
 
+  // Anonymous Sign In for Quick Play
+  static async signInAnonymously(displayName: string): Promise<FirebaseAuthTypes.UserCredential> {
+    try {
+      const userCredential = await auth().signInAnonymously();
+      
+      // Update the user profile with the display name
+      if (userCredential.user) {
+        await userCredential.user.updateProfile({
+          displayName: displayName
+        });
+        
+        // Also authenticate with backend
+        const BackendService = require('./BackendService').default;
+        await BackendService.loginAnonymously(userCredential.user.uid, displayName);
+      }
+      
+      return userCredential;
+    } catch (error: any) {
+      console.error('Anonymous signin error:', error);
+      throw new Error(AuthService.getErrorMessage(error.code));
+    }
+  }
+
   // Google Sign In
   static async signInWithGoogle(): Promise<FirebaseAuthTypes.UserCredential> {
     try {

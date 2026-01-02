@@ -7,14 +7,14 @@ const API_BASE_URL = __DEV__
 
 // Fallback URL for emulators and devices
 const API_FALLBACK_URL = 'http://10.0.2.2:3001/api'; // Android emulator localhost
-const API_DEVICE_URL = 'http://192.168.1.71:3001/api'; // For physical devices on network
+const API_DEVICE_URL = 'http://192.168.1.41:3001/api'; // For physical devices on network - Updated IP
 
 // Network test function with fallback URLs
 const testNetworkConnection = async (): Promise<{ success: boolean; url?: string }> => {
   const urlsToTest = [
-    API_BASE_URL,
-    API_FALLBACK_URL,
-    API_DEVICE_URL
+    API_DEVICE_URL,      // Try device IP first (most likely to work on physical device)
+    API_FALLBACK_URL,    // Then emulator localhost
+    API_BASE_URL,        // Finally regular localhost
   ];
 
   for (const url of urlsToTest) {
@@ -23,11 +23,14 @@ const testNetworkConnection = async (): Promise<{ success: boolean; url?: string
 
       // Create a timeout promise
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 3000)
+        setTimeout(() => reject(new Error('Request timeout')), 5000) // Increased timeout
       );
 
       const fetchPromise = fetch(`${url}/health`, {
         method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
       const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
@@ -195,17 +198,37 @@ class BackendService {
   }
 
   async ensureAuthenticated(firebaseUser: any): Promise<boolean> {
+    console.log('🔍 ensureAuthenticated called with user:', firebaseUser?.email || firebaseUser?.displayName || 'Anonymous');
+    console.log('🔍 Current isAuthenticated():', this.isAuthenticated());
+    
     if (this.isAuthenticated()) return true;
-    if (!firebaseUser) return false;
+    if (!firebaseUser) {
+      console.log('❌ No Firebase user provided');
+      return false;
+    }
 
-    console.log('🔄 Auto-syncing with backend...', firebaseUser.email);
-    const result = await this.loginWithGoogle(
-      firebaseUser.uid,
-      firebaseUser.email || '',
-      firebaseUser.displayName || 'Commander',
-      firebaseUser.photoURL || undefined
-    );
+    console.log('🔄 Auto-syncing with backend...', firebaseUser.email || firebaseUser.displayName || 'Anonymous User');
+    
+    let result;
+    if (firebaseUser.isAnonymous) {
+      console.log('👤 Logging in anonymously...');
+      // Handle anonymous users
+      result = await this.loginAnonymously(
+        firebaseUser.uid,
+        firebaseUser.displayName || 'Anonymous Commander'
+      );
+    } else {
+      console.log('🔑 Logging in with Google...');
+      // Handle regular Google users
+      result = await this.loginWithGoogle(
+        firebaseUser.uid,
+        firebaseUser.email || '',
+        firebaseUser.displayName || 'Commander',
+        firebaseUser.photoURL || undefined
+      );
+    }
 
+    console.log('🔍 Login result:', result.success ? 'Success' : `Failed: ${result.error}`);
     return result.success;
   }
 
@@ -308,6 +331,35 @@ class BackendService {
     } catch (error) {
       console.error('Google login error:', error);
       return { success: false, error: 'Network error during Google login' };
+    }
+  }
+
+  // Anonymous Login
+  async loginAnonymously(firebaseId: string, displayName: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/auth/anonymous-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firebaseId,
+          displayName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await this.saveAuthToken(data.token, data.user);
+        return { success: true, user: data.user };
+      } else {
+        return { success: false, error: data.message || 'Anonymous login failed' };
+      }
+    } catch (error) {
+      console.error('Anonymous login error:', error);
+      return { success: false, error: 'Network error during anonymous login' };
     }
   }
 
@@ -536,11 +588,18 @@ class BackendService {
 
   async submitGameSession(session: Omit<GameSession, 'sessionId' | 'userId' | 'completedAt'>): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
+      console.log('🎮 submitGameSession called');
+      console.log('🔍 Auth token exists:', !!this.authToken);
+      console.log('🔍 Session data:', session);
+      
       if (!this.authToken) {
+        console.log('❌ No auth token available');
         return { success: false, error: 'Not authenticated' };
       }
 
       const baseUrl = await this.ensureWorkingUrl();
+      console.log('🌐 Using API URL:', baseUrl);
+      
       const response = await fetch(`${baseUrl}/game/session`, {
         method: 'POST',
         headers: {
@@ -550,7 +609,9 @@ class BackendService {
         body: JSON.stringify(session),
       });
 
+      console.log('📡 Response status:', response.status);
       const data = await response.json();
+      console.log('📡 Response data:', data);
 
       if (response.ok) {
         return { success: true, data: { sessionId: data.sessionId } };

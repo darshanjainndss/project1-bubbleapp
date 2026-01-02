@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: function() {
-      return !this.isGoogleLogin;
+      return !this.isGoogleLogin && !this.isAnonymous;
     },
     minlength: 6
   },
@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema({
     unique: true
   },
   isGoogleLogin: {
+    type: Boolean,
+    default: false
+  },
+  isAnonymous: {
     type: Boolean,
     default: false
   },
@@ -122,8 +126,8 @@ userSchema.pre('save', async function(next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
   
-  // Don't hash password for Google login users
-  if (this.isGoogleLogin) return next();
+  // Don't hash password for Google login users or anonymous users
+  if (this.isGoogleLogin || this.isAnonymous) return next();
   
   try {
     // Hash password with cost of 12
@@ -154,8 +158,8 @@ userSchema.pre('save', async function(next) {
 
 // Instance method to check password
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  if (this.isGoogleLogin) {
-    throw new Error('Google login users do not have passwords');
+  if (this.isGoogleLogin || this.isAnonymous) {
+    throw new Error('This user type does not have passwords');
   }
   return bcrypt.compare(candidatePassword, this.password);
 };

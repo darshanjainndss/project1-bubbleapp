@@ -62,6 +62,8 @@ export const handleFloating = (grid: any[], destroyed: any[], setScore: any, set
             x: b.x, y: b.y, color: b.color, delay: baseDelay + (i * 120)
         }));
         setBlasts((prev: any[]) => [...prev, ...floatBlasts]);
+        // Vibration for floating bubbles (chain reaction)
+        SettingsService.vibrateChainReaction();
     }
 };
 

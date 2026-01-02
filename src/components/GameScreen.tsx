@@ -53,7 +53,7 @@ const COLOR_MAP: Record<string, any> = {
 const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities }: {
   onBackPress?: () => void,
   level?: number,
-  onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home') => void,
+  onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home', sessionData?: any) => void,
   initialAbilities?: any
 }) => {
   const { user } = useAuth(); // Get Firebase user
@@ -177,10 +177,15 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             return;
           }
 
+          console.log('🔍 Checking backend authentication...');
+          console.log('🔍 BackendService.isAuthenticated():', BackendService.isAuthenticated());
+          console.log('🔍 User object:', user?.email || user?.displayName || 'Anonymous');
+
           // Check if BackendService is authenticated
           if (!BackendService.isAuthenticated()) {
             console.log('BackendService not authenticated, attempting to authenticate...');
             const authResult = await BackendService.ensureAuthenticated(user);
+            console.log('🔍 Authentication result:', authResult);
             if (!authResult) {
               console.log('Failed to authenticate with backend, skipping submission');
               return;
@@ -206,7 +211,8 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             bubblesDestroyed: 0,
             chainReactions: 0,
             perfectShots: 0,
-            coinsEarned: coinsEarned
+            coinsEarned: coinsEarned,
+            isWin: gameState === 'won'
           };
 
           console.log('Submitting game session:', sessionData);
@@ -802,9 +808,30 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
 
   const goToNextLevel = async () => {
     if (onLevelComplete) {
-      const stars = score > 1000 ? 3 : score > 500 ? 2 : score > 100 ? 1 : 0;
+      const stars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
+      
+      // Calculate coins earned
+      const baseCoins = Math.floor(10 + (level * 2.5));
+      const starBonus = stars * Math.floor(5 + (level * 0.5));
+      const completionBonus = Math.floor(level * 1.2);
+      const coinsEarned = baseCoins + starBonus + completionBonus;
+
+      // Prepare session data
+      const sessionData = {
+        level,
+        score,
+        moves: moves,
+        stars,
+        duration: Math.floor((Date.now() - gameStartTime) / 1000),
+        abilitiesUsed: abilitiesUsedCount,
+        bubblesDestroyed: 0, // Could be tracked if needed
+        chainReactions: 0, // Could be tracked if needed
+        perfectShots: 0, // Could be tracked if needed
+        coinsEarned: coinsEarned
+      };
+
       // Session submission is now handled by useEffect when gameState changes
-      onLevelComplete(level, score, stars);
+      onLevelComplete(level, score, stars, coinsEarned, 'next', sessionData);
     }
   };
 
@@ -826,7 +853,8 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             bubblesDestroyed: 0,
             chainReactions: 0,
             perfectShots: 0,
-            coinsEarned: 0
+            coinsEarned: 0,
+            isWin: false
           };
 
           const sessionResult = await BackendService.submitGameSession(sessionData);
@@ -1001,8 +1029,29 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                 <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => {
                   SettingsService.vibrateClick(); // Button feedback
                   if (gameState === 'won' && onLevelComplete) {
+                    // Calculate coins earned
+                    const baseCoins = Math.floor(10 + (level * 2.5));
+                    const starBonus = earnedStars * Math.floor(5 + (level * 0.5));
+                    const completionBonus = Math.floor(level * 1.2);
+                    const coinsEarned = baseCoins + starBonus + completionBonus;
+
+                    // Prepare session data
+                    const sessionData = {
+                      level,
+                      score,
+                      moves: moves,
+                      stars: earnedStars,
+                      duration: Math.floor((Date.now() - gameStartTime) / 1000),
+                      abilitiesUsed: abilitiesUsedCount,
+                      bubblesDestroyed: 0,
+                      chainReactions: 0,
+                      perfectShots: 0,
+                      coinsEarned: coinsEarned,
+                      isWin: gameState === 'won'
+                    };
+
                     // If won, report completion with 'home' action so parent updates data but goes back
-                    onLevelComplete(level, score, earnedStars, earnedCoins, 'home');
+                    onLevelComplete(level, score, earnedStars, coinsEarned, 'home', sessionData);
                   } else {
                     onBackPress && onBackPress();
                   }
@@ -1029,8 +1078,29 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                   <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {
                     SettingsService.vibrateClick(); // Button feedback
                     if (onLevelComplete) {
+                      // Calculate coins earned
+                      const baseCoins = Math.floor(10 + (level * 2.5));
+                      const starBonus = earnedStars * Math.floor(5 + (level * 0.5));
+                      const completionBonus = Math.floor(level * 1.2);
+                      const coinsEarned = baseCoins + starBonus + completionBonus;
+
+                      // Prepare session data
+                      const sessionData = {
+                        level,
+                        score,
+                        moves: moves,
+                        stars: earnedStars,
+                        duration: Math.floor((Date.now() - gameStartTime) / 1000),
+                        abilitiesUsed: abilitiesUsedCount,
+                        bubblesDestroyed: 0,
+                        chainReactions: 0,
+                        perfectShots: 0,
+                        coinsEarned: coinsEarned,
+                        isWin: gameState === 'won'
+                      };
+
                       // Pass reliable calculated data including coins and 'next' action
-                      onLevelComplete(level, score, earnedStars, earnedCoins, 'next');
+                      onLevelComplete(level, score, earnedStars, coinsEarned, 'next', sessionData);
                     }
                   }}>
                     <MaterialIcon

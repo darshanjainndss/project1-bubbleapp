@@ -33,6 +33,9 @@ export const styles = StyleSheet.create({
         marginTop: -20,
         textAlign: 'center',
     },
+    battleLoadingDots: {
+        marginTop: 20,
+    },
 
     // DASHBOARD HEADER STYLES
     dashboardContainer: {

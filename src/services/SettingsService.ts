@@ -130,6 +130,59 @@ class SettingsService {
     }
   }
 
+  // Bubble blast vibration patterns
+  vibrateBubbleBlast(bubbleCount: number = 1): void {
+    try {
+      if (bubbleCount === 1) {
+        // Single bubble pop - short vibration
+        this.vibrate(80);
+      } else if (bubbleCount <= 5) {
+        // Small group - double pulse
+        this.vibrate([80, 50, 80]);
+      } else if (bubbleCount <= 10) {
+        // Medium group - triple pulse
+        this.vibrate([100, 40, 80, 40, 100]);
+      } else {
+        // Large group - intense vibration
+        this.vibrate([150, 50, 100, 50, 150, 50, 100]);
+      }
+    } catch (error) {
+      console.warn('Bubble blast vibration failed:', error);
+    }
+  }
+
+  vibrateChainReaction(): void {
+    try {
+      // Chain reaction - escalating pattern
+      this.vibrate([60, 30, 80, 30, 100, 30, 120]);
+    } catch (error) {
+      console.warn('Chain reaction vibration failed:', error);
+    }
+  }
+
+  vibratePowerUp(powerType: string): void {
+    try {
+      switch (powerType) {
+        case 'lightning':
+          this.vibrate([50, 30, 100, 30, 150, 30, 200]);
+          break;
+        case 'bomb':
+          this.vibrate([200, 100, 200]);
+          break;
+        case 'fire':
+          this.vibrate([80, 20, 80, 20, 80, 20, 120]);
+          break;
+        case 'freeze':
+          this.vibrate([120, 80, 120]);
+          break;
+        default:
+          this.vibrate(100);
+      }
+    } catch (error) {
+      console.warn('Power-up vibration failed:', error);
+    }
+  }
+
   // Ensure settings are loaded
   async ensureLoaded(): Promise<void> {
     if (!this.isLoaded) {
