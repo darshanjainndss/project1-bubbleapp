@@ -190,9 +190,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 
         <View style={styles.scoreInfo}>
           <Text style={[styles.totalScoreText, { color: isCurrentUser ? '#00FF88' : '#FFF' }]}>
-            {item.totalScore.toLocaleString()}
+           <MaterialIcon name="stars" family="material" size={15} color={ICON_COLORS.SUCCESS}  />
+               {item.totalScore.toLocaleString()}
           </Text>
-          <Text style={styles.ptsText}>PTS</Text>
+          <Text style={styles.ptsText}>PTS </Text>
+    
         </View>
       </View>
     );
@@ -486,7 +488,8 @@ const styles = StyleSheet.create({
     minWidth: 100,
   },
   totalScoreText: {
-    fontSize: 20,
+    
+    fontSize: 15,
     fontWeight: '900',
     fontFamily: 'monospace',
     color: '#FFF',
