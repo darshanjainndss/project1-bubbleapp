@@ -273,12 +273,12 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
 
   const toggleVibration = async () => {
     if (!vibrationSupported) return;
-    
+
     try {
       const newValue = !vibrationEnabled;
       setVibrationEnabled(newValue);
       await SettingsService.setVibrationEnabled(newValue);
-      
+
       // Give feedback when enabling vibration
       if (newValue) {
         try {
@@ -319,7 +319,7 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
             <Text style={localStyles.profileStatLabel}>Level</Text>
             <Text style={localStyles.profileStatValue}>{currentLevel}</Text>
           </View>
-          
+
           <View style={localStyles.profileStatItem}>
             <MaterialIcon
               name={GAME_ICONS.COIN.name}
@@ -341,27 +341,27 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
         {/* Settings Section */}
         <View style={localStyles.profileSettingsContainer}>
           <Text style={localStyles.profileSectionTitle}>Settings</Text>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[
               localStyles.profileSettingItem,
               !vibrationSupported && localStyles.profileSettingDisabled
-            ]} 
+            ]}
             onPress={toggleVibration}
             disabled={!vibrationSupported}
           >
             <View style={localStyles.profileSettingLeft}>
-              <MaterialIcon 
-                name={GAME_ICONS.VIBRATION.name} 
-                family={GAME_ICONS.VIBRATION.family} 
-                size={24} 
+              <MaterialIcon
+                name={GAME_ICONS.VIBRATION.name}
+                family={GAME_ICONS.VIBRATION.family}
+                size={24}
                 color={
-                  !vibrationSupported 
-                    ? ICON_COLORS.DISABLED 
-                    : vibrationEnabled 
-                      ? ICON_COLORS.SUCCESS 
+                  !vibrationSupported
+                    ? ICON_COLORS.DISABLED
+                    : vibrationEnabled
+                      ? ICON_COLORS.SUCCESS
                       : ICON_COLORS.DISABLED
-                } 
+                }
               />
               <Text style={[
                 localStyles.profileSettingLabel,
@@ -426,11 +426,11 @@ const EarnCoinsPopup = ({ visible, onClose, onWatchAd, isAdLoaded }: any) => {
 
         {/* Action Buttons */}
         <View style={localStyles.earnCoinsButtons}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               localStyles.earnCoinsWatchBtn,
               !isAdLoaded && localStyles.earnCoinsWatchBtnDisabled
-            ]} 
+            ]}
             onPress={onWatchAd}
             disabled={!isAdLoaded}
           >
@@ -478,12 +478,12 @@ const Roadmap: React.FC = () => {
     signOut();
   };
 
-  // Ability inventory
+  // Ability inventory - ONLY stores PURCHASED abilities (base abilities are added per level in GameScreen)
   const [abilityInventory, setAbilityInventory] = useState({
-    lightning: 2,
-    bomb: 2,
-    fire: 2,
-    freeze: 2,
+    lightning: 0,
+    bomb: 0,
+    fire: 0,
+    freeze: 0,
   });
 
   // Rewarded ad state
@@ -497,6 +497,9 @@ const Roadmap: React.FC = () => {
   // Load user data when component mounts or user changes
   const loadUserData = useCallback(async (showLoading = true) => {
     if (!user?.uid) return;
+
+
+
     try {
       if (showLoading && !dataLoaded) setIsLoading(true);
       const isAuth = await BackendService.ensureAuthenticated(user);
@@ -510,12 +513,26 @@ const Roadmap: React.FC = () => {
         setScore(result.data.totalScore || 0);
         setCoins(result.data.totalCoins || 0);
         setCurrentLevel(result.data.currentLevel || 1);
-        const inv = result.data.abilities || { lightning: 2, bomb: 2, freeze: 2, fire: 2 };
-        if (result.data.currentLevel <= 1 && result.data.totalScore === 0 && inv.lightning === 0) {
-          inv.lightning = 2; inv.bomb = 2; inv.fire = 2; inv.freeze = 2;
-          await BackendService.updateAbilities(inv);
+
+        // Backend stores TOTAL abilities (base + purchased)
+        // We need to extract ONLY purchased abilities for the inventory
+        const backendAbilities = result.data.abilities || { lightning: 0, bomb: 0, freeze: 0, fire: 0 };
+        const purchasedAbilities = {
+          lightning: Math.max(0, backendAbilities.lightning - 2), // Subtract base abilities
+          bomb: Math.max(0, backendAbilities.bomb - 2),
+          freeze: Math.max(0, backendAbilities.freeze - 2),
+          fire: Math.max(0, backendAbilities.fire - 2),
+        };
+
+        // Initialize new users with 0 purchased abilities (they get base 2 per level automatically)
+        if (result.data.currentLevel <= 1 && result.data.totalScore === 0 && backendAbilities.lightning === 0) {
+          const initialAbilities = { lightning: 0, bomb: 0, freeze: 0, fire: 0 };
+          await BackendService.updateAbilities(initialAbilities);
+          setAbilityInventory(initialAbilities);
+        } else {
+          setAbilityInventory(purchasedAbilities);
         }
-        setAbilityInventory(inv);
+
         setDataLoaded(true);
       }
     } catch (err) {
@@ -588,17 +605,19 @@ const Roadmap: React.FC = () => {
 
   // Update leaderboard entry is now handled by backend during submission
 
-  // Purchase ability function - now using BackendService
+  // Purchase ability function - now using BackendService (skip for Quick Play)
   const purchaseAbility = async (abilityId: string, price: number) => {
     if (!user?.uid) return;
 
     console.log(`🛒 Attempting to purchase ${abilityId} for ${price} coins. Current balance: ${coins}`);
-    
+
     // Add client-side validation
     if (coins < price) {
       toastRef.current?.show(`Insufficient coins. Need ${price}, have ${coins}.`, 'error');
       return;
     }
+
+
 
     try {
       const result = await BackendService.purchaseAbilities(
@@ -610,11 +629,18 @@ const Roadmap: React.FC = () => {
 
       if (result.success) {
         setCoins(result.newCoinBalance || 0);
-        setAbilityInventory((prev: any) => ({
-          ...prev,
-          [abilityId]: result.newAbilityCount || (prev[abilityId as keyof typeof prev] + 1)
-        }));
-        toastRef.current?.show(`Successfully purchased ${abilityId}!`, 'success');
+
+        // Backend returns TOTAL count (base + purchased), we need to store only PURCHASED
+        const totalCount = result.newAbilityCount || 0;
+        const purchasedCount = Math.max(0, totalCount - 2); // Subtract base abilities
+
+        const newInventory = {
+          ...abilityInventory,
+          [abilityId]: purchasedCount
+        };
+        setAbilityInventory(newInventory);
+        console.log(`✅ Purchased ${abilityId}! New purchased count: ${purchasedCount}, Total in game: ${totalCount}`);
+        toastRef.current?.show(`Successfully purchased ${abilityId}! (+1 for all levels)`, 'success');
       } else {
         toastRef.current?.show(result.error || 'Insufficient coins.', 'error');
       }
@@ -815,14 +841,7 @@ const Roadmap: React.FC = () => {
       const currentTotalCoins = userGameData?.totalCoins || coins || 0;
       const newTotalCoins = currentTotalCoins + (coinsEarned || 0);
 
-      // Add ability rewards: 2 of each ability per level completion
-      const abilityRewards = { lightning: 2, bomb: 2, freeze: 2, fire: 2 };
-      const newAbilityInventory = {
-        lightning: (abilityInventory.lightning || 0) + abilityRewards.lightning,
-        bomb: (abilityInventory.bomb || 0) + abilityRewards.bomb,
-        freeze: (abilityInventory.freeze || 0) + abilityRewards.freeze,
-        fire: (abilityInventory.fire || 0) + abilityRewards.fire,
-      };
+      // Keep purchased abilities (base abilities are provided per level automatically)
 
       // Create updated data object
       const updatedGameData = {
@@ -832,7 +851,8 @@ const Roadmap: React.FC = () => {
         // We also want to update highScore (single best run) if applicable, though typically less visible
         highScore: Math.max(userGameData?.highScore || 0, finalScore),
         totalCoins: newTotalCoins,
-        abilities: newAbilityInventory, // Update abilities
+        // Keep existing purchased abilities (base abilities provided per level)
+        abilities: abilityInventory,
         levelStars: {
           ...userGameData.levelStars,
           [completedLevel]: Math.max(userGameData.levelStars?.[completedLevel] || 0, stars)
@@ -846,62 +866,73 @@ const Roadmap: React.FC = () => {
       setUserGameData(updatedGameData);
       setScore(newTotalScore); // Show TOTAL score in HUD
       setCoins(newTotalCoins);
-      setAbilityInventory(newAbilityInventory); // Update ability inventory
+      // Keep purchased abilities for next level
       setCurrentLevel(newCurrentLevel);
 
       // Show appropriate completion message
       if (stars >= 2) {
-        toastRef.current?.show(`Level Complete! Next level unlocked! +2 of each ability earned!`, 'success');
+        toastRef.current?.show(`Level Complete! Next level unlocked!`, 'success');
       } else {
         toastRef.current?.show(`Level Complete! Need 2+ stars to unlock next level. +2 of each ability earned!`, 'info');
       }
 
       // 2. BACKEND SYNC: Submit game session to backend
-      try {
-        const sessionDataToSubmit = sessionData || {
-          level: completedLevel,
-          score: finalScore,
-          moves: 0,
-          stars,
-          duration: 0,
-          abilitiesUsed: { lightning: 0, bomb: 0, freeze: 0, fire: 0 },
-          bubblesDestroyed: 0,
-          chainReactions: 0,
-          perfectShots: 0,
-          coinsEarned: coinsEarned || 0,
-          isWin: stars > 0
-        };
+      if (user) {
+        try {
+          const sessionDataToSubmit = sessionData || {
+            level: completedLevel,
+            score: finalScore,
+            moves: 0,
+            stars,
+            duration: 0,
+            abilitiesUsed: { lightning: 0, bomb: 0, freeze: 0, fire: 0 },
+            bubblesDestroyed: 0,
+            chainReactions: 0,
+            perfectShots: 0,
+            coinsEarned: coinsEarned || 0,
+            isWin: stars > 0
+          };
 
-        console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
-        const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
-        
-        if (sessionResult.success) {
-          console.log('✅ Game session submitted successfully:', sessionResult.data?.sessionId);
-        } else {
-          console.error('❌ Failed to submit game session:', sessionResult.error);
+          console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
+          const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
+
+          if (sessionResult.success) {
+            console.log('✅ Game session submitted successfully:', sessionResult.data?.sessionId);
+          } else {
+            console.error('❌ Failed to submit game session:', sessionResult.error);
+          }
+
+          // Update user game data in backend
+          try {
+            const updateResult = await BackendService.updateUserGameData(updatedGameData);
+            if (updateResult.success) {
+              console.log('✅ User game data updated in backend');
+            } else {
+              console.error('❌ Failed to update user game data:', updateResult.error);
+              // Continue anyway - local state is already updated
+              toastRef.current?.show('Progress saved locally. Backend sync will retry later.', 'warning');
+            }
+          } catch (error) {
+            console.error('❌ Backend update error:', error);
+            // Continue anyway - local state is already updated
+            toastRef.current?.show('Progress saved locally. Backend sync will retry later.', 'warning');
+          }
+
+        } catch (error) {
+          console.error('❌ Backend sync error:', error);
         }
 
-        // Update user game data in backend
-        const updateResult = await BackendService.updateUserGameData(updatedGameData);
-        if (updateResult.success) {
-          console.log('✅ User game data updated in backend');
-        } else {
-          console.error('❌ Failed to update user game data:', updateResult.error);
+        // Update purchased abilities in backend (abilityInventory contains ONLY purchased, not base)
+        try {
+          await BackendService.updateAbilities(abilityInventory);
+          console.log('✅ Synced purchased abilities to backend:', abilityInventory);
+        } catch (error) {
+          console.error('Failed to sync abilities to backend:', error);
         }
 
-      } catch (error) {
-        console.error('❌ Backend sync error:', error);
+        // 3. Trigger Background Sync
+        loadUserData(false);
       }
-
-      // Update abilities in backend
-      try {
-        await BackendService.updateAbilities(newAbilityInventory);
-      } catch (error) {
-        console.error('Failed to sync abilities to backend:', error);
-      }
-
-      // 3. Trigger Background Sync
-      loadUserData(false);
 
       // 4. Navigate UI based on Action and Stars
       if (action === 'next' && stars >= 2) {
@@ -909,9 +940,17 @@ const Roadmap: React.FC = () => {
         if (completedLevel < levels.length) {
           // Prepare to move to next level
           setSelectedLevel(completedLevel + 1);
-          setLoadingDirection('toBase'); // Show loading briefly
+          setLoadingDirection('toFight');
           setIsLoading(true);
-          setTimeout(() => setIsLoading(false), 500);
+          
+          // Close current GameScreen and reopen with next level to reset modal state
+          setShowGameScreen(false);
+          
+          setTimeout(() => {
+            // Reopen GameScreen with next level - this will reset the game state and close modal
+            setShowGameScreen(true);
+            setIsLoading(false);
+          }, 1000);
         } else {
           handleBackPress();
         }
@@ -1180,7 +1219,7 @@ const Roadmap: React.FC = () => {
           onBackPress={handleBackPress}
           level={selectedLevel}
           onLevelComplete={handleLevelComplete}
-          initialAbilities={abilityInventory}
+          initialAbilities={abilityInventory} // Pass purchased abilities
         />
       ) : (
         <View style={{ flex: 1 }}>
@@ -1266,7 +1305,7 @@ const Roadmap: React.FC = () => {
                         </TouchableOpacity>
                       </View>
 
-                      {/* Inventory count */}
+                      {/* Inventory count - Shows PURCHASED abilities only (base 2 per level not included) */}
                       {abilityInventory[item.id as keyof typeof abilityInventory] > 0 && (
                         <View style={styles.shopInventoryBadge}>
                           <Text style={styles.shopInventoryText}>

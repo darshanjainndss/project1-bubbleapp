@@ -149,6 +149,12 @@ router.get('/game-data', auth, async (req, res) => {
       });
     }
 
+    // Initialize abilities if they don't exist
+    if (!user.gameData.abilities || user.gameData.abilities.size === 0) {
+      await user.initializeUserAbilities();
+      await user.save();
+    }
+
     // Get user's rank
     const rank = await User.getUserRank(req.userId);
 
@@ -320,6 +326,11 @@ router.post('/purchase-abilities', auth, [
       });
     }
 
+    // Initialize abilities if they don't exist
+    if (!user.gameData.abilities || user.gameData.abilities.size === 0) {
+      await user.initializeUserAbilities();
+    }
+
     // Define ability costs
     const abilityCosts = {
       lightning: 50,
@@ -342,16 +353,18 @@ router.post('/purchase-abilities', auth, [
 
     // Deduct coins and add abilities
     user.gameData.totalCoins -= totalCost;
-    user.gameData.abilities[ability] += quantity;
+    user.addAbilities(ability, quantity);
 
     await user.save();
+
+    const newAbilityCount = user.getAbilityCount(ability);
 
     res.json({
       success: true,
       message: `Purchased ${quantity} ${ability} ability(ies)`,
       coinsSpent: totalCost,
       newCoinBalance: user.gameData.totalCoins,
-      newAbilityCount: user.gameData.abilities[ability]
+      newAbilityCount: newAbilityCount
     });
 
   } catch (error) {
