@@ -1,0 +1,26 @@
+Alias name: my-key-alias
+Creation date: Dec 30, 2025
+Entry type: PrivateKeyEntry
+Certificate chain length: 1
+Certificate[1]:
+Owner: CN=BubbleApp, OU=Development, O=BubbleApp, L=City, ST=State, C=US
+Issuer: CN=BubbleApp, OU=Development, O=BubbleApp, L=City, ST=State, C=US
+Serial number: 99bf27232c1bd871
+Valid from: Tue Dec 30 17:29:45 IST 2025 until: Sat May 17 17:29:45 IST 2053
+Certificate fingerprints:
+	 SHA1: 69:36:08:D7:7B:C7:C5:88:66:2D:2E:8C:90:25:5B:1A:45:34:2B:DD
+	 SHA256: FD:32:32:3F:D2:51:09:4E:49:59:14:69:1A:C9:BB:D0:5E:22:2D:D1:AC:8D:3A:31:7B:87:0F:6C:46:D0:B4:74
+Signature algorithm name: SHA256withRSA
+Subject Public Key Algorithm: 2048-bit RSA key
+Version: 3
+
+Extensions: 
+
+#1: ObjectId: 2.5.29.14 Criticality=false
+SubjectKeyIdentifier [
+KeyIdentifier [
+0000: C1 49 A5 4E 15 D7 18 DA   42 EA B2 D7 6D D8 59 07  .I.N....B...m.Y.
+0010: C6 A2 2E 48                                        ...H
+]
+]
+

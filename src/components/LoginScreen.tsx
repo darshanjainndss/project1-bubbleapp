@@ -79,6 +79,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleGoogleAuth = async () => {
+    setLoading(true);
+    try {
+      await AuthService.signInWithGoogle();
+      toastRef.current?.show('Signed in with Google!', 'success');
+      onLoginSuccess();
+    } catch (error: any) {
+      if (error.message !== 'Sign-in was cancelled') {
+        toastRef.current?.show(error.message, 'error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
 
 
@@ -110,7 +125,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </View>
 
           {/* Sign In Header */}
-        
+
 
           {/* Tab Content */}
           <View style={styles.contentContainer}>
@@ -233,6 +248,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     ? 'Already a commander? Sign In'
                     : "New recruit? Join the Fleet"
                   }
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <TouchableOpacity
+                style={styles.googleButton}
+                onPress={handleGoogleAuth}
+                disabled={loading}
+              >
+                <MaterialIcon
+                  name="google"
+                  family="material-community"
+                  size={ICON_SIZES.MEDIUM}
+                  color={ICON_COLORS.WHITE}
+                />
+                <Text style={styles.googleButtonText}>
+                  {isSignUp ? 'SIGN UP WITH GOOGLE' : 'SIGN IN WITH GOOGLE'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -397,6 +434,39 @@ const styles = StyleSheet.create({
     color: '#00E0FF',
     fontSize: 12,
     fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 15,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  dividerText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    paddingHorizontal: 10,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  googleButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 10,
+  },
+  googleButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
 
