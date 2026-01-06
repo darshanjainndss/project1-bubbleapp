@@ -310,33 +310,45 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
 
         {/* Stats Section */}
         <View style={localStyles.profileStatsContainer}>
-          <View style={localStyles.profileStatItem}>
-            <MaterialIcon name="trending-up" family="material" size={24} color={ICON_COLORS.SUCCESS} />
+          <View style={localStyles.profileStatCard}>
+            <View style={localStyles.profileStatIconContainer}>
+              <MaterialIcon name="trending-up" family="material" size={28} color={ICON_COLORS.SUCCESS} />
+            </View>
             <Text style={localStyles.profileStatLabel}>Level</Text>
             <Text style={localStyles.profileStatValue}>{currentLevel}</Text>
+            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.SUCCESS + '20' }]} />
           </View>
 
-          <View style={localStyles.profileStatItem}>
-            <MaterialIcon
-              name={GAME_ICONS.COIN.name}
-              family={GAME_ICONS.COIN.family}
-              size={24}
-              color={ICON_COLORS.GOLD}
-            />
+          <View style={localStyles.profileStatCard}>
+            <View style={localStyles.profileStatIconContainer}>
+              <MaterialIcon
+                name={GAME_ICONS.COIN.name}
+                family={GAME_ICONS.COIN.family}
+                size={28}
+                color={ICON_COLORS.GOLD}
+              />
+            </View>
             <Text style={localStyles.profileStatLabel}>Coins</Text>
             <Text style={localStyles.profileStatValue}>{coins.toLocaleString()}</Text>
+            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.GOLD + '20' }]} />
           </View>
 
-          <View style={localStyles.profileStatItem}>
-            <MaterialIcon name="stars" family="material" size={24} color={ICON_COLORS.WARNING} />
+          <View style={localStyles.profileStatCard}>
+            <View style={localStyles.profileStatIconContainer}>
+              <MaterialIcon name="stars" family="material" size={28} color={ICON_COLORS.WARNING} />
+            </View>
             <Text style={localStyles.profileStatLabel}>Score</Text>
             <Text style={localStyles.profileStatValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
+            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.WARNING + '20' }]} />
           </View>
 
-          <View style={localStyles.profileStatItem}>
-            <MaterialIcon name="play-circle-filled" family="material" size={24} color={ICON_COLORS.INFO} />
+          <View style={localStyles.profileStatCard}>
+            <View style={localStyles.profileStatIconContainer}>
+              <MaterialIcon name="play-circle-filled" family="material" size={28} color={ICON_COLORS.INFO} />
+            </View>
             <Text style={localStyles.profileStatLabel}>Ad Earn</Text>
             <Text style={localStyles.profileStatValue}>{(userGameData?.totalAdEarnings || 0).toLocaleString()}</Text>
+            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.INFO + '20' }]} />
           </View>
         </View>
 
@@ -575,15 +587,25 @@ const Roadmap: React.FC = () => {
 
   // Handle watching the ad from popup
   const handleWatchAd = async (amount: number) => {
-    setCoins((prev: any) => prev + amount);
-    toastRef.current?.show(`Earned ${amount} bonus coins!`, 'success');
-
-    // Sync with backend
     try {
-      await BackendService.updateCoins(amount, 'add', true);
-      console.log(`✅ Synced ${amount} rewarded coins to backend`);
+      // Call backend first to get server-validated reward amount
+      const result = await BackendService.updateCoins(amount, 'add', true);
+      
+      if (result.success && result.newBalance !== undefined) {
+        // Update local state with the actual validated amount from backend
+        setCoins(result.newBalance);
+        const actualAmount = result.previousBalance !== undefined 
+          ? result.newBalance - result.previousBalance 
+          : amount;
+        toastRef.current?.show(`Earned ${actualAmount} bonus coins!`, 'success');
+        console.log(`✅ Synced ${actualAmount} rewarded coins to backend`);
+      } else {
+        console.error('Failed to update coins:', result.error);
+        toastRef.current?.show('Failed to update coins', 'error');
+      }
     } catch (error) {
       console.error('Failed to sync rewarded coins:', error);
+      toastRef.current?.show('Network error', 'error');
     }
   };
 
@@ -1505,36 +1527,67 @@ const localStyles = StyleSheet.create({
   },
   profileStatsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     width: '100%',
     marginBottom: 25,
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
   },
-  profileStatItem: {
-    alignItems: 'center',
-    flex: 1,
-    paddingVertical: 15,
-    backgroundColor: 'rgba(0, 224, 255, 0.1)',
-    borderRadius: 15,
-    marginHorizontal: 5,
+  profileStatCard: {
+    width: '48%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.3)',
+    borderColor: 'rgba(0, 224, 255, 0.2)',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  profileStatIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  profileStatGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    opacity: 0.1,
   },
   profileStatLabel: {
     color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 5,
-    marginBottom: 3,
+    fontSize: 11,
+    marginTop: 8,
+    marginBottom: 4,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+    textAlign: 'center',
   },
   profileStatValue: {
     color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '900',
     textShadowColor: '#00E0FF',
-    textShadowRadius: 5,
+    textShadowRadius: 8,
+    fontFamily: 'monospace',
+    textAlign: 'center',
   },
   profileSettingsContainer: {
     width: '100%',

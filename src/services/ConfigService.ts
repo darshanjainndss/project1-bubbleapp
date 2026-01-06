@@ -14,56 +14,7 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
 
 // Fallback configurations (in case backend is unavailable)
-const FALLBACK_ABILITIES: AbilityConfig[] = [
-  {
-    id: 'lightning',
-    name: 'lightning',
-    displayName: 'Lightning',
-    description: 'Destroys an entire row of bubbles',
-    icon: 'lightning-bolt',
-    effect: 'destroyRow',
-    pointsPerBubble: 15,
-    price: 50,
-    startingCount: 2,
-    sortOrder: 1
-  },
-  {
-    id: 'bomb',
-    name: 'bomb',
-    displayName: 'Bomb',
-    description: 'Destroys bubbles in a hexagonal area',
-    icon: 'bomb',
-    effect: 'destroyNeighbors',
-    pointsPerBubble: 12,
-    price: 75,
-    startingCount: 2,
-    sortOrder: 2
-  },
-  {
-    id: 'freeze',
-    name: 'freeze',
-    displayName: 'Freeze',
-    description: 'Freezes a column of bubbles',
-    icon: 'snowflake',
-    effect: 'freezeColumn',
-    pointsPerBubble: 8,
-    price: 30,
-    startingCount: 2,
-    sortOrder: 3
-  },
-  {
-    id: 'fire',
-    name: 'fire',
-    displayName: 'Fire',
-    description: 'Burns through obstacles and metal grids',
-    icon: 'fire',
-    effect: 'burnObstacles',
-    pointsPerBubble: 12,
-    price: 40,
-    startingCount: 2,
-    sortOrder: 4
-  }
-];
+const FALLBACK_ABILITIES: AbilityConfig[] = [];
 
 const FALLBACK_AD_CONFIG: AdConfig = {
   platform: Platform.OS as 'android' | 'ios',
@@ -153,9 +104,14 @@ class ConfigService {
 
     // Fetch from backend
     try {
+      console.log('🔄 Fetching abilities config from backend...');
       const result = await BackendService.getAbilitiesConfig();
 
       if (result.success && result.abilities) {
+        console.log('✅ Successfully fetched abilities from backend:', result.abilities.length, 'abilities');
+        result.abilities.forEach(ability => {
+          console.log(`   - ${ability.displayName}: ${ability.price} coins`);
+        });
         this.abilitiesConfig = result.abilities;
 
         // Cache the result
@@ -164,14 +120,13 @@ class ConfigService {
 
         return this.abilitiesConfig;
       } else {
-        console.warn('Failed to fetch abilities config from backend, using fallback');
-        this.abilitiesConfig = FALLBACK_ABILITIES;
-        return this.abilitiesConfig;
+        console.warn('⚠️ Failed to fetch abilities config from backend');
+        console.log('Backend response:', result);
+        throw new Error(result.error || 'Failed to fetch abilities from backend');
       }
     } catch (error) {
-      console.error('Error fetching abilities config:', error);
-      this.abilitiesConfig = FALLBACK_ABILITIES;
-      return this.abilitiesConfig;
+      console.error('❌ Error fetching abilities config:', error);
+      throw error;
     }
   }
 

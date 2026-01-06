@@ -9,7 +9,7 @@ const abilities = [
     icon: 'flash',
     effect: 'destroyRow',
     pointsPerBubble: 10,
-    price: 52,
+    price: 58,
     startingCount: 2,
     sortOrder: 1
   },

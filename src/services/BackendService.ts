@@ -417,7 +417,7 @@ class BackendService {
   // COINS & ABILITIES METHODS
   // ============================================================================
 
-  async updateCoins(amount: number, operation: 'add' | 'subtract' = 'add', isAdReward: boolean = false): Promise<{ success: boolean; newBalance?: number; error?: string }> {
+  async updateCoins(amount: number, operation: 'add' | 'subtract' = 'add', isAdReward: boolean = false): Promise<{ success: boolean; newBalance?: number; previousBalance?: number; error?: string }> {
     try {
       if (!this.authToken) {
         return { success: false, error: 'Not authenticated' };
@@ -436,7 +436,11 @@ class BackendService {
       const data = await response.json();
 
       if (response.ok) {
-        return { success: true, newBalance: data.newBalance };
+        return { 
+          success: true, 
+          newBalance: data.newBalance,
+          previousBalance: data.previousBalance 
+        };
       } else {
         return { success: false, error: data.message || 'Failed to update coins' };
       }
