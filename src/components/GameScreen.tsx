@@ -50,11 +50,12 @@ const COLOR_MAP: Record<string, any> = {
 
 
 
-const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities }: {
+const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities, initialStartingCounts }: {
   onBackPress?: () => void,
   level?: number,
   onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home', sessionData?: any) => void,
-  initialAbilities?: any
+  initialAbilities?: any,
+  initialStartingCounts?: Record<string, number>
 }) => {
   const { user } = useAuth(); // Get Firebase user
 
@@ -81,7 +82,12 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(Date.now());
   // Base abilities per level (2 of each) + any purchased abilities
-  const getBaseAbilitiesPerLevel = () => ({ lightning: 2, bomb: 2, freeze: 2, fire: 2 });
+  const getBaseAbilitiesPerLevel = () => ({
+    lightning: initialStartingCounts?.lightning ?? 2,
+    bomb: initialStartingCounts?.bomb ?? 2,
+    freeze: initialStartingCounts?.freeze ?? 2,
+    fire: initialStartingCounts?.fire ?? 2,
+  });
   const [abilityInventory, setAbilityInventory] = useState(() => {
     if (initialAbilities) {
       // Add base abilities to purchased abilities
@@ -1012,7 +1018,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       {gameState !== 'playing' && (() => {
         // Pre-calculate results for consistency
         const earnedStars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
-        
+
         // Debug logging
         console.log('🎮 Game Over Modal - Debug Info:');
         console.log('📊 Score:', score);
@@ -1062,7 +1068,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
               )}
 
               <Text style={styles.modalScore}>SCORE: {score}</Text>
-              
+
               {/* Debug Info - Remove this after fixing */}
               <Text style={[styles.modalScore, { fontSize: 12, color: '#888' }]}>
                 Debug: Stars={earnedStars}, GameState="{gameState}", Show Next={earnedStars >= 2 ? 'Yes' : 'No'}
@@ -1132,14 +1138,14 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                   />
                 </TouchableOpacity>
                 {earnedStars >= 2 && (
-                  <TouchableOpacity 
-                    style={[styles.modalBtnPrimary, nextLevelLoading && { opacity: 0.5 }]} 
+                  <TouchableOpacity
+                    style={[styles.modalBtnPrimary, nextLevelLoading && { opacity: 0.5 }]}
                     onPress={() => {
                       if (nextLevelLoading) return; // Prevent multiple clicks
-                      
+
                       setNextLevelLoading(true);
                       SettingsService.vibrateClick(); // Button feedback
-                      
+
                       if (onLevelComplete) {
                         // Calculate coins earned
                         const baseCoins = Math.floor(10 + (level * 2.5));

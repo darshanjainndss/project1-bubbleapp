@@ -12,10 +12,24 @@ const adUnitsData = [
         isActive: true
     },
     {
-        adId: "ca-app-pub-3940256099942544/1712485313", // Test Rewarded (iOS)
+        adId: "ca-app-pub-3940256099942544/1712485313", // Test Rewarded (iOS) - ID 1
         adType: "rewarded",
         platform: "ios",
         priority: 1,
+        isActive: true
+    },
+    {
+        adId: "ca-app-pub-3940256099942544/rewarded-ios-dummy-2", // Dummy Test Rewarded (iOS) - ID 2
+        adType: "rewarded",
+        platform: "ios",
+        priority: 2,
+        isActive: true
+    },
+    {
+        adId: "ca-app-pub-3940256099942544/rewarded-ios-dummy-3", // Dummy Test Rewarded (iOS) - ID 3
+        adType: "rewarded",
+        platform: "ios",
+        priority: 3,
         isActive: true
     },
     {
@@ -26,10 +40,24 @@ const adUnitsData = [
         isActive: true
     },
     {
-        adId: "ca-app-pub-3940256099942544/5224354917", // Test Rewarded (Android)
+        adId: "ca-app-pub-3940256099942544/5224354917", // Test Rewarded (Android) - ID 1
         adType: "rewarded",
         platform: "android",
         priority: 1,
+        isActive: true
+    },
+    {
+        adId: "ca-app-pub-3940256099942544/rewarded-android-dummy-2", // Dummy Test Rewarded (Android) - ID 2
+        adType: "rewarded",
+        platform: "android",
+        priority: 2,
+        isActive: true
+    },
+    {
+        adId: "ca-app-pub-3940256099942544/rewarded-android-dummy-3", // Dummy Test Rewarded (Android) - ID 3
+        adType: "rewarded",
+        platform: "android",
+        priority: 3,
         isActive: true
     }
 ];

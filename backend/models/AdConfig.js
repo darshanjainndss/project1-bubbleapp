@@ -15,40 +15,6 @@ const adConfigSchema = new mongoose.Schema({
     required: true
   },
   
-  // Ad unit IDs
-  bannerAdUnitId: {
-    production: {
-      type: String,
-      required: true
-    },
-    test: {
-      type: String,
-      required: true
-    }
-  },
-  
-  rewardedAdUnitId: {
-    production: {
-      type: String,
-      required: true
-    },
-    test: {
-      type: String,
-      required: true
-    }
-  },
-  
-  interstitialAdUnitId: {
-    production: {
-      type: String,
-      required: false
-    },
-    test: {
-      type: String,
-      required: false
-    }
-  },
-  
   // Ad configuration
   maxAdContentRating: {
     type: String,
@@ -64,20 +30,6 @@ const adConfigSchema = new mongoose.Schema({
   tagForChildDirectedTreatment: {
     type: Boolean,
     default: false
-  },
-  
-  // Reward configuration for rewarded ads
-  rewardConfig: {
-    coinsPerAd: {
-      type: Number,
-      default: 25,
-      min: 1
-    },
-    abilitiesPerAd: {
-      type: Number,
-      default: 1,
-      min: 0
-    }
   },
   
   // Metadata
@@ -104,26 +56,27 @@ adConfigSchema.pre('save', function(next) {
 });
 
 // Instance methods
-adConfigSchema.methods.toPublic = function(isDev = false) {
+adConfigSchema.methods.toPublic = function() {
+  // Get reward amount from environment variable (single source of truth)
+  const rewardAmount = Number(process.env.REWARDED_AD_COINS || 50);
+  
   return {
     platform: this.platform,
     appId: this.appId,
-    bannerAdUnitId: isDev ? this.bannerAdUnitId.test : this.bannerAdUnitId.production,
-    rewardedAdUnitId: isDev ? this.rewardedAdUnitId.test : this.rewardedAdUnitId.production,
-    interstitialAdUnitId: isDev 
-      ? this.interstitialAdUnitId?.test 
-      : this.interstitialAdUnitId?.production,
     maxAdContentRating: this.maxAdContentRating,
     tagForUnderAgeOfConsent: this.tagForUnderAgeOfConsent,
     tagForChildDirectedTreatment: this.tagForChildDirectedTreatment,
-    rewardConfig: this.rewardConfig
+    rewardConfig: {
+      coinsPerAd: rewardAmount,
+      abilitiesPerAd: 1
+    }
   };
 };
 
 // Static methods
-adConfigSchema.statics.getConfigForPlatform = function(platform, isDev = false) {
+adConfigSchema.statics.getConfigForPlatform = function(platform) {
   return this.findOne({ platform, isActive: true }).then(config => {
-    return config ? config.toPublic(isDev) : null;
+    return config ? config.toPublic() : null;
   });
 };
 

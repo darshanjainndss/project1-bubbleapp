@@ -17,15 +17,16 @@ import Leaderboard from './Leaderboard';
 import MaterialIcon from './MaterialIcon';
 import AdBanner from './AdBanner';
 import RewardedAdButton from './RewardedAdButton';
-import SimpleRewardedAdButton from './SimpleRewardedAdButton';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
 import { useAuth } from '../context/AuthContext';
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from "../styles/RoadmapStyles";
 import BackendService from '../services/BackendService';
+import ConfigService from '../services/ConfigService';
 import ConfirmationModal from './ConfirmationModal';
 import ToastNotification, { ToastRef } from './ToastNotification';
 import SettingsService from '../services/SettingsService';
+import Shop from './Shop';
 
 // Helper function to safely call vibration
 const safeVibrate = () => {
@@ -171,12 +172,7 @@ const ICONS = [
   'https://img.icons8.com/fluency/512/shooting-star.png',
 ];
 
-const SHOP_ITEMS = [
-  { id: 'lightning', name: 'Lightning', icon: GAME_ICONS.LIGHTNING, price: 50, description: 'Destroys entire row', color: ICON_COLORS.PRIMARY },
-  { id: 'bomb', name: 'Bomb', icon: GAME_ICONS.BOMB, price: 75, description: 'Destroys 6 hex neighbors', color: ICON_COLORS.WARNING },
-  { id: 'freeze', name: 'Freeze', icon: GAME_ICONS.FREEZE, price: 30, description: 'Freezes column up to 2 rows', color: ICON_COLORS.INFO },
-  { id: 'fire', name: 'Fire', icon: GAME_ICONS.FIRE, price: 40, description: 'Burns through obstacles', color: ICON_COLORS.ERROR },
-];
+// Initial fallback for UI while loading (empty until backend fetches)
 
 // Top HUD Component
 // Top HUD Component - with Neon Styling
@@ -336,6 +332,12 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
             <Text style={localStyles.profileStatLabel}>Score</Text>
             <Text style={localStyles.profileStatValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
           </View>
+
+          <View style={localStyles.profileStatItem}>
+            <MaterialIcon name="play-circle-filled" family="material" size={24} color={ICON_COLORS.INFO} />
+            <Text style={localStyles.profileStatLabel}>Ad Earn</Text>
+            <Text style={localStyles.profileStatValue}>{(userGameData?.totalAdEarnings || 0).toLocaleString()}</Text>
+          </View>
         </View>
 
         {/* Settings Section */}
@@ -388,7 +390,7 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
 };
 
 // Earn Coins Popup Component
-const EarnCoinsPopup = ({ visible, onClose, onWatchAd, isAdLoaded }: any) => {
+const EarnCoinsPopup = ({ visible, onClose, onWatchAd, rewardAmount }: any) => {
   if (!visible) return null;
 
   return (
@@ -421,24 +423,18 @@ const EarnCoinsPopup = ({ visible, onClose, onWatchAd, isAdLoaded }: any) => {
             size={32}
             color={ICON_COLORS.GOLD}
           />
-          <Text style={localStyles.earnCoinsRewardText}>+50 Coins</Text>
+          <Text style={localStyles.earnCoinsRewardText}>+{rewardAmount} Coins</Text>
         </View>
 
         {/* Action Buttons */}
         <View style={localStyles.earnCoinsButtons}>
-          <TouchableOpacity
-            style={[
-              localStyles.earnCoinsWatchBtn,
-              !isAdLoaded && localStyles.earnCoinsWatchBtnDisabled
-            ]}
-            onPress={onWatchAd}
-            disabled={!isAdLoaded}
-          >
-            <MaterialIcon name="play-circle-filled" family="material" size={24} color="#000" />
-            <Text style={localStyles.earnCoinsWatchBtnText}>
-              {isAdLoaded ? 'Watch Ad' : 'Loading...'}
-            </Text>
-          </TouchableOpacity>
+          <RewardedAdButton
+            onReward={(amount) => {
+              onWatchAd(amount);
+            }}
+            rewardAmount={rewardAmount}
+            style={localStyles.earnCoinsWatchBtnComponent}
+          />
 
           <TouchableOpacity style={localStyles.earnCoinsLaterBtn} onPress={onClose}>
             <Text style={localStyles.earnCoinsLaterBtnText}>Maybe Later</Text>
@@ -467,9 +463,11 @@ const Roadmap: React.FC = () => {
     currentLevel: 1,
     highScore: 0,
     totalCoins: 0,
-    abilities: { lightning: 2, bomb: 2, freeze: 2, fire: 2 }
+    abilities: {}
   });
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [adRewardAmount, setAdRewardAmount] = useState(0);
+  const [abilityStartingCounts, setAbilityStartingCounts] = useState<Record<string, number>>({});
   const [loadingDirection, setLoadingDirection] = useState<'toFight' | 'toBase'>('toFight');
   const toastRef = useRef<ToastRef>(null);
 
@@ -479,16 +477,9 @@ const Roadmap: React.FC = () => {
   };
 
   // Ability inventory - ONLY stores PURCHASED abilities (base abilities are added per level in GameScreen)
-  const [abilityInventory, setAbilityInventory] = useState({
-    lightning: 0,
-    bomb: 0,
-    fire: 0,
-    freeze: 0,
-  });
+  const [abilityInventory, setAbilityInventory] = useState<Record<string, number>>({});
 
-  // Rewarded ad state
-  const [rewardedAd, setRewardedAd] = useState<any>(null);
-  const [isAdLoaded, setIsAdLoaded] = useState(false);
+  // Removed manual rewarded ad state in favor of RewardedAdButton component
 
   const flatListRef = useRef<FlatList>(null);
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -516,20 +507,48 @@ const Roadmap: React.FC = () => {
 
         // Backend stores TOTAL abilities (base + purchased)
         // We need to extract ONLY purchased abilities for the inventory
-        const backendAbilities = result.data.abilities || { lightning: 0, bomb: 0, freeze: 0, fire: 0 };
-        const purchasedAbilities = {
-          lightning: Math.max(0, backendAbilities.lightning - 2), // Subtract base abilities
-          bomb: Math.max(0, backendAbilities.bomb - 2),
-          freeze: Math.max(0, backendAbilities.freeze - 2),
-          fire: Math.max(0, backendAbilities.fire - 2),
-        };
+        const backendAbilities = result.data.abilities || {};
 
-        // Initialize new users with 0 purchased abilities (they get base 2 per level automatically)
-        if (result.data.currentLevel <= 1 && result.data.totalScore === 0 && backendAbilities.lightning === 0) {
-          const initialAbilities = { lightning: 0, bomb: 0, freeze: 0, fire: 0 };
-          await BackendService.updateAbilities(initialAbilities);
-          setAbilityInventory(initialAbilities);
+        // Fetch Dynamic Configs (Abilities and Ads) early to know which abilities exist
+        let abilitiesConfig: any[] = [];
+        let adReward = 50;
+        try {
+          const [aConfig, adConfig] = await Promise.all([
+            ConfigService.getAbilitiesConfig(),
+            ConfigService.getAdConfig()
+          ]);
+          abilitiesConfig = aConfig || [];
+          if (adConfig && adConfig.rewardConfig) {
+            adReward = adConfig.rewardConfig.coinsPerAd;
+            setAdRewardAmount(adReward);
+          }
+        } catch (configErr) {
+          console.warn('Failed to load dynamic configs:', configErr);
+        }
+
+        // Initialize new users with 0 purchased abilities
+        if (result.data.currentLevel <= 1 && result.data.totalScore === 0 && (!backendAbilities || Object.keys(backendAbilities).length === 0)) {
+          const initialAbilities: Record<string, number> = {};
+          abilitiesConfig.forEach(a => { initialAbilities[a.name] = 0; });
+
+          if (Object.keys(initialAbilities).length > 0) {
+            await BackendService.updateAbilities(initialAbilities);
+            setAbilityInventory(initialAbilities);
+          }
         } else {
+          const startingCounts: Record<string, number> = {};
+          if (abilitiesConfig.length > 0) {
+            abilitiesConfig.forEach(a => {
+              startingCounts[a.name] = a.startingCount;
+            });
+            setAbilityStartingCounts(startingCounts);
+          }
+
+          // Calculate purchased abilities dynamically using dynamic starting counts
+          const purchasedAbilities: Record<string, number> = {};
+          Object.keys(backendAbilities).forEach(key => {
+            purchasedAbilities[key] = Math.max(0, backendAbilities[key] - (startingCounts[key] ?? 2));
+          });
           setAbilityInventory(purchasedAbilities);
         }
 
@@ -546,73 +565,7 @@ const Roadmap: React.FC = () => {
     loadUserData();
   }, [user?.uid, loadUserData]);
 
-  // Initialize rewarded ad
-  useEffect(() => {
-    const { RewardedAd, AdEventType, RewardedAdEventType, TestIds } = require('react-native-google-mobile-ads');
-    const ConfigService = require('../services/ConfigService').default;
-
-    let adInstance: any = null;
-    let isMounted = true;
-
-    const initializeAd = async () => {
-      try {
-        const units = await ConfigService.getAdUnits();
-        const unitId = units.rewarded || TestIds.REWARDED;
-        console.log('Fetched ad units for Roadmap:', unitId);
-
-        if (!isMounted) return;
-
-        const ad = RewardedAd.createForAdRequest(unitId, {
-          requestNonPersonalizedAdsOnly: true,
-        });
-
-        const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-          console.log('✅ Rewarded ad loaded (Roadmap)');
-          if (isMounted) setIsAdLoaded(true);
-        });
-
-        const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: any) => {
-          console.log('🎉 User earned reward (Roadmap):', reward);
-          setCoins((prev: any) => prev + 50);
-          toastRef.current?.show('Earned 50 bonus coins!', 'success');
-        });
-
-        const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error: any) => {
-          console.log('❌ Rewarded ad error (Roadmap):', error);
-          if (isMounted) setIsAdLoaded(false);
-        });
-
-        const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
-          console.log('📱 Rewarded ad closed (Roadmap)');
-          if (isMounted) {
-            setIsAdLoaded(false);
-            ad.load();
-          }
-        });
-
-        adInstance = ad;
-        if (isMounted) {
-          setRewardedAd(ad);
-          ad.load();
-        }
-
-        return () => {
-          unsubscribeLoaded();
-          unsubscribeEarned();
-          unsubscribeError();
-          unsubscribeClosed();
-        };
-      } catch (error) {
-        console.error('Error initializing rewarded ad in Roadmap:', error);
-      }
-    };
-
-    initializeAd();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  // Manual ad initialization removed in favor of RewardedAdButton component
 
   // Handle rewarded ad button press - show popup first
   const handleRewardedAdPress = () => {
@@ -621,12 +574,16 @@ const Roadmap: React.FC = () => {
   };
 
   // Handle watching the ad from popup
-  const handleWatchAd = () => {
-    if (rewardedAd && isAdLoaded) {
-      setShowEarnCoinsPopup(false);
-      rewardedAd.show();
-    } else {
-      toastRef.current?.show('Ad not ready. Try again in a moment.', 'info');
+  const handleWatchAd = async (amount: number) => {
+    setCoins((prev: any) => prev + amount);
+    toastRef.current?.show(`Earned ${amount} bonus coins!`, 'success');
+
+    // Sync with backend
+    try {
+      await BackendService.updateCoins(amount, 'add', true);
+      console.log(`✅ Synced ${amount} rewarded coins to backend`);
+    } catch (error) {
+      console.error('Failed to sync rewarded coins:', error);
     }
   };
 
@@ -637,51 +594,6 @@ const Roadmap: React.FC = () => {
   }, []);
 
   // Update leaderboard entry is now handled by backend during submission
-
-  // Purchase ability function - now using BackendService (skip for Quick Play)
-  const purchaseAbility = async (abilityId: string, price: number) => {
-    if (!user?.uid) return;
-
-    console.log(`🛒 Attempting to purchase ${abilityId} for ${price} coins. Current balance: ${coins}`);
-
-    // Add client-side validation
-    if (coins < price) {
-      toastRef.current?.show(`Insufficient coins. Need ${price}, have ${coins}.`, 'error');
-      return;
-    }
-
-
-
-    try {
-      const result = await BackendService.purchaseAbilities(
-        abilityId as any,
-        1
-      );
-
-      console.log('🛒 Purchase result:', result);
-
-      if (result.success) {
-        setCoins(result.newCoinBalance || 0);
-
-        // Backend returns TOTAL count (base + purchased), we need to store only PURCHASED
-        const totalCount = result.newAbilityCount || 0;
-        const purchasedCount = Math.max(0, totalCount - 2); // Subtract base abilities
-
-        const newInventory = {
-          ...abilityInventory,
-          [abilityId]: purchasedCount
-        };
-        setAbilityInventory(newInventory);
-        console.log(`✅ Purchased ${abilityId}! New purchased count: ${purchasedCount}, Total in game: ${totalCount}`);
-        toastRef.current?.show(`Successfully purchased ${abilityId}! (+1 for all levels)`, 'success');
-      } else {
-        toastRef.current?.show(result.error || 'Insufficient coins.', 'error');
-      }
-    } catch (error) {
-      console.error('Error purchasing ability:', error);
-      toastRef.current?.show('Failed to purchase ability.', 'error');
-    }
-  };
 
   // Generate levels data (Infinite Levels)
   const levels = useMemo(() =>
@@ -906,7 +818,7 @@ const Roadmap: React.FC = () => {
       if (stars >= 2) {
         toastRef.current?.show(`Level Complete! Next level unlocked!`, 'success');
       } else {
-        toastRef.current?.show(`Level Complete! Need 2+ stars to unlock next level. +2 of each ability earned!`, 'info');
+        toastRef.current?.show(`Level Complete! Need 2+ stars to unlock next level. Try again for more stars!`, 'info');
       }
 
       // 2. BACKEND SYNC: Submit game session to backend
@@ -918,7 +830,7 @@ const Roadmap: React.FC = () => {
             moves: 0,
             stars,
             duration: 0,
-            abilitiesUsed: { lightning: 0, bomb: 0, freeze: 0, fire: 0 },
+            abilitiesUsed: sessionData?.abilitiesUsed || {},
             bubblesDestroyed: 0,
             chainReactions: 0,
             perfectShots: 0,
@@ -1253,6 +1165,7 @@ const Roadmap: React.FC = () => {
           level={selectedLevel}
           onLevelComplete={handleLevelComplete}
           initialAbilities={abilityInventory} // Pass purchased abilities
+          initialStartingCounts={abilityStartingCounts}
         />
       ) : (
         <View style={{ flex: 1 }}>
@@ -1267,103 +1180,21 @@ const Roadmap: React.FC = () => {
           />
 
           {/* Shop Modal */}
-          {showShop && (
-            <View style={styles.shopOverlay}>
-              <View style={styles.shopModal}>
-                <View style={styles.shopHeader}>
-                  <Text style={styles.shopTitle}>ABILITY SHOP</Text>
-                  <TouchableOpacity
-                    style={styles.shopCloseBtn}
-                    onPress={() => setShowShop(false)}
-                  >
-                    <MaterialIcon
-                      name={GAME_ICONS.CLOSE.name}
-                      family={GAME_ICONS.CLOSE.family}
-                      size={ICON_SIZES.MEDIUM}
-                      color={ICON_COLORS.WHITE}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.shopCoins}>
-                  <MaterialIcon
-                    name={GAME_ICONS.COIN.name}
-                    family={GAME_ICONS.COIN.family}
-                    size={ICON_SIZES.LARGE}
-                    color={ICON_COLORS.GOLD}
-                  />
-                  <Text style={styles.shopCoinsText}>{coins}</Text>
-                </View>
-
-                <View style={styles.shopGrid}>
-                  {SHOP_ITEMS.map((item) => (
-                    <View key={item.id} style={styles.shopItem}>
-                      <View style={styles.shopItemIcon}>
-                        <MaterialIcon
-                          name={item.icon.name}
-                          family={item.icon.family}
-                          size={ICON_SIZES.XLARGE}
-                          color={item.color}
-                        />
-                      </View>
-
-                      <Text style={styles.shopItemName}>{item.name}</Text>
-                      <Text style={styles.shopItemDesc}>{item.description}</Text>
-
-                      <View style={styles.shopItemFooter}>
-                        <View style={styles.shopItemPrice}>
-                          <MaterialIcon
-                            name={GAME_ICONS.COIN.name}
-                            family={GAME_ICONS.COIN.family}
-                            size={ICON_SIZES.SMALL}
-                            color={ICON_COLORS.GOLD}
-                          />
-                          <Text style={styles.shopPriceText}>{item.price}</Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.shopBuyBtn,
-                            coins < item.price && styles.shopBuyBtnDisabled
-                          ]}
-                          onPress={() => purchaseAbility(item.id, item.price)}
-                          disabled={coins < item.price}
-                        >
-                          <MaterialIcon
-                            name={GAME_ICONS.BUY.name}
-                            family={GAME_ICONS.BUY.family}
-                            size={ICON_SIZES.SMALL}
-                            color={coins >= item.price ? ICON_COLORS.WHITE : ICON_COLORS.DISABLED}
-                          />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Inventory count - Shows PURCHASED abilities only (base 2 per level not included) */}
-                      {abilityInventory[item.id as keyof typeof abilityInventory] > 0 && (
-                        <View style={styles.shopInventoryBadge}>
-                          <Text style={styles.shopInventoryText}>
-                            {abilityInventory[item.id as keyof typeof abilityInventory]}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  ))}
-                </View>
-
-                {/* Rewarded Ad Section */}
-                <View style={styles.shopRewardSection}>
-                  <Text style={styles.shopRewardTitle}>EARN COINS</Text>
-                  <RewardedAdButton
-                    onReward={(amount) => {
-                      setCoins((prev: any) => prev + amount);
-                      console.log(`🎉 Rewarded ${amount} coins from ad!`);
-                    }}
-                    rewardAmount={50}
-                  />
-                </View>
-              </View>
-            </View>
-          )}
+          <Shop
+            visible={showShop}
+            onClose={() => setShowShop(false)}
+            coins={coins}
+            onCoinsUpdate={(newCoins) => {
+              setCoins(newCoins);
+              // Optimistically update total coins in userGameData
+              setUserGameData((prev: any) => ({ ...prev, totalCoins: newCoins }));
+            }}
+            abilityInventory={abilityInventory}
+            onInventoryUpdate={setAbilityInventory}
+            abilityStartingCounts={abilityStartingCounts}
+            onWatchAd={(amount) => handleWatchAd(amount)}
+            adRewardAmount={adRewardAmount}
+          />
 
           {/* Top HUD */}
           <TopHUD
@@ -1461,8 +1292,11 @@ const Roadmap: React.FC = () => {
           <EarnCoinsPopup
             visible={showEarnCoinsPopup}
             onClose={() => setShowEarnCoinsPopup(false)}
-            onWatchAd={handleWatchAd}
-            isAdLoaded={isAdLoaded}
+            onWatchAd={(amount: number) => {
+              handleWatchAd(amount);
+              setShowEarnCoinsPopup(false);
+            }}
+            rewardAmount={adRewardAmount}
           />
 
         </View>
@@ -1864,6 +1698,10 @@ const localStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 10,
+  },
+  earnCoinsWatchBtnComponent: {
+    backgroundColor: 'rgba(255, 214, 10, 0.1)',
+    borderColor: ICON_COLORS.GOLD,
   },
   earnCoinsLaterBtn: {
     alignItems: 'center',

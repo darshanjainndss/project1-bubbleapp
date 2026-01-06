@@ -68,13 +68,11 @@ const FALLBACK_ABILITIES: AbilityConfig[] = [
 const FALLBACK_AD_CONFIG: AdConfig = {
   platform: Platform.OS as 'android' | 'ios',
   appId: 'ca-app-pub-placeholder',
-  bannerAdUnitId: 'ca-app-pub-placeholder',
-  rewardedAdUnitId: 'ca-app-pub-placeholder',
   maxAdContentRating: 'G',
   tagForUnderAgeOfConsent: false,
   tagForChildDirectedTreatment: false,
   rewardConfig: {
-    coinsPerAd: 25,
+    coinsPerAd: 50,
     abilitiesPerAd: 1
   }
 };
@@ -82,7 +80,7 @@ const FALLBACK_AD_CONFIG: AdConfig = {
 class ConfigService {
   private abilitiesConfig: AbilityConfig[] | null = null;
   private adConfig: AdConfig | null = null;
-  private adUnits: { banner: string | null; rewarded: string | null } | null = null;
+  private adUnits: { banner: string | null; rewarded: string | null; rewardedList?: string[] } | null = null;
   private gameConfig: GameConfig | null = null;
   private isLoading = false;
 
@@ -209,7 +207,7 @@ class ConfigService {
     // Fetch from backend
     try {
       const platform = Platform.OS as 'android' | 'ios';
-      const result = await BackendService.getAdConfig(platform, __DEV__);
+      const result = await BackendService.getAdConfig(platform);
 
       if (result.success && result.adConfig) {
         this.adConfig = result.adConfig;
@@ -258,7 +256,7 @@ class ConfigService {
     // Fetch from backend
     try {
       const platform = Platform.OS as 'android' | 'ios';
-      const result = await BackendService.getGameConfig(platform, __DEV__);
+      const result = await BackendService.getGameConfig(platform);
 
       if (result.success && result.config) {
         this.gameConfig = result.config;
@@ -274,7 +272,7 @@ class ConfigService {
           abilities: FALLBACK_ABILITIES,
           ads: FALLBACK_AD_CONFIG,
           platform: platform,
-          isDevelopment: __DEV__
+          rewardAmount: 50
         };
         return this.gameConfig;
       }
@@ -284,7 +282,7 @@ class ConfigService {
         abilities: FALLBACK_ABILITIES,
         ads: FALLBACK_AD_CONFIG,
         platform: Platform.OS as 'android' | 'ios',
-        isDevelopment: __DEV__
+        rewardAmount: 50
       };
       return this.gameConfig;
     }
@@ -294,7 +292,7 @@ class ConfigService {
   // UTILITY METHODS
   // ============================================================================
 
-  async getAdUnits(forceRefresh = false): Promise<{ banner: string | null; rewarded: string | null }> {
+  async getAdUnits(forceRefresh = false): Promise<{ banner: string | null; rewarded: string | null; rewardedList?: string[] }> {
     // Return cached data if available and not forcing refresh
     if (this.adUnits && !forceRefresh) {
       return this.adUnits;
@@ -305,8 +303,13 @@ class ConfigService {
       try {
         const cached = await AsyncStorage.getItem(AD_UNITS_CACHE_KEY);
         if (cached) {
-          this.adUnits = JSON.parse(cached);
-          if (this.adUnits) return this.adUnits;
+          const parsed = JSON.parse(cached);
+          // If the cached data is missing rewardedList, it's a stale cache from an older version
+          if (parsed && parsed.rewardedList && parsed.rewardedList.length > 0) {
+            this.adUnits = parsed;
+            return this.adUnits!;
+          }
+          console.log('📡 Cache is missing rewardedList, forcing refresh...');
         }
       } catch (error) {
         console.error('Error loading cached ad units:', error);
@@ -328,12 +331,12 @@ class ConfigService {
         return this.adUnits;
       } else {
         console.warn('Failed to fetch ad units from backend, using default');
-        this.adUnits = { banner: null, rewarded: null };
+        this.adUnits = { banner: null, rewarded: null, rewardedList: [] };
         return this.adUnits;
       }
     } catch (error) {
       console.error('Error fetching ad units:', error);
-      this.adUnits = { banner: null, rewarded: null };
+      this.adUnits = { banner: null, rewarded: null, rewardedList: [] };
       return this.adUnits;
     }
   }

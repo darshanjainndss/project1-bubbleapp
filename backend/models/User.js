@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: function() {
+    required: function () {
       return !this.isGoogleLogin && !this.isAnonymous;
     },
     minlength: 6
@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  
+
   // Authentication info
   firebaseId: {
     type: String,
@@ -43,7 +43,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  
+
   // Game statistics
   gameData: {
     totalScore: {
@@ -69,7 +69,7 @@ const userSchema = new mongoose.Schema({
     abilities: {
       type: Map,
       of: Number,
-      default: function() {
+      default: function () {
         // Default abilities will be set by the initializeUserAbilities method
         return new Map();
       }
@@ -85,12 +85,26 @@ const userSchema = new mongoose.Schema({
       of: Number,
       default: new Map()
     },
+    totalAdEarnings: {
+      type: Number,
+      default: 0
+    },
+    rewardedAdHistory: [{
+      amount: {
+        type: Number,
+        required: true
+      },
+      watchedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
     lastPlayedAt: {
       type: Date,
       default: Date.now
     }
   },
-  
+
   // Account timestamps
   createdAt: {
     type: Date,
@@ -100,7 +114,7 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  
+
   // Account status
   isActive: {
     type: Boolean,
@@ -122,13 +136,13 @@ userSchema.index({ 'gameData.totalScore': -1 });
 userSchema.index({ createdAt: -1 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
-  
+
   // Don't hash password for Google login users or anonymous users
   if (this.isGoogleLogin || this.isAnonymous) return next();
-  
+
   try {
     // Hash password with cost of 12
     const hashedPassword = await bcrypt.hash(this.password, 12);
@@ -140,10 +154,10 @@ userSchema.pre('save', async function(next) {
 });
 
 // Initialize abilities for new users
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   // Only initialize abilities for new users
   if (!this.isNew) return next();
-  
+
   try {
     // Initialize abilities if they don't exist
     if (!this.gameData.abilities || this.gameData.abilities.size === 0) {
@@ -157,7 +171,7 @@ userSchema.pre('save', async function(next) {
 });
 
 // Instance method to check password
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   if (this.isGoogleLogin || this.isAnonymous) {
     throw new Error('This user type does not have passwords');
   }
@@ -165,13 +179,13 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 // Instance method to update last login
-userSchema.methods.updateLastLogin = function() {
+userSchema.methods.updateLastLogin = function () {
   this.lastLoginAt = new Date();
   return this.save();
 };
 
 // Instance method to get public profile
-userSchema.methods.getPublicProfile = function() {
+userSchema.methods.getPublicProfile = function () {
   return {
     id: this._id,
     email: this.email,
@@ -184,23 +198,23 @@ userSchema.methods.getPublicProfile = function() {
 };
 
 // Instance method to get game data
-userSchema.methods.getGameData = function() {
+userSchema.methods.getGameData = function () {
   const gameData = this.gameData.toObject();
-  
+
   // Convert levelStars Map to plain object
   if (gameData.levelStars instanceof Map) {
     gameData.levelStars = Object.fromEntries(gameData.levelStars);
   } else if (!gameData.levelStars) {
     gameData.levelStars = {};
   }
-  
+
   // Convert abilities Map to plain object
   if (gameData.abilities instanceof Map) {
     gameData.abilities = Object.fromEntries(gameData.abilities);
   } else if (!gameData.abilities) {
     gameData.abilities = {};
   }
-  
+
   return {
     userId: this._id,
     ...gameData,
@@ -209,24 +223,24 @@ userSchema.methods.getGameData = function() {
 };
 
 // Instance method to initialize user abilities from Ability model
-userSchema.methods.initializeUserAbilities = async function() {
+userSchema.methods.initializeUserAbilities = async function () {
   const Ability = require('./Ability');
-  
+
   try {
     const abilities = await Ability.getActiveAbilities();
-    
+
     // Initialize abilities map if it doesn't exist
     if (!this.gameData.abilities) {
       this.gameData.abilities = new Map();
     }
-    
+
     // Set starting counts for each ability
     abilities.forEach(ability => {
       if (!this.gameData.abilities.has(ability.name)) {
         this.gameData.abilities.set(ability.name, ability.startingCount);
       }
     });
-    
+
     // Don't save here - let the calling code handle the save
     return this;
   } catch (error) {
@@ -236,7 +250,7 @@ userSchema.methods.initializeUserAbilities = async function() {
 };
 
 // Instance method to get ability count
-userSchema.methods.getAbilityCount = function(abilityName) {
+userSchema.methods.getAbilityCount = function (abilityName) {
   if (!this.gameData.abilities || !this.gameData.abilities.has(abilityName)) {
     return 0;
   }
@@ -244,35 +258,35 @@ userSchema.methods.getAbilityCount = function(abilityName) {
 };
 
 // Instance method to update ability count
-userSchema.methods.updateAbilityCount = function(abilityName, count) {
+userSchema.methods.updateAbilityCount = function (abilityName, count) {
   if (!this.gameData.abilities) {
     this.gameData.abilities = new Map();
   }
-  
+
   this.gameData.abilities.set(abilityName, Math.max(0, count));
   return this;
 };
 
 // Instance method to use ability (decrement count)
-userSchema.methods.useAbility = function(abilityName, count = 1) {
+userSchema.methods.useAbility = function (abilityName, count = 1) {
   const currentCount = this.getAbilityCount(abilityName);
   if (currentCount < count) {
     throw new Error(`Insufficient ${abilityName} abilities. Current: ${currentCount}, Required: ${count}`);
   }
-  
+
   this.updateAbilityCount(abilityName, currentCount - count);
   return this;
 };
 
 // Instance method to add abilities
-userSchema.methods.addAbilities = function(abilityName, count) {
+userSchema.methods.addAbilities = function (abilityName, count) {
   const currentCount = this.getAbilityCount(abilityName);
   this.updateAbilityCount(abilityName, currentCount + count);
   return this;
 };
 
 // Static method to get leaderboard
-userSchema.statics.getLeaderboard = async function(limit = 100) {
+userSchema.statics.getLeaderboard = async function (limit = 100) {
   return this.aggregate([
     {
       $match: { isActive: true }
@@ -301,7 +315,7 @@ userSchema.statics.getLeaderboard = async function(limit = 100) {
 };
 
 // Static method to get user rank
-userSchema.statics.getUserRank = async function(userId) {
+userSchema.statics.getUserRank = async function (userId) {
   const pipeline = [
     {
       $match: { isActive: true }
@@ -330,13 +344,13 @@ userSchema.statics.getUserRank = async function(userId) {
       }
     }
   ];
-  
+
   const result = await this.aggregate(pipeline);
   return result.length > 0 ? result[0].rank : null;
 };
 
 // Virtual for games played
-userSchema.virtual('gameData.totalGames').get(function() {
+userSchema.virtual('gameData.totalGames').get(function () {
   return this.gameData.gamesPlayed || 0;
 });
 

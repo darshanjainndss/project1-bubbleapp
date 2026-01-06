@@ -69,15 +69,11 @@ export interface UserGameData {
   currentLevel: number;
   gamesPlayed: number;
   gamesWon: number;
-  abilities: {
-    lightning: number;
-    bomb: number;
-    freeze: number;
-    fire: number;
-  };
+  abilities: Record<string, number>;
   achievements: string[];
   completedLevels: number[];
   levelStars: Record<number, number>;
+  totalAdEarnings?: number;
   lastPlayedAt: string;
 }
 
@@ -125,9 +121,6 @@ export interface AbilityConfig {
 export interface AdConfig {
   platform: 'android' | 'ios';
   appId: string;
-  bannerAdUnitId: string;
-  rewardedAdUnitId: string;
-  interstitialAdUnitId?: string;
   maxAdContentRating: 'G' | 'PG' | 'T' | 'MA';
   tagForUnderAgeOfConsent: boolean;
   tagForChildDirectedTreatment: boolean;
@@ -141,7 +134,7 @@ export interface GameConfig {
   abilities: AbilityConfig[];
   ads: AdConfig | null;
   platform: 'android' | 'ios';
-  isDevelopment: boolean;
+  rewardAmount: number;
 }
 
 export interface AdUnitsResponse {
@@ -149,6 +142,7 @@ export interface AdUnitsResponse {
   ads: {
     banner: string | null;
     rewarded: string | null;
+    rewardedList?: string[];
   };
   fullConfig?: {
     banner: any;
@@ -423,7 +417,7 @@ class BackendService {
   // COINS & ABILITIES METHODS
   // ============================================================================
 
-  async updateCoins(amount: number, operation: 'add' | 'subtract' = 'add'): Promise<{ success: boolean; newBalance?: number; error?: string }> {
+  async updateCoins(amount: number, operation: 'add' | 'subtract' = 'add', isAdReward: boolean = false): Promise<{ success: boolean; newBalance?: number; error?: string }> {
     try {
       if (!this.authToken) {
         return { success: false, error: 'Not authenticated' };
@@ -436,7 +430,7 @@ class BackendService {
           'Authorization': `Bearer ${this.authToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount, operation }),
+        body: JSON.stringify({ amount, operation, isAdReward }),
       });
 
       const data = await response.json();
@@ -693,10 +687,10 @@ class BackendService {
     }
   }
 
-  async getAdConfig(platform: 'android' | 'ios' = 'android', isDev: boolean = __DEV__): Promise<{ success: boolean; adConfig?: AdConfig; error?: string }> {
+  async getAdConfig(platform: 'android' | 'ios' = 'android'): Promise<{ success: boolean; adConfig?: AdConfig; error?: string }> {
     try {
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/config/ads?platform=${platform}&dev=${isDev}`, {
+      const response = await fetch(`${baseUrl}/config/ads?platform=${platform}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -716,10 +710,10 @@ class BackendService {
     }
   }
 
-  async getGameConfig(platform: 'android' | 'ios' = 'android', isDev: boolean = __DEV__): Promise<{ success: boolean; config?: GameConfig; error?: string }> {
+  async getGameConfig(platform: 'android' | 'ios' = 'android'): Promise<{ success: boolean; config?: GameConfig; error?: string }> {
     try {
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/config/game?platform=${platform}&dev=${isDev}`, {
+      const response = await fetch(`${baseUrl}/config/game?platform=${platform}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

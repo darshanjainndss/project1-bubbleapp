@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { TouchableOpacity, Text, View, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { TouchableOpacity, Text, View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { RewardedAd, AdEventType, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
 import MaterialIcon from './MaterialIcon';
 import ConfigService from '../services/ConfigService';
@@ -14,125 +14,184 @@ interface RewardedAdButtonProps {
 
 const RewardedAdButton: React.FC<RewardedAdButtonProps> = ({
   onReward,
-  rewardAmount = 50,
+  rewardAmount = 0,
   style,
   disabled = false
 }) => {
-  const [rewardedAd, setRewardedAd] = useState<RewardedAd | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [adUnitId, setAdUnitId] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const [rewardedAd, setRewardedAd] = useState<RewardedAd | null>(null);
+  const [adUnitIds, setAdUnitIds] = useState<string[]>([]);
+  const [displayRewardAmount, setDisplayRewardAmount] = useState(rewardAmount || 0);
 
-  const loadAd = useCallback((ad: RewardedAd) => {
-    setIsLoading(true);
-    setIsLoaded(false);
-    ad.load();
-  }, []);
+  const timerRef: { current: any } = useRef<any>(null);
+  const adsRef = useRef<RewardedAd[]>([]);
+  const isLoadedRef = useRef(false);
 
+  // Sync prop changes with local state
   useEffect(() => {
-    let adInstance: RewardedAd | null = null;
-    let isMounted = true;
+    if (rewardAmount) {
+      setDisplayRewardAmount(rewardAmount);
+    }
+  }, [rewardAmount]);
 
-    const initializeAd = async () => {
+  // Initialize and fetch ad unit IDs and reward config
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        const units = await ConfigService.getAdUnits();
-        console.log('Fetched ad units:', units);
-        const unitId = units.rewarded || TestIds.REWARDED;
+        const [units, adConfig] = await Promise.all([
+          ConfigService.getAdUnits(),
+          ConfigService.getAdConfig()
+        ]);
 
-        if (!isMounted) return;
-        setAdUnitId(unitId);
+        console.log('📦 RewardedAdButton: Fetched data from service');
 
-        const ad = RewardedAd.createForAdRequest(unitId, {
-          requestNonPersonalizedAdsOnly: true,
-        });
-
-        const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-          console.log('✅ Rewarded ad loaded');
-          if (isMounted) {
-            setIsLoaded(true);
-            setIsLoading(false);
-          }
-        });
-
-        const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
-          console.log('🎉 User earned reward:', reward);
-          onReward(rewardAmount);
-        });
-
-        const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
-          console.log('📱 Rewarded ad closed');
-          if (isMounted) loadAd(ad);
-        });
-
-        const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error) => {
-          console.log('❌ Rewarded ad error:', error);
-          if (isMounted) {
-            setIsLoading(false);
-            setIsLoaded(false);
-          }
-        });
-
-        adInstance = ad;
-        if (isMounted) {
-          setRewardedAd(ad);
-          loadAd(ad);
+        if (!rewardAmount && adConfig?.rewardConfig?.coinsPerAd) {
+          setDisplayRewardAmount(adConfig.rewardConfig.coinsPerAd);
         }
 
-        return () => {
-          unsubscribeLoaded();
-          unsubscribeEarned();
-          unsubscribeClosed();
-          unsubscribeError();
-        };
+        const ids = units.rewardedList && units.rewardedList.length > 0
+          ? units.rewardedList
+          : [units.rewarded || TestIds.REWARDED];
+
+        console.log(`🎯 RewardedAdButton: Using ${ids.length} ad units for the race:`, ids);
+        setAdUnitIds(ids);
       } catch (error) {
-        console.error('Error initializing rewarded ad:', error);
+        console.error('❌ RewardedAdButton: Error fetching ad units:', error);
+        setAdUnitIds([TestIds.REWARDED]);
       }
     };
 
-    const cleanup = initializeAd();
+    fetchData();
 
     return () => {
-      isMounted = false;
-      // Note: cleanup is a promise here, but our standard pattern for listeners handles this
+      if (timerRef.current) clearInterval(timerRef.current);
+      // Cleanup any active ads
+      adsRef.current = [];
     };
-  }, [onReward, rewardAmount, loadAd]);
+  }, []);
+
+  const startAdLoadRace = async () => {
+    if (isLoading || isLoaded) return;
+
+    setIsLoading(true);
+    setCountdown(10);
+    isLoadedRef.current = false;
+
+    // Start 10 second timer
+    timerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          if (!isLoadedRef.current) {
+            setIsLoading(false);
+            Alert.alert('Timeout', 'Failed to load ad within 10 seconds. Please try again.');
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    console.log(`🚀 Starting ad load race with ${adUnitIds.length} IDs...`);
+
+    // Create and load multiple ad instances
+    const currentAds: RewardedAd[] = adUnitIds.map(id => {
+      const ad = RewardedAd.createForAdRequest(id, {
+        requestNonPersonalizedAdsOnly: true,
+      });
+
+      const unsubLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+        if (!isLoadedRef.current) {
+          console.log(`🏆 WINNER! Ad ID loaded first: ${id}`);
+          isLoadedRef.current = true;
+          setIsLoaded(true);
+          setIsLoading(false);
+          setRewardedAd(ad);
+          if (timerRef.current) clearInterval(timerRef.current);
+
+          // Show the ad immediately as requested
+          ad.show();
+        }
+        unsubLoaded();
+      });
+
+      const unsubError = ad.addAdEventListener(AdEventType.ERROR, (error) => {
+        console.log(`❌ Ad ID failed to load: ${id}`, error);
+        unsubError();
+      });
+
+      const unsubEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
+        console.log('🎉 User earned reward from race ad:', reward);
+        onReward(displayRewardAmount);
+        resetState();
+        unsubEarned();
+      });
+
+      const unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
+        console.log('📱 Rewarded ad closed');
+        resetState();
+        unsubClosed();
+      });
+
+      ad.load();
+      return ad;
+    });
+
+    adsRef.current = currentAds;
+  };
+
+  const resetState = () => {
+    setIsLoaded(false);
+    setIsLoading(false);
+    setCountdown(0);
+    setRewardedAd(null);
+    isLoadedRef.current = false;
+    if (timerRef.current) clearInterval(timerRef.current);
+  };
 
   const showAd = () => {
-    if (rewardedAd && isLoaded) {
+    if (isLoaded && rewardedAd) {
       rewardedAd.show();
     } else {
-      Alert.alert(
-        'Ad Not Ready',
-        'The rewarded ad is still loading. Please try again in a moment.',
-        [{ text: 'OK' }]
-      );
+      startAdLoadRace();
     }
   };
 
   return (
     <TouchableOpacity
-      style={[styles.rewardButton, style, disabled && styles.disabled]}
+      style={[styles.rewardButton, style, (disabled || (isLoading && countdown === 0)) && styles.disabled]}
       onPress={showAd}
-      disabled={disabled || !isLoaded}
+      disabled={disabled || isLoading}
     >
-      <MaterialIcon
-        name="play-circle-filled"
-        family="material"
-        size={ICON_SIZES.MEDIUM}
-        color={isLoaded ? ICON_COLORS.SUCCESS : ICON_COLORS.DISABLED}
-      />
+      <View style={styles.iconContainer}>
+        {isLoading ? (
+          <View style={styles.timerCircle}>
+            <Text style={styles.countdownText}>{countdown}</Text>
+          </View>
+        ) : (
+          <MaterialIcon
+            name="play-circle-filled"
+            family="material"
+            size={ICON_SIZES.MEDIUM}
+            color={disabled ? ICON_COLORS.DISABLED : ICON_COLORS.SUCCESS}
+          />
+        )}
+      </View>
+
       <View style={styles.textContainer}>
-        <Text style={[styles.rewardText, !isLoaded && styles.disabledText]}>
-          WATCH AD
+        <Text style={[styles.rewardText, (disabled) && styles.disabledText]}>
+          {isLoading ? 'LOADING AD...' : 'WATCH AD'}
         </Text>
-        <Text style={[styles.rewardAmount, !isLoaded && styles.disabledText]}>
-          +{rewardAmount} COINS
+        <Text style={[styles.rewardAmount, (disabled) && styles.disabledText]}>
+          +{displayRewardAmount} COINS
         </Text>
       </View>
 
       {isLoading && (
         <View style={styles.loadingIndicator}>
-          <Text style={styles.loadingText}>Loading...</Text>
+          <ActivityIndicator size="small" color="#00E0FF" />
         </View>
       )}
     </TouchableOpacity>
@@ -150,10 +209,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginVertical: 8,
+    minHeight: 64,
   },
   disabled: {
     backgroundColor: 'rgba(128, 128, 128, 0.1)',
     borderColor: '#666',
+  },
+  iconContainer: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#00E0FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countdownText: {
+    color: '#00E0FF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
   textContainer: {
     marginLeft: 12,
@@ -175,13 +255,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   loadingIndicator: {
-    position: 'absolute',
-    right: 12,
-  },
-  loadingText: {
-    color: '#00E0FF',
-    fontSize: 10,
-    fontFamily: 'monospace',
+    marginLeft: 8,
   },
 });
 

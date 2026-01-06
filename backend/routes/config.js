@@ -3,7 +3,6 @@ const Ability = require('../models/Ability');
 const AdConfig = require('../models/AdConfig');
 const AdUnit = require('../models/AdUnit');
 
-
 const router = express.Router();
 
 // ============================================================================
@@ -68,7 +67,7 @@ router.get('/abilities/:name', async (req, res) => {
 // @access  Public
 router.get('/ads', async (req, res) => {
   try {
-    const { platform = 'android', dev } = req.query;
+    const { platform = 'android' } = req.query;
 
     // Validate platform
     if (!['android', 'ios'].includes(platform)) {
@@ -78,9 +77,7 @@ router.get('/ads', async (req, res) => {
       });
     }
 
-    const isDev = dev === 'true' || dev === '1';
-
-    const adConfig = await AdConfig.getConfigForPlatform(platform, isDev);
+    const adConfig = await AdConfig.getConfigForPlatform(platform);
 
     if (!adConfig) {
       return res.status(404).json({
@@ -108,7 +105,7 @@ router.get('/ads', async (req, res) => {
 // @access  Public
 router.get('/game', async (req, res) => {
   try {
-    const { platform = 'android', dev } = req.query;
+    const { platform = 'android' } = req.query;
 
     // Validate platform
     if (!['android', 'ios'].includes(platform)) {
@@ -118,12 +115,10 @@ router.get('/game', async (req, res) => {
       });
     }
 
-    const isDev = dev === 'true' || dev === '1';
-
     // Fetch abilities and ad config in parallel
     const [abilities, adConfig] = await Promise.all([
       Ability.getActiveAbilities(),
-      AdConfig.getConfigForPlatform(platform, isDev)
+      AdConfig.getConfigForPlatform(platform)
     ]);
 
     const abilitiesData = abilities.map(ability => ability.toPublic());
@@ -134,7 +129,7 @@ router.get('/game', async (req, res) => {
         abilities: abilitiesData,
         ads: adConfig,
         platform,
-        isDevelopment: isDev
+        rewardAmount: Number(process.env.REWARDED_AD_COINS || 50)
       }
     });
   } catch (error) {
@@ -162,17 +157,19 @@ router.get('/ad-units', async (req, res) => {
     }
 
     const bannerAd = await AdUnit.findOne({ platform, adType: 'banner', isActive: true }).sort({ priority: 1 });
-    const rewardedAd = await AdUnit.findOne({ platform, adType: 'rewarded', isActive: true }).sort({ priority: 1 });
+    const rewardedAds = await AdUnit.find({ platform, adType: 'rewarded', isActive: true }).sort({ priority: 1 });
 
     res.json({
       success: true,
       ads: {
         banner: bannerAd ? bannerAd.adId : null,
-        rewarded: rewardedAd ? rewardedAd.adId : null
+        rewarded: rewardedAds.length > 0 ? rewardedAds[0].adId : null,
+        rewardedList: rewardedAds.map(ad => ad.adId)
       },
       fullConfig: {
         banner: bannerAd,
-        rewarded: rewardedAd
+        rewarded: rewardedAds.length > 0 ? rewardedAds[0] : null,
+        rewardedList: rewardedAds
       }
     });
   } catch (error) {
