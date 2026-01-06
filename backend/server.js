@@ -11,6 +11,9 @@ const userRoutes = require('./routes/user');
 const gameRoutes = require('./routes/game');
 const leaderboardRoutes = require('./routes/leaderboard');
 const configRoutes = require('./routes/config');
+const adConfigRoutes = require('./routes/adconfig');
+const adUnitRoutes = require('./routes/adunit');
+const abilityRoutes = require('./routes/ability');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -81,6 +84,9 @@ app.use('/api/user', userRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/adconfig', adConfigRoutes);
+app.use('/api/adunit', adUnitRoutes);
+app.use('/api/ability', abilityRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -121,6 +127,15 @@ app.listen(PORT, () => {
   console.log('   GET  /api/config/abilities - Get abilities config');
   console.log('   GET  /api/config/ads - Get ads config');
   console.log('   GET  /api/config/game - Get complete game config');
+  console.log('   🆕 Ability Management:');
+  console.log('   GET  /api/ability - Get all abilities');
+  console.log('   POST /api/ability/initialize - Initialize default abilities');
+  console.log('   🆕 AdConfig Management:');
+  console.log('   GET  /api/adconfig - Get all ad configurations');
+  console.log('   POST /api/adconfig/initialize - Initialize default ad configs');
+  console.log('   🆕 AdUnit Management:');
+  console.log('   GET  /api/adunit - Get all ad units');
+  console.log('   GET  /api/adunit/best/:platform/:type - Get best ad unit');
 });
 
 // Graceful shutdown

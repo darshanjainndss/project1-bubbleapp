@@ -43,6 +43,14 @@ const AdBanner: React.FC<AdBannerProps> = ({
 
   const handleAdFailedToLoad = (error: any) => {
     console.log('❌ Banner ad failed to load:', error);
+
+    // If we were using a custom ID and it failed, fallback to test ID
+    if (adUnitId && adUnitId !== TestIds.BANNER) {
+      console.log('⚠️ Falling back to test ID due to load failure');
+      setAdUnitId(TestIds.BANNER);
+      return;
+    }
+
     setAdError(error.message || 'Ad failed to load');
     setAdLoaded(false);
   };

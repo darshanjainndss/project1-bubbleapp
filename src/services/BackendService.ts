@@ -761,6 +761,600 @@ class BackendService {
     }
   }
 
+  // Force fetch fresh ad units from database (bypasses any server-side caching)
+  async getFreshAdUnits(platform: 'android' | 'ios' = 'android'): Promise<AdUnitsResponse> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      // Add timestamp to bypass any potential caching
+      const timestamp = Date.now();
+      const response = await fetch(`${baseUrl}/config/ad-units?platform=${platform}&_t=${timestamp}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+      });
+
+      const data = await response.json();
+      console.log('Fresh ad units response data:', data);
+
+      if (response.ok) {
+        return { success: true, ads: data.ads, fullConfig: data.fullConfig };
+      } else {
+        return { success: false, ads: { banner: null, rewarded: null }, error: data.message || 'Failed to fetch fresh ad units' };
+      }
+    } catch (error) {
+      console.error('Get fresh ad units error:', error);
+      return { success: false, ads: { banner: null, rewarded: null }, error: 'Network error fetching fresh ad units' };
+    }
+  }
+
+
+  // ============================================================================
+  // ABILITY MANAGEMENT METHODS
+  // ============================================================================
+
+  async getAllAbilities(filters?: {
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any[]; count?: number; filter?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const queryParams = new URLSearchParams();
+      
+      if (filters?.isActive !== undefined) queryParams.append('isActive', filters.isActive.toString());
+
+      const url = `${baseUrl}/ability${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data, count: data.count, filter: data.filter };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch abilities' };
+      }
+    } catch (error) {
+      console.error('Get all abilities error:', error);
+      return { success: false, error: 'Network error fetching abilities' };
+    }
+  }
+
+  async getAbilityById(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/ability/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch ability' };
+      }
+    } catch (error) {
+      console.error('Get ability by ID error:', error);
+      return { success: false, error: 'Network error fetching ability' };
+    }
+  }
+
+  async getAbilityByName(name: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/ability/name/${name}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch ability' };
+      }
+    } catch (error) {
+      console.error('Get ability by name error:', error);
+      return { success: false, error: 'Network error fetching ability' };
+    }
+  }
+
+  async createAbility(abilityData: {
+    name: string;
+    displayName: string;
+    description: string;
+    icon: string;
+    effect: 'destroyRow' | 'destroyNeighbors' | 'freezeColumn' | 'burnObstacles';
+    pointsPerBubble?: number;
+    price?: number;
+    startingCount?: number;
+    sortOrder?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/ability`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(abilityData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to create ability' };
+      }
+    } catch (error) {
+      console.error('Create ability error:', error);
+      return { success: false, error: 'Network error creating ability' };
+    }
+  }
+
+  async updateAbility(id: string, updates: {
+    name?: string;
+    displayName?: string;
+    description?: string;
+    icon?: string;
+    effect?: 'destroyRow' | 'destroyNeighbors' | 'freezeColumn' | 'burnObstacles';
+    pointsPerBubble?: number;
+    price?: number;
+    startingCount?: number;
+    sortOrder?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/ability/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to update ability' };
+      }
+    } catch (error) {
+      console.error('Update ability error:', error);
+      return { success: false, error: 'Network error updating ability' };
+    }
+  }
+
+  async deleteAbility(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/ability/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to delete ability' };
+      }
+    } catch (error) {
+      console.error('Delete ability error:', error);
+      return { success: false, error: 'Network error deleting ability' };
+    }
+  }
+
+  async initializeAbilities(): Promise<{ success: boolean; results?: any[]; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/ability/initialize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, results: data.results };
+      } else {
+        return { success: false, error: data.message || 'Failed to initialize abilities' };
+      }
+    } catch (error) {
+      console.error('Initialize abilities error:', error);
+      return { success: false, error: 'Network error initializing abilities' };
+    }
+  }
+
+  async resetAbilities(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/ability/reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data, count: data.count };
+      } else {
+        return { success: false, error: data.message || 'Failed to reset abilities' };
+      }
+    } catch (error) {
+      console.error('Reset abilities error:', error);
+      return { success: false, error: 'Network error resetting abilities' };
+    }
+  }
+
+  // ============================================================================
+  // AD CONFIG MANAGEMENT METHODS
+  // ============================================================================
+
+  async getAllAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adconfig`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data, count: data.count };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch ad configurations' };
+      }
+    } catch (error) {
+      console.error('Get all ad configs error:', error);
+      return { success: false, error: 'Network error fetching ad configurations' };
+    }
+  }
+
+  async getAdConfigByPlatform(platform: 'android' | 'ios'): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adconfig/${platform}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch ad configuration' };
+      }
+    } catch (error) {
+      console.error('Get ad config by platform error:', error);
+      return { success: false, error: 'Network error fetching ad configuration' };
+    }
+  }
+
+  async createAdConfig(configData: {
+    platform: 'android' | 'ios';
+    appId: string;
+    maxAdContentRating?: 'G' | 'PG' | 'T' | 'MA';
+    tagForUnderAgeOfConsent?: boolean;
+    tagForChildDirectedTreatment?: boolean;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adconfig`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(configData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to create ad configuration' };
+      }
+    } catch (error) {
+      console.error('Create ad config error:', error);
+      return { success: false, error: 'Network error creating ad configuration' };
+    }
+  }
+
+  async updateAdConfig(platform: 'android' | 'ios', updates: {
+    appId?: string;
+    maxAdContentRating?: 'G' | 'PG' | 'T' | 'MA';
+    tagForUnderAgeOfConsent?: boolean;
+    tagForChildDirectedTreatment?: boolean;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adconfig/${platform}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to update ad configuration' };
+      }
+    } catch (error) {
+      console.error('Update ad config error:', error);
+      return { success: false, error: 'Network error updating ad configuration' };
+    }
+  }
+
+  async deleteAdConfig(platform: 'android' | 'ios'): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adconfig/${platform}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to delete ad configuration' };
+      }
+    } catch (error) {
+      console.error('Delete ad config error:', error);
+      return { success: false, error: 'Network error deleting ad configuration' };
+    }
+  }
+
+  async initializeAdConfigs(): Promise<{ success: boolean; results?: any[]; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adconfig/initialize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, results: data.results };
+      } else {
+        return { success: false, error: data.message || 'Failed to initialize ad configurations' };
+      }
+    } catch (error) {
+      console.error('Initialize ad configs error:', error);
+      return { success: false, error: 'Network error initializing ad configurations' };
+    }
+  }
+
+  async resetAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adconfig/reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data, count: data.count };
+      } else {
+        return { success: false, error: data.message || 'Failed to reset ad configurations' };
+      }
+    } catch (error) {
+      console.error('Reset ad configs error:', error);
+      return { success: false, error: 'Network error resetting ad configurations' };
+    }
+  }
+
+  // ============================================================================
+  // AD UNIT MANAGEMENT METHODS
+  // ============================================================================
+
+  async getAllAdUnits(filters?: {
+    platform?: 'android' | 'ios';
+    adType?: 'banner' | 'rewarded';
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any[]; count?: number; filter?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const queryParams = new URLSearchParams();
+      
+      if (filters?.platform) queryParams.append('platform', filters.platform);
+      if (filters?.adType) queryParams.append('adType', filters.adType);
+      if (filters?.isActive !== undefined) queryParams.append('isActive', filters.isActive.toString());
+
+      const url = `${baseUrl}/adunit${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data, count: data.count, filter: data.filter };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch ad units' };
+      }
+    } catch (error) {
+      console.error('Get all ad units error:', error);
+      return { success: false, error: 'Network error fetching ad units' };
+    }
+  }
+
+  async getAdUnitById(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adunit/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch ad unit' };
+      }
+    } catch (error) {
+      console.error('Get ad unit by ID error:', error);
+      return { success: false, error: 'Network error fetching ad unit' };
+    }
+  }
+
+  async createAdUnit(unitData: {
+    adId: string;
+    adType: 'banner' | 'rewarded';
+    platform: 'android' | 'ios';
+    priority?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adunit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(unitData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to create ad unit' };
+      }
+    } catch (error) {
+      console.error('Create ad unit error:', error);
+      return { success: false, error: 'Network error creating ad unit' };
+    }
+  }
+
+  async updateAdUnit(id: string, updates: {
+    adId?: string;
+    adType?: 'banner' | 'rewarded';
+    platform?: 'android' | 'ios';
+    priority?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adunit/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to update ad unit' };
+      }
+    } catch (error) {
+      console.error('Update ad unit error:', error);
+      return { success: false, error: 'Network error updating ad unit' };
+    }
+  }
+
+  async deleteAdUnit(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adunit/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to delete ad unit' };
+      }
+    } catch (error) {
+      console.error('Delete ad unit error:', error);
+      return { success: false, error: 'Network error deleting ad unit' };
+    }
+  }
+
+  async getBestAdUnit(platform: 'android' | 'ios', adType: 'banner' | 'rewarded'): Promise<{ success: boolean; data?: any; adId?: string; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adunit/best/${platform}/${adType}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data, adId: data.adId };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch best ad unit' };
+      }
+    } catch (error) {
+      console.error('Get best ad unit error:', error);
+      return { success: false, error: 'Network error fetching best ad unit' };
+    }
+  }
 
   // ============================================================================
   // UTILITY METHODS

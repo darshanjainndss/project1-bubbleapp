@@ -9,8 +9,8 @@ const AD_UNITS_CACHE_KEY = 'cached_ad_units';
 const GAME_CONFIG_CACHE_KEY = 'cached_game_config';
 const CONFIG_TIMESTAMP_KEY = 'config_cache_timestamp';
 
-// Cache duration (24 hours)
-const CACHE_DURATION = 24 * 60 * 60 * 1000;
+// Cache duration (5 minutes in development, 24 hours in production)
+const CACHE_DURATION = __DEV__ ? 0 : 24 * 60 * 60 * 1000;
 
 
 // Fallback configurations (in case backend is unavailable)
@@ -248,8 +248,11 @@ class ConfigService {
   // ============================================================================
 
   async getAdUnits(forceRefresh = false): Promise<{ banner: string | null; rewarded: string | null; rewardedList?: string[] }> {
+    console.log(`🔍 getAdUnits called with forceRefresh: ${forceRefresh}`);
+
     // Return cached data if available and not forcing refresh
     if (this.adUnits && !forceRefresh) {
+      console.log('📦 Returning cached ad units');
       return this.adUnits;
     }
 
@@ -261,6 +264,7 @@ class ConfigService {
           const parsed = JSON.parse(cached);
           // If the cached data is missing rewardedList, it's a stale cache from an older version
           if (parsed && parsed.rewardedList && parsed.rewardedList.length > 0) {
+            console.log('📦 Using cached ad units from AsyncStorage');
             this.adUnits = parsed;
             return this.adUnits!;
           }
@@ -269,19 +273,30 @@ class ConfigService {
       } catch (error) {
         console.error('Error loading cached ad units:', error);
       }
+    } else if (forceRefresh) {
+      console.log('🔄 Force refresh requested, bypassing cache');
+    } else {
+      console.log('⏰ Cache expired, fetching fresh data');
     }
 
     // Fetch from backend
     try {
+      console.log('🌐 Fetching ad units from backend...');
       const platform = Platform.OS as 'android' | 'ios';
       const result = await BackendService.getAdUnits(platform);
 
       if (result.success && result.ads) {
+        console.log('✅ Successfully fetched ad units from backend');
+        console.log('📱 Banner:', result.ads.banner);
+        console.log('🎁 Rewarded:', result.ads.rewarded);
+        console.log('📋 Rewarded List:', result.ads.rewardedList?.length || 0, 'ads');
+
         this.adUnits = result.ads;
 
         // Cache the result
         await AsyncStorage.setItem(AD_UNITS_CACHE_KEY, JSON.stringify(result.ads));
         await this.setCacheTimestamp();
+        console.log('💾 Cached new ad units data');
 
         return this.adUnits;
       } else {
@@ -308,6 +323,47 @@ class ConfigService {
     await this.getAdUnits(true);
   }
 
+  // Force refresh ad units only (useful when ad units are updated in database)
+  async refreshAdUnits(): Promise<{ banner: string | null; rewarded: string | null; rewardedList?: string[] }> {
+    console.log('🔄 Force refreshing ad units from database...');
+    this.adUnits = null;
+
+    // Clear ad units cache and timestamp to force fresh fetch
+    try {
+      await AsyncStorage.multiRemove([AD_UNITS_CACHE_KEY, CONFIG_TIMESTAMP_KEY]);
+      console.log('🗑️ Cleared ad units cache and timestamp');
+    } catch (error) {
+      console.error('Error clearing ad units cache:', error);
+    }
+
+    return await this.getAdUnits(true);
+  }
+
+  // Nuclear option - clear everything and start fresh
+  async clearAllCaches(): Promise<void> {
+    console.log('💥 Clearing ALL caches and resetting ConfigService...');
+
+    // Reset all in-memory variables
+    this.abilitiesConfig = null;
+    this.adConfig = null;
+    this.adUnits = null;
+    this.gameConfig = null;
+
+    // Clear all AsyncStorage caches
+    try {
+      await AsyncStorage.multiRemove([
+        ABILITIES_CACHE_KEY,
+        AD_CONFIG_CACHE_KEY,
+        AD_UNITS_CACHE_KEY,
+        GAME_CONFIG_CACHE_KEY,
+        CONFIG_TIMESTAMP_KEY
+      ]);
+      console.log('🗑️ All caches cleared from AsyncStorage');
+    } catch (error) {
+      console.error('Error clearing all caches:', error);
+    }
+  }
+
 
 
   // Get ability price by name
@@ -326,6 +382,330 @@ class ConfigService {
   async getAbilityNames(): Promise<string[]> {
     const abilities = await this.getAbilitiesConfig();
     return abilities.map(ability => ability.name);
+  }
+
+  // ============================================================================
+  // ABILITY MANAGEMENT METHODS
+  // ============================================================================
+
+  async getAllAbilities(filters?: {
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any[]; count?: number; filter?: any; error?: string }> {
+    try {
+      return await BackendService.getAllAbilities(filters);
+    } catch (error) {
+      console.error('Error fetching all abilities:', error);
+      return { success: false, error: 'Failed to fetch abilities' };
+    }
+  }
+
+  async getAbilityById(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      return await BackendService.getAbilityById(id);
+    } catch (error) {
+      console.error('Error fetching ability by ID:', error);
+      return { success: false, error: 'Failed to fetch ability' };
+    }
+  }
+
+  async getAbilityByNameDirect(name: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      return await BackendService.getAbilityByName(name);
+    } catch (error) {
+      console.error('Error fetching ability by name:', error);
+      return { success: false, error: 'Failed to fetch ability' };
+    }
+  }
+
+  async createAbility(abilityData: {
+    name: string;
+    displayName: string;
+    description: string;
+    icon: string;
+    effect: 'destroyRow' | 'destroyNeighbors' | 'freezeColumn' | 'burnObstacles';
+    pointsPerBubble?: number;
+    price?: number;
+    startingCount?: number;
+    sortOrder?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.createAbility(abilityData);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating ability:', error);
+      return { success: false, error: 'Failed to create ability' };
+    }
+  }
+
+  async updateAbility(id: string, updates: {
+    name?: string;
+    displayName?: string;
+    description?: string;
+    icon?: string;
+    effect?: 'destroyRow' | 'destroyNeighbors' | 'freezeColumn' | 'burnObstacles';
+    pointsPerBubble?: number;
+    price?: number;
+    startingCount?: number;
+    sortOrder?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.updateAbility(id, updates);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+        this.abilitiesConfig = null;
+        this.gameConfig = null;
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating ability:', error);
+      return { success: false, error: 'Failed to update ability' };
+    }
+  }
+
+  async deleteAbility(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.deleteAbility(id);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error deleting ability:', error);
+      return { success: false, error: 'Failed to delete ability' };
+    }
+  }
+
+  async initializeAbilities(): Promise<{ success: boolean; results?: any[]; error?: string }> {
+    try {
+      const result = await BackendService.initializeAbilities();
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error initializing abilities:', error);
+      return { success: false, error: 'Failed to initialize abilities' };
+    }
+  }
+
+  async resetAbilities(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      const result = await BackendService.resetAbilities();
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error resetting abilities:', error);
+      return { success: false, error: 'Failed to reset abilities' };
+    }
+  }
+
+  // ============================================================================
+  // AD CONFIG MANAGEMENT METHODS
+  // ============================================================================
+
+  async getAllAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      return await BackendService.getAllAdConfigs();
+    } catch (error) {
+      console.error('Error fetching all ad configs:', error);
+      return { success: false, error: 'Failed to fetch ad configurations' };
+    }
+  }
+
+  async getAdConfigByPlatform(platform: 'android' | 'ios'): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      return await BackendService.getAdConfigByPlatform(platform);
+    } catch (error) {
+      console.error('Error fetching ad config by platform:', error);
+      return { success: false, error: 'Failed to fetch ad configuration' };
+    }
+  }
+
+  async createAdConfig(configData: {
+    platform: 'android' | 'ios';
+    appId: string;
+    maxAdContentRating?: 'G' | 'PG' | 'T' | 'MA';
+    tagForUnderAgeOfConsent?: boolean;
+    tagForChildDirectedTreatment?: boolean;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.createAdConfig(configData);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating ad config:', error);
+      return { success: false, error: 'Failed to create ad configuration' };
+    }
+  }
+
+  async updateAdConfig(platform: 'android' | 'ios', updates: {
+    appId?: string;
+    maxAdContentRating?: 'G' | 'PG' | 'T' | 'MA';
+    tagForUnderAgeOfConsent?: boolean;
+    tagForChildDirectedTreatment?: boolean;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.updateAdConfig(platform, updates);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+        this.adConfig = null;
+        this.gameConfig = null;
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating ad config:', error);
+      return { success: false, error: 'Failed to update ad configuration' };
+    }
+  }
+
+  async deleteAdConfig(platform: 'android' | 'ios'): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.deleteAdConfig(platform);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error deleting ad config:', error);
+      return { success: false, error: 'Failed to delete ad configuration' };
+    }
+  }
+
+  async initializeAdConfigs(): Promise<{ success: boolean; results?: any[]; error?: string }> {
+    try {
+      const result = await BackendService.initializeAdConfigs();
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error initializing ad configs:', error);
+      return { success: false, error: 'Failed to initialize ad configurations' };
+    }
+  }
+
+  async resetAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      const result = await BackendService.resetAdConfigs();
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error resetting ad configs:', error);
+      return { success: false, error: 'Failed to reset ad configurations' };
+    }
+  }
+
+  // ============================================================================
+  // AD UNIT MANAGEMENT METHODS
+  // ============================================================================
+
+  async getAllAdUnits(filters?: {
+    platform?: 'android' | 'ios';
+    adType?: 'banner' | 'rewarded';
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any[]; count?: number; filter?: any; error?: string }> {
+    try {
+      return await BackendService.getAllAdUnits(filters);
+    } catch (error) {
+      console.error('Error fetching all ad units:', error);
+      return { success: false, error: 'Failed to fetch ad units' };
+    }
+  }
+
+  async getAdUnitById(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      return await BackendService.getAdUnitById(id);
+    } catch (error) {
+      console.error('Error fetching ad unit by ID:', error);
+      return { success: false, error: 'Failed to fetch ad unit' };
+    }
+  }
+
+  async createAdUnit(unitData: {
+    adId: string;
+    adType: 'banner' | 'rewarded';
+    platform: 'android' | 'ios';
+    priority?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.createAdUnit(unitData);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error creating ad unit:', error);
+      return { success: false, error: 'Failed to create ad unit' };
+    }
+  }
+
+  async updateAdUnit(id: string, updates: {
+    adId?: string;
+    adType?: 'banner' | 'rewarded';
+    platform?: 'android' | 'ios';
+    priority?: number;
+    isActive?: boolean;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.updateAdUnit(id, updates);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+        this.adUnits = null;
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating ad unit:', error);
+      return { success: false, error: 'Failed to update ad unit' };
+    }
+  }
+
+  async deleteAdUnit(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const result = await BackendService.deleteAdUnit(id);
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error deleting ad unit:', error);
+      return { success: false, error: 'Failed to delete ad unit' };
+    }
+  }
+
+  async getBestAdUnit(platform: 'android' | 'ios', adType: 'banner' | 'rewarded'): Promise<{ success: boolean; data?: any; adId?: string; error?: string }> {
+    try {
+      return await BackendService.getBestAdUnit(platform, adType);
+    } catch (error) {
+      console.error('Error fetching best ad unit:', error);
+      return { success: false, error: 'Failed to fetch best ad unit' };
+    }
   }
 }
 
