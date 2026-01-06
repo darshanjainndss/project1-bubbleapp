@@ -144,6 +144,20 @@ export interface GameConfig {
   isDevelopment: boolean;
 }
 
+export interface AdUnitsResponse {
+  success: boolean;
+  ads: {
+    banner: string | null;
+    rewarded: string | null;
+  };
+  fullConfig?: {
+    banner: any;
+    rewarded: any;
+  };
+  error?: string;
+}
+
+
 class BackendService {
   private authToken: string | null = null;
   private currentUser: UserProfile | null = null;
@@ -724,6 +738,31 @@ class BackendService {
       return { success: false, error: 'Network error fetching game config' };
     }
   }
+
+  async getAdUnits(platform: 'android' | 'ios' = 'android'): Promise<AdUnitsResponse> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/config/ad-units?platform=${platform}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      console.log('Ad units response data:', data);
+
+      if (response.ok) {
+        return { success: true, ads: data.ads, fullConfig: data.fullConfig };
+      } else {
+        return { success: false, ads: { banner: null, rewarded: null }, error: data.message || 'Failed to fetch ad units' };
+      }
+    } catch (error) {
+      console.error('Get ad units error:', error);
+      return { success: false, ads: { banner: null, rewarded: null }, error: 'Network error fetching ad units' };
+    }
+  }
+
 
   // ============================================================================
   // UTILITY METHODS

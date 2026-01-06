@@ -1,6 +1,8 @@
 const express = require('express');
 const Ability = require('../models/Ability');
 const AdConfig = require('../models/AdConfig');
+const AdUnit = require('../models/AdUnit');
+
 
 const router = express.Router();
 
@@ -14,9 +16,9 @@ const router = express.Router();
 router.get('/abilities', async (req, res) => {
   try {
     const abilities = await Ability.getActiveAbilities();
-    
+
     const abilitiesData = abilities.map(ability => ability.toPublic());
-    
+
     res.json({
       success: true,
       abilities: abilitiesData
@@ -37,16 +39,16 @@ router.get('/abilities', async (req, res) => {
 router.get('/abilities/:name', async (req, res) => {
   try {
     const { name } = req.params;
-    
+
     const ability = await Ability.getAbilityByName(name);
-    
+
     if (!ability) {
       return res.status(404).json({
         success: false,
         message: 'Ability not found'
       });
     }
-    
+
     res.json({
       success: true,
       ability: ability.toPublic()
@@ -67,7 +69,7 @@ router.get('/abilities/:name', async (req, res) => {
 router.get('/ads', async (req, res) => {
   try {
     const { platform = 'android', dev } = req.query;
-    
+
     // Validate platform
     if (!['android', 'ios'].includes(platform)) {
       return res.status(400).json({
@@ -75,18 +77,18 @@ router.get('/ads', async (req, res) => {
         message: 'Invalid platform. Must be "android" or "ios"'
       });
     }
-    
+
     const isDev = dev === 'true' || dev === '1';
-    
+
     const adConfig = await AdConfig.getConfigForPlatform(platform, isDev);
-    
+
     if (!adConfig) {
       return res.status(404).json({
         success: false,
         message: `Ad configuration not found for platform: ${platform}`
       });
     }
-    
+
     res.json({
       success: true,
       adConfig
@@ -107,7 +109,7 @@ router.get('/ads', async (req, res) => {
 router.get('/game', async (req, res) => {
   try {
     const { platform = 'android', dev } = req.query;
-    
+
     // Validate platform
     if (!['android', 'ios'].includes(platform)) {
       return res.status(400).json({
@@ -115,17 +117,17 @@ router.get('/game', async (req, res) => {
         message: 'Invalid platform. Must be "android" or "ios"'
       });
     }
-    
+
     const isDev = dev === 'true' || dev === '1';
-    
+
     // Fetch abilities and ad config in parallel
     const [abilities, adConfig] = await Promise.all([
       Ability.getActiveAbilities(),
       AdConfig.getConfigForPlatform(platform, isDev)
     ]);
-    
+
     const abilitiesData = abilities.map(ability => ability.toPublic());
-    
+
     res.json({
       success: true,
       config: {
@@ -140,6 +142,44 @@ router.get('/game', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch game configuration',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// @route   GET /api/config/ad-units
+// @desc    Get all active ad units for platform
+// @access  Public
+router.get('/ad-units', async (req, res) => {
+  try {
+    const { platform = 'android' } = req.query;
+
+    if (!['android', 'ios'].includes(platform)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid platform. Must be "android" or "ios"'
+      });
+    }
+
+    const bannerAd = await AdUnit.findOne({ platform, adType: 'banner', isActive: true }).sort({ priority: 1 });
+    const rewardedAd = await AdUnit.findOne({ platform, adType: 'rewarded', isActive: true }).sort({ priority: 1 });
+
+    res.json({
+      success: true,
+      ads: {
+        banner: bannerAd ? bannerAd.adId : null,
+        rewarded: rewardedAd ? rewardedAd.adId : null
+      },
+      fullConfig: {
+        banner: bannerAd,
+        rewarded: rewardedAd
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching ad units:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ad units',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

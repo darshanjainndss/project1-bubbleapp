@@ -548,36 +548,69 @@ const Roadmap: React.FC = () => {
 
   // Initialize rewarded ad
   useEffect(() => {
-    const { RewardedAd, AdEventType, RewardedAdEventType } = require('react-native-google-mobile-ads');
-    const { ADMOB_CONFIG } = require('../config/admob');
+    const { RewardedAd, AdEventType, RewardedAdEventType, TestIds } = require('react-native-google-mobile-ads');
+    const ConfigService = require('../services/ConfigService').default;
 
-    const ad = RewardedAd.createForAdRequest(ADMOB_CONFIG.REWARDED_AD_UNIT_ID, {
-      requestNonPersonalizedAdsOnly: true,
-    });
+    let adInstance: any = null;
+    let isMounted = true;
 
-    const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-      console.log('✅ Rewarded ad loaded');
-      setIsAdLoaded(true);
-    });
+    const initializeAd = async () => {
+      try {
+        const units = await ConfigService.getAdUnits();
+        const unitId = units.rewarded || TestIds.REWARDED;
+        console.log('Fetched ad units for Roadmap:', unitId);
 
-    const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: any) => {
-      console.log('🎉 User earned reward:', reward);
-      setCoins((prev: any) => prev + 50);
-      toastRef.current?.show('Earned 50 bonus coins!', 'success');
-    });
+        if (!isMounted) return;
 
-    const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error: any) => {
-      console.log('❌ Rewarded ad error:', error);
-      setIsAdLoaded(false);
-    });
+        const ad = RewardedAd.createForAdRequest(unitId, {
+          requestNonPersonalizedAdsOnly: true,
+        });
 
-    setRewardedAd(ad);
-    ad.load();
+        const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+          console.log('✅ Rewarded ad loaded (Roadmap)');
+          if (isMounted) setIsAdLoaded(true);
+        });
+
+        const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: any) => {
+          console.log('🎉 User earned reward (Roadmap):', reward);
+          setCoins((prev: any) => prev + 50);
+          toastRef.current?.show('Earned 50 bonus coins!', 'success');
+        });
+
+        const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error: any) => {
+          console.log('❌ Rewarded ad error (Roadmap):', error);
+          if (isMounted) setIsAdLoaded(false);
+        });
+
+        const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
+          console.log('📱 Rewarded ad closed (Roadmap)');
+          if (isMounted) {
+            setIsAdLoaded(false);
+            ad.load();
+          }
+        });
+
+        adInstance = ad;
+        if (isMounted) {
+          setRewardedAd(ad);
+          ad.load();
+        }
+
+        return () => {
+          unsubscribeLoaded();
+          unsubscribeEarned();
+          unsubscribeError();
+          unsubscribeClosed();
+        };
+      } catch (error) {
+        console.error('Error initializing rewarded ad in Roadmap:', error);
+      }
+    };
+
+    initializeAd();
 
     return () => {
-      unsubscribeLoaded();
-      unsubscribeEarned();
-      unsubscribeError();
+      isMounted = false;
     };
   }, []);
 
@@ -942,10 +975,10 @@ const Roadmap: React.FC = () => {
           setSelectedLevel(completedLevel + 1);
           setLoadingDirection('toFight');
           setIsLoading(true);
-          
+
           // Close current GameScreen and reopen with next level to reset modal state
           setShowGameScreen(false);
-          
+
           setTimeout(() => {
             // Reopen GameScreen with next level - this will reset the game state and close modal
             setShowGameScreen(true);

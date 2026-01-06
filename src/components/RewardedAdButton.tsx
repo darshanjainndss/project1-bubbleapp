@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TouchableOpacity, Text, View, StyleSheet, Alert } from 'react-native';
 import { RewardedAd, AdEventType, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
 import MaterialIcon from './MaterialIcon';
-import { ADMOB_CONFIG } from '../config/admob';
+import ConfigService from '../services/ConfigService';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 
 interface RewardedAdButtonProps {
@@ -21,53 +21,81 @@ const RewardedAdButton: React.FC<RewardedAdButtonProps> = ({
   const [rewardedAd, setRewardedAd] = useState<RewardedAd | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [adUnitId, setAdUnitId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const ad = RewardedAd.createForAdRequest(ADMOB_CONFIG.REWARDED_AD_UNIT_ID, {
-      requestNonPersonalizedAdsOnly: true,
-    });
-
-    const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-      console.log('✅ Rewarded ad loaded');
-      setIsLoaded(true);
-      setIsLoading(false);
-    });
-
-    const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
-      console.log('🎉 User earned reward:', reward);
-      onReward(rewardAmount);
-    });
-
-    const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
-      console.log('📱 Rewarded ad closed');
-      // Load a new ad for next time
-      loadAd();
-    });
-
-    const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error) => {
-      console.log('❌ Rewarded ad error:', error);
-      setIsLoading(false);
-      setIsLoaded(false);
-    });
-
-    setRewardedAd(ad);
-    loadAd();
-
-    return () => {
-      unsubscribeLoaded();
-      unsubscribeEarned();
-      unsubscribeClosed();
-      unsubscribeError();
-    };
+  const loadAd = useCallback((ad: RewardedAd) => {
+    setIsLoading(true);
+    setIsLoaded(false);
+    ad.load();
   }, []);
 
-  const loadAd = () => {
-    if (rewardedAd) {
-      setIsLoading(true);
-      setIsLoaded(false);
-      rewardedAd.load();
-    }
-  };
+  useEffect(() => {
+    let adInstance: RewardedAd | null = null;
+    let isMounted = true;
+
+    const initializeAd = async () => {
+      try {
+        const units = await ConfigService.getAdUnits();
+        console.log('Fetched ad units:', units);
+        const unitId = units.rewarded || TestIds.REWARDED;
+
+        if (!isMounted) return;
+        setAdUnitId(unitId);
+
+        const ad = RewardedAd.createForAdRequest(unitId, {
+          requestNonPersonalizedAdsOnly: true,
+        });
+
+        const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+          console.log('✅ Rewarded ad loaded');
+          if (isMounted) {
+            setIsLoaded(true);
+            setIsLoading(false);
+          }
+        });
+
+        const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
+          console.log('🎉 User earned reward:', reward);
+          onReward(rewardAmount);
+        });
+
+        const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
+          console.log('📱 Rewarded ad closed');
+          if (isMounted) loadAd(ad);
+        });
+
+        const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error) => {
+          console.log('❌ Rewarded ad error:', error);
+          if (isMounted) {
+            setIsLoading(false);
+            setIsLoaded(false);
+          }
+        });
+
+        adInstance = ad;
+        if (isMounted) {
+          setRewardedAd(ad);
+          loadAd(ad);
+        }
+
+        return () => {
+          unsubscribeLoaded();
+          unsubscribeEarned();
+          unsubscribeClosed();
+          unsubscribeError();
+        };
+      } catch (error) {
+        console.error('Error initializing rewarded ad:', error);
+      }
+    };
+
+    const cleanup = initializeAd();
+
+    return () => {
+      isMounted = false;
+      // Note: cleanup is a promise here, but our standard pattern for listeners handles this
+    };
+  }, [onReward, rewardAmount, loadAd]);
 
   const showAd = () => {
     if (rewardedAd && isLoaded) {
@@ -101,7 +129,7 @@ const RewardedAdButton: React.FC<RewardedAdButtonProps> = ({
           +{rewardAmount} COINS
         </Text>
       </View>
-      
+
       {isLoading && (
         <View style={styles.loadingIndicator}>
           <Text style={styles.loadingText}>Loading...</Text>

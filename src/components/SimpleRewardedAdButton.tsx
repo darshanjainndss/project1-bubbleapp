@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
 import { RewardedAd, AdEventType, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
-import { ADMOB_CONFIG } from '../config/admob';
+import ConfigService from '../services/ConfigService';
 
 interface SimpleRewardedAdButtonProps {
   onReward: (amount: number) => void;
@@ -15,55 +15,79 @@ const SimpleRewardedAdButton: React.FC<SimpleRewardedAdButtonProps> = ({
   const [rewardedAd, setRewardedAd] = useState<RewardedAd | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [adUnitId, setAdUnitId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const ad = RewardedAd.createForAdRequest(ADMOB_CONFIG.REWARDED_AD_UNIT_ID, {
-      requestNonPersonalizedAdsOnly: true,
-    });
-
-    const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-      console.log('✅ Rewarded ad loaded');
-      setIsLoaded(true);
-      setIsLoading(false);
-    });
-
-    const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
-      console.log('🎉 User earned reward:', reward);
-      onReward(rewardAmount);
-      Alert.alert('Reward Earned!', `You earned ${rewardAmount} coins!`, [{ text: 'OK' }]);
-    });
-
-    const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
-      console.log('📱 Rewarded ad closed');
-      // Load a new ad for next time
-      loadAd();
-    });
-
-    const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error) => {
-      console.log('❌ Rewarded ad error:', error);
-      setIsLoading(false);
-      setIsLoaded(false);
-      Alert.alert('Ad Error', 'Failed to load ad. Please try again later.', [{ text: 'OK' }]);
-    });
-
-    setRewardedAd(ad);
-    loadAd();
-
-    return () => {
-      unsubscribeLoaded();
-      unsubscribeEarned();
-      unsubscribeClosed();
-      unsubscribeError();
-    };
+  const loadAd = useCallback((ad: RewardedAd) => {
+    setIsLoading(true);
+    setIsLoaded(false);
+    ad.load();
   }, []);
 
-  const loadAd = () => {
-    if (rewardedAd) {
-      setIsLoading(true);
-      setIsLoaded(false);
-      rewardedAd.load();
-    }
-  };
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializeAd = async () => {
+      try {
+        const units = await ConfigService.getAdUnits();
+        const unitId = units.rewarded || TestIds.REWARDED;
+
+        if (!isMounted) return;
+        setAdUnitId(unitId);
+
+        const ad = RewardedAd.createForAdRequest(unitId, {
+          requestNonPersonalizedAdsOnly: true,
+        });
+
+        const unsubscribeLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+          console.log('✅ Rewarded ad loaded');
+          if (isMounted) {
+            setIsLoaded(true);
+            setIsLoading(false);
+          }
+        });
+
+        const unsubscribeEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
+          console.log('🎉 User earned reward:', reward);
+          onReward(rewardAmount);
+          Alert.alert('Reward Earned!', `You earned ${rewardAmount} coins!`, [{ text: 'OK' }]);
+        });
+
+        const unsubscribeClosed = ad.addAdEventListener(AdEventType.CLOSED, () => {
+          console.log('📱 Rewarded ad closed');
+          if (isMounted) loadAd(ad);
+        });
+
+        const unsubscribeError = ad.addAdEventListener(AdEventType.ERROR, (error) => {
+          console.log('❌ Rewarded ad error:', error);
+          if (isMounted) {
+            setIsLoading(false);
+            setIsLoaded(false);
+            Alert.alert('Ad Error', 'Failed to load ad. Please try again later.', [{ text: 'OK' }]);
+          }
+        });
+
+        if (isMounted) {
+          setRewardedAd(ad);
+          loadAd(ad);
+        }
+
+        return () => {
+          unsubscribeLoaded();
+          unsubscribeEarned();
+          unsubscribeClosed();
+          unsubscribeError();
+        };
+      } catch (error) {
+        console.error('Error initializing simple rewarded ad:', error);
+      }
+    };
+
+    initializeAd();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [onReward, rewardAmount, loadAd]);
 
   const showAd = () => {
     if (rewardedAd && isLoaded) {

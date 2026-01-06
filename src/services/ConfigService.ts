@@ -5,11 +5,13 @@ import BackendService, { AbilityConfig, AdConfig, GameConfig } from './BackendSe
 // Cache keys
 const ABILITIES_CACHE_KEY = 'cached_abilities_config';
 const AD_CONFIG_CACHE_KEY = 'cached_ad_config';
+const AD_UNITS_CACHE_KEY = 'cached_ad_units';
 const GAME_CONFIG_CACHE_KEY = 'cached_game_config';
 const CONFIG_TIMESTAMP_KEY = 'config_cache_timestamp';
 
 // Cache duration (24 hours)
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
+
 
 // Fallback configurations (in case backend is unavailable)
 const FALLBACK_ABILITIES: AbilityConfig[] = [
@@ -65,13 +67,9 @@ const FALLBACK_ABILITIES: AbilityConfig[] = [
 
 const FALLBACK_AD_CONFIG: AdConfig = {
   platform: Platform.OS as 'android' | 'ios',
-  appId: 'ca-app-pub-9343780880487586~7301029574',
-  bannerAdUnitId: __DEV__ 
-    ? 'ca-app-pub-3940256099942544/6300978111'
-    : 'ca-app-pub-9343780880487586/4698916968',
-  rewardedAdUnitId: __DEV__
-    ? 'ca-app-pub-3940256099942544/5224354917'
-    : 'ca-app-pub-9343780880487586/4698916968',
+  appId: 'ca-app-pub-placeholder',
+  bannerAdUnitId: 'ca-app-pub-placeholder',
+  rewardedAdUnitId: 'ca-app-pub-placeholder',
   maxAdContentRating: 'G',
   tagForUnderAgeOfConsent: false,
   tagForChildDirectedTreatment: false,
@@ -84,8 +82,10 @@ const FALLBACK_AD_CONFIG: AdConfig = {
 class ConfigService {
   private abilitiesConfig: AbilityConfig[] | null = null;
   private adConfig: AdConfig | null = null;
+  private adUnits: { banner: string | null; rewarded: string | null } | null = null;
   private gameConfig: GameConfig | null = null;
   private isLoading = false;
+
 
   // ============================================================================
   // CACHE MANAGEMENT
@@ -95,10 +95,10 @@ class ConfigService {
     try {
       const timestamp = await AsyncStorage.getItem(CONFIG_TIMESTAMP_KEY);
       if (!timestamp) return false;
-      
+
       const cacheTime = parseInt(timestamp, 10);
       const now = Date.now();
-      
+
       return (now - cacheTime) < CACHE_DURATION;
     } catch (error) {
       console.error('Error checking cache validity:', error);
@@ -119,9 +119,11 @@ class ConfigService {
       await AsyncStorage.multiRemove([
         ABILITIES_CACHE_KEY,
         AD_CONFIG_CACHE_KEY,
+        AD_UNITS_CACHE_KEY,
         GAME_CONFIG_CACHE_KEY,
         CONFIG_TIMESTAMP_KEY
       ]);
+
     } catch (error) {
       console.error('Error clearing config cache:', error);
     }
@@ -143,24 +145,25 @@ class ConfigService {
         const cached = await AsyncStorage.getItem(ABILITIES_CACHE_KEY);
         if (cached) {
           this.abilitiesConfig = JSON.parse(cached);
-          return this.abilitiesConfig;
+          if (this.abilitiesConfig) return this.abilitiesConfig;
         }
       } catch (error) {
         console.error('Error loading cached abilities config:', error);
       }
     }
 
+
     // Fetch from backend
     try {
       const result = await BackendService.getAbilitiesConfig();
-      
+
       if (result.success && result.abilities) {
         this.abilitiesConfig = result.abilities;
-        
+
         // Cache the result
         await AsyncStorage.setItem(ABILITIES_CACHE_KEY, JSON.stringify(result.abilities));
         await this.setCacheTimestamp();
-        
+
         return this.abilitiesConfig;
       } else {
         console.warn('Failed to fetch abilities config from backend, using fallback');
@@ -195,25 +198,26 @@ class ConfigService {
         const cached = await AsyncStorage.getItem(AD_CONFIG_CACHE_KEY);
         if (cached) {
           this.adConfig = JSON.parse(cached);
-          return this.adConfig;
+          if (this.adConfig) return this.adConfig;
         }
       } catch (error) {
         console.error('Error loading cached ad config:', error);
       }
     }
 
+
     // Fetch from backend
     try {
       const platform = Platform.OS as 'android' | 'ios';
       const result = await BackendService.getAdConfig(platform, __DEV__);
-      
+
       if (result.success && result.adConfig) {
         this.adConfig = result.adConfig;
-        
+
         // Cache the result
         await AsyncStorage.setItem(AD_CONFIG_CACHE_KEY, JSON.stringify(result.adConfig));
         await this.setCacheTimestamp();
-        
+
         return this.adConfig;
       } else {
         console.warn('Failed to fetch ad config from backend, using fallback');
@@ -243,25 +247,26 @@ class ConfigService {
         const cached = await AsyncStorage.getItem(GAME_CONFIG_CACHE_KEY);
         if (cached) {
           this.gameConfig = JSON.parse(cached);
-          return this.gameConfig;
+          if (this.gameConfig) return this.gameConfig;
         }
       } catch (error) {
         console.error('Error loading cached game config:', error);
       }
     }
 
+
     // Fetch from backend
     try {
       const platform = Platform.OS as 'android' | 'ios';
       const result = await BackendService.getGameConfig(platform, __DEV__);
-      
+
       if (result.success && result.config) {
         this.gameConfig = result.config;
-        
+
         // Cache the result
         await AsyncStorage.setItem(GAME_CONFIG_CACHE_KEY, JSON.stringify(result.config));
         await this.setCacheTimestamp();
-        
+
         return this.gameConfig;
       } else {
         console.warn('Failed to fetch game config from backend, using fallback');
@@ -289,15 +294,63 @@ class ConfigService {
   // UTILITY METHODS
   // ============================================================================
 
+  async getAdUnits(forceRefresh = false): Promise<{ banner: string | null; rewarded: string | null }> {
+    // Return cached data if available and not forcing refresh
+    if (this.adUnits && !forceRefresh) {
+      return this.adUnits;
+    }
+
+    // Check if we should use cache
+    if (!forceRefresh && await this.isCacheValid()) {
+      try {
+        const cached = await AsyncStorage.getItem(AD_UNITS_CACHE_KEY);
+        if (cached) {
+          this.adUnits = JSON.parse(cached);
+          if (this.adUnits) return this.adUnits;
+        }
+      } catch (error) {
+        console.error('Error loading cached ad units:', error);
+      }
+    }
+
+    // Fetch from backend
+    try {
+      const platform = Platform.OS as 'android' | 'ios';
+      const result = await BackendService.getAdUnits(platform);
+
+      if (result.success && result.ads) {
+        this.adUnits = result.ads;
+
+        // Cache the result
+        await AsyncStorage.setItem(AD_UNITS_CACHE_KEY, JSON.stringify(result.ads));
+        await this.setCacheTimestamp();
+
+        return this.adUnits;
+      } else {
+        console.warn('Failed to fetch ad units from backend, using default');
+        this.adUnits = { banner: null, rewarded: null };
+        return this.adUnits;
+      }
+    } catch (error) {
+      console.error('Error fetching ad units:', error);
+      this.adUnits = { banner: null, rewarded: null };
+      return this.adUnits;
+    }
+  }
+
   async refreshConfig(): Promise<void> {
     this.abilitiesConfig = null;
     this.adConfig = null;
+    this.adUnits = null;
     this.gameConfig = null;
     await this.clearCache();
-    
+
     // Pre-load the config
     await this.getGameConfig(true);
+    await this.getAdUnits(true);
   }
+
+
 
   // Get ability price by name
   async getAbilityPrice(abilityName: string): Promise<number> {

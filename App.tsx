@@ -3,74 +3,63 @@
  * @format
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Animated } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import {
   SafeAreaProvider,
-  useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import mobileAds from 'react-native-google-mobile-ads';
+import mobileAds, { MaxAdContentRating } from 'react-native-google-mobile-ads';
 import LoadingScreen from './src/components/LoadingScreen';
-import TransitionScreen from './src/components/TransitionScreen';
 import Roadmap from './src/components/Roadmap';
 import LoginScreen from './src/components/LoginScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import ConfigService from './src/services/ConfigService';
 
-// Initialize AdMob with dynamic configuration
-const initializeAdMob = async () => {
-  try {
-    console.log('🔧 Initializing AdMob with dynamic configuration...');
-    
-    // Get ad configuration from backend
-    const adConfig = await ConfigService.getAdConfig();
-    
-    // Initialize AdMob
-    const adapterStatuses = await mobileAds().initialize();
-    console.log('✅ AdMob initialized successfully');
-    
-    // Log adapter statuses for debugging
-    Object.keys(adapterStatuses).forEach(adapter => {
-      const status = adapterStatuses[adapter];
-      console.log(`📱 ${adapter}: ${status.state} (${status.description})`);
-    });
-    
-    // Set request configuration from backend config
-    await mobileAds().setRequestConfiguration({
-      maxAdContentRating: adConfig.maxAdContentRating,
-      tagForUnderAgeOfConsent: adConfig.tagForUnderAgeOfConsent,
-      tagForChildDirectedTreatment: adConfig.tagForChildDirectedTreatment,
-    });
-    
-    console.log('🎯 AdMob request configuration set:', {
-      maxAdContentRating: adConfig.maxAdContentRating,
-      tagForUnderAgeOfConsent: adConfig.tagForUnderAgeOfConsent,
-      tagForChildDirectedTreatment: adConfig.tagForChildDirectedTreatment,
-    });
-    
-  } catch (error) {
-    console.error('❌ AdMob initialization failed:', error);
-    
-    // Fallback to basic initialization
-    try {
-      await mobileAds().initialize();
-      await mobileAds().setRequestConfiguration({
-        maxAdContentRating: 'G',
-        tagForUnderAgeOfConsent: false,
-        tagForChildDirectedTreatment: false,
-      });
-      console.log('✅ AdMob initialized with fallback configuration');
-    } catch (fallbackError) {
-      console.error('❌ AdMob fallback initialization failed:', fallbackError);
-    }
-  }
-};
-
-// Initialize AdMob on app start
-initializeAdMob();
-
 function App() {
+  useEffect(() => {
+    // Initialize AdMob with dynamic configuration
+    const initialize = async () => {
+      try {
+        console.log('🔧 Initializing AdMob with dynamic configuration...');
+
+        // Get ad configuration from backend
+        const adConfig = await ConfigService.getAdConfig();
+
+        // Initialize AdMob
+        const adapterStatuses = await mobileAds().initialize();
+        console.log('✅ AdMob initialized successfully');
+
+        // Set request configuration from backend config
+        await mobileAds().setRequestConfiguration({
+          maxAdContentRating: adConfig.maxAdContentRating as any,
+          tagForUnderAgeOfConsent: adConfig.tagForUnderAgeOfConsent,
+          tagForChildDirectedTreatment: adConfig.tagForChildDirectedTreatment,
+        });
+
+        console.log('🎯 AdMob request configuration set');
+
+      } catch (error) {
+        console.error('❌ AdMob initialization failed:', error);
+
+        // Fallback to basic initialization
+        try {
+          await mobileAds().initialize();
+          await mobileAds().setRequestConfiguration({
+            maxAdContentRating: MaxAdContentRating.G,
+            tagForUnderAgeOfConsent: false,
+            tagForChildDirectedTreatment: false,
+          });
+          console.log('✅ AdMob initialized with fallback configuration');
+        } catch (fallbackError) {
+          console.error('❌ AdMob fallback initialization failed:', fallbackError);
+        }
+      }
+    };
+
+    initialize();
+  }, []);
+
   return (
     <AuthProvider>
       <AppWrapper />
@@ -102,7 +91,7 @@ function AppWrapper() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <View style={styles.loadingContainer}>
-            <LoadingScreen onLoadingComplete={() => {}} />
+            <LoadingScreen onLoadingComplete={() => { }} />
           </View>
         </SafeAreaProvider>
       </GestureHandlerRootView>
@@ -141,8 +130,6 @@ function AppWrapper() {
 }
 
 function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
   return (
     <View style={styles.container}>
       <Roadmap />
