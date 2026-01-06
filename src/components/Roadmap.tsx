@@ -27,6 +27,8 @@ import ConfirmationModal from './ConfirmationModal';
 import ToastNotification, { ToastRef } from './ToastNotification';
 import SettingsService from '../services/SettingsService';
 import Shop from './Shop';
+import HelpSlider from './HelpSlider';
+import HelpButton from './HelpButton';
 
 // Helper function to safely call vibration
 const safeVibrate = () => {
@@ -176,7 +178,7 @@ const ICONS = [
 
 // Top HUD Component
 // Top HUD Component - with Neon Styling
-const TopHUD = ({ coins, score, onProfilePress, onLogout }: any) => (
+const TopHUD = ({ coins, score, onProfilePress, onLogout, onHelp }: any) => (
   <View style={[styles.dashboardContainer, localStyles.topHudContainer]}>
     <TouchableOpacity onPress={onProfilePress} style={localStyles.profileButton}>
       <MaterialIcon name="account-circle" family="material" size={48} color="#FFFFFF" />
@@ -198,10 +200,14 @@ const TopHUD = ({ coins, score, onProfilePress, onLogout }: any) => (
       </View>
     </View>
 
-    <TouchableOpacity onPress={onLogout} style={localStyles.logoutButton}>
-      <MaterialIcon name="logout" family="material" size={28} color={ICON_COLORS.ERROR} />
-    </TouchableOpacity>
-  </View>
+    <View style={localStyles.topButtons}>
+      <HelpButton onPress={onHelp} />
+
+      <TouchableOpacity onPress={onLogout} style={localStyles.logoutButton}>
+        <MaterialIcon name="logout" family="material" size={28} color={ICON_COLORS.ERROR} />
+      </TouchableOpacity>
+    </View>
+  </View >
 );
 
 // Bottom Navigation Bar Component
@@ -468,6 +474,7 @@ const Roadmap: React.FC = () => {
   const [showShop, setShowShop] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [showInstructionModal, setShowInstructionModal] = useState(false);
   const [showEarnCoinsPopup, setShowEarnCoinsPopup] = useState(false);
   const [userGameData, setUserGameData] = useState<any>({
     completedLevels: [],
@@ -590,12 +597,12 @@ const Roadmap: React.FC = () => {
     try {
       // Call backend first to get server-validated reward amount
       const result = await BackendService.updateCoins(amount, 'add', true);
-      
+
       if (result.success && result.newBalance !== undefined) {
         // Update local state with the actual validated amount from backend
         setCoins(result.newBalance);
-        const actualAmount = result.previousBalance !== undefined 
-          ? result.newBalance - result.previousBalance 
+        const actualAmount = result.previousBalance !== undefined
+          ? result.newBalance - result.previousBalance
           : amount;
         toastRef.current?.show(`Earned ${actualAmount} bonus coins!`, 'success');
         console.log(`✅ Synced ${actualAmount} rewarded coins to backend`);
@@ -1226,9 +1233,10 @@ const Roadmap: React.FC = () => {
               safeVibrate();
               setShowProfilePopup(true);
             }}
-            onLogout={() => {
+            onLogout={handleLogout}
+            onHelp={() => {
               safeVibrate();
-              handleLogout();
+              setShowInstructionModal(true);
             }}
           />
 
@@ -1321,6 +1329,12 @@ const Roadmap: React.FC = () => {
             rewardAmount={adRewardAmount}
           />
 
+          {/* Help Slider (replaces Instruction Modal) */}
+          <HelpSlider
+            visible={showInstructionModal}
+            onClose={() => setShowInstructionModal(false)}
+          />
+
         </View>
       )}
 
@@ -1386,6 +1400,14 @@ const localStyles = StyleSheet.create({
     textShadowColor: 'rgba(0, 224, 255, 0.5)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 5,
+  },
+  topButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+  },
+  helpButton: {
+    padding: 5,
   },
   logoutButton: {
     padding: 5,

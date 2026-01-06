@@ -86,14 +86,14 @@ const HelpButton: React.FC<HelpButtonProps> = ({ onPress }) => {
       >
         <View style={styles.iconContainer}>
           <MaterialIcon
-            name="help-outline"
+            name="info"
             family="material"
             size={22}
             color="#00E0FF"
           />
         </View>
       </Animated.View>
-      <Text style={styles.helpLabel}>GUIDE</Text>
+      {/* <Text style={styles.helpLabel}>GUIDE</Text> */}
     </TouchableOpacity>
   );
 };

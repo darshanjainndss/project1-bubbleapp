@@ -85,7 +85,18 @@ const HelpSlider: React.FC<HelpSliderProps> = ({ visible, onClose }) => {
         "METAL GRIDS: Require two direct hits.",
         "ICE BLOCKS: Must be shattered first.",
         "VOID SPACE: Obstacles can shift mid-game.",
-        "Plan your strategy around these hazards."
+      ]
+    },
+    {
+      title: "LEVEL PROGRESSION",
+      icon: "trending-up",
+      color: "#D000FF", // Neon Purple
+      items: [
+        "UNLOCK RULE: You need 2 STARS to advance.",
+        "1 STAR: Level Passed but stuck.",
+        "2 STARS: Next Level Unlocked!",
+        "Stuck? Replay levels for better scores.",
+        "Journey through 2000 levels!"
       ]
     }
   ];
