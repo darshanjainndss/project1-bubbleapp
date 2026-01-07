@@ -133,6 +133,13 @@ export interface AdConfig {
 export interface GameConfig {
   abilities: AbilityConfig[];
   ads: AdConfig | null;
+  gameSettings?: {
+    baseCoins: number;
+    coinsPerLevelMultiplier: number;
+    starBonusBase: number;
+    starBonusLevelMultiplier: number;
+    completionBonusMultiplier: number;
+  };
   platform: 'android' | 'ios';
   rewardAmount: number;
 }
@@ -143,6 +150,7 @@ export interface AdUnitsResponse {
     banner: string | null;
     rewarded: string | null;
     rewardedList?: string[];
+    rewardedAmount?: number;
   };
   fullConfig?: {
     banner: any;
@@ -436,10 +444,10 @@ class BackendService {
       const data = await response.json();
 
       if (response.ok) {
-        return { 
-          success: true, 
+        return {
+          success: true,
           newBalance: data.newBalance,
-          previousBalance: data.previousBalance 
+          previousBalance: data.previousBalance
         };
       } else {
         return { success: false, error: data.message || 'Failed to update coins' };
@@ -587,7 +595,15 @@ class BackendService {
       console.log('📡 Response data:', data);
 
       if (response.ok) {
-        return { success: true, data: { sessionId: data.sessionId } };
+        return {
+          success: true,
+          data: {
+            sessionId: data.sessionId,
+            coinsEarned: data.coinsEarned,
+            updatedGameData: data.updatedGameData,
+            newAchievements: data.newAchievements // Also useful to have
+          }
+        };
       } else {
         return { success: false, error: data.message || 'Failed to submit game session' };
       }
@@ -800,7 +816,7 @@ class BackendService {
     try {
       const baseUrl = await this.ensureWorkingUrl();
       const queryParams = new URLSearchParams();
-      
+
       if (filters?.isActive !== undefined) queryParams.append('isActive', filters.isActive.toString());
 
       const url = `${baseUrl}/ability${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
@@ -1201,7 +1217,7 @@ class BackendService {
     try {
       const baseUrl = await this.ensureWorkingUrl();
       const queryParams = new URLSearchParams();
-      
+
       if (filters?.platform) queryParams.append('platform', filters.platform);
       if (filters?.adType) queryParams.append('adType', filters.adType);
       if (filters?.isActive !== undefined) queryParams.append('isActive', filters.isActive.toString());

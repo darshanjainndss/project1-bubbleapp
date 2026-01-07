@@ -95,12 +95,12 @@ router.post('/progress', auth, async (req, res) => {
 
     // Update progress data
     user.gameData.lastPlayedAt = new Date();
-    
+
     // Update level stars if this is better than previous attempt
     const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
     if (stars > currentStars) {
       user.gameData.levelStars.set(level.toString(), stars);
-      
+
       // Add to completed levels if not already there
       if (!user.gameData.completedLevels.includes(level)) {
         user.gameData.completedLevels.push(level);
@@ -190,7 +190,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     });
 
     // Calculate coins earned
-    const coinsEarned = gameSession.calculateCoinsEarned();
+    const coinsEarned = await gameSession.calculateCoinsEarned();
 
     // Save game session
     await gameSession.save();
@@ -273,7 +273,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
 router.get('/sessions', auth, async (req, res) => {
   try {
     const { page = 1, limit = 20, level } = req.query;
-    
+
     const query = { userId: req.userId };
     if (level) {
       query.level = parseInt(level);
@@ -316,7 +316,7 @@ router.get('/level/:level/leaderboard', async (req, res) => {
     const { limit = 50 } = req.query;
 
     const leaderboard = await GameSession.getLevelLeaderboard(
-      parseInt(level), 
+      parseInt(level),
       parseInt(limit)
     );
 
@@ -343,7 +343,7 @@ router.get('/level/:level/best-score', auth, async (req, res) => {
     const { level } = req.params;
 
     const bestScore = await GameSession.getUserBestScore(
-      req.userId, 
+      req.userId,
       parseInt(level)
     );
 

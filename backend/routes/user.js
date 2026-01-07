@@ -218,9 +218,6 @@ router.put('/game-data', auth, async (req, res) => {
   }
 });
 
-// @route   PUT /api/user/coins
-// @desc    Update user coins
-// @access  Private
 router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (req, res) => {
   try {
     const { amount, operation, isAdReward } = req.body;
@@ -233,10 +230,18 @@ router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (r
       });
     }
 
-    // Server-side enforcement of ad reward amount
+    // Server-side enforcement of ad reward amount from database
     let actualAmount = amount;
-    if (isAdReward && process.env.REWARDED_AD_COINS) {
-      const allowedReward = Number(process.env.REWARDED_AD_COINS);
+    if (isAdReward) {
+      const AdUnit = require('../models/AdUnit');
+      const rewardedAds = await AdUnit.find({
+        platform: 'android', // You can make this dynamic based on user's platform
+        adType: 'rewarded',
+        isActive: true
+      }).sort({ priority: 1 }).limit(1);
+
+      const allowedReward = rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50;
+
       if (amount !== allowedReward) {
         console.warn(`⚠️ User ${req.userId} attempted to claim ${amount} coins for an ad, but allowed is ${allowedReward}. Enforcing allowed.`);
         actualAmount = allowedReward;

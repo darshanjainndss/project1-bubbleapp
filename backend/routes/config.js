@@ -2,6 +2,7 @@ const express = require('express');
 const Ability = require('../models/Ability');
 const AdConfig = require('../models/AdConfig');
 const AdUnit = require('../models/AdUnit');
+const GameConfig = require('../models/GameConfig');
 
 const router = express.Router();
 
@@ -116,20 +117,26 @@ router.get('/game', async (req, res) => {
     }
 
     // Fetch abilities and ad config in parallel
-    const [abilities, adConfig] = await Promise.all([
+    const [abilities, adConfig, rewardedAds, gameSettings] = await Promise.all([
       Ability.getActiveAbilities(),
-      AdConfig.getConfigForPlatform(platform)
+      AdConfig.getConfigForPlatform(platform),
+      AdUnit.find({ platform, adType: 'rewarded', isActive: true }).sort({ priority: 1 }),
+      GameConfig.getConfig()
     ]);
 
     const abilitiesData = abilities.map(ability => ability.toPublic());
+
+    // Get reward amount from first active rewarded ad unit, fallback to 50
+    const rewardAmount = rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50;
 
     res.json({
       success: true,
       config: {
         abilities: abilitiesData,
         ads: adConfig,
+        gameSettings: gameSettings ? gameSettings.winningRewards : null,
         platform,
-        rewardAmount: Number(process.env.REWARDED_AD_COINS || 50)
+        rewardAmount
       }
     });
   } catch (error) {
@@ -164,7 +171,8 @@ router.get('/ad-units', async (req, res) => {
       ads: {
         banner: bannerAd ? bannerAd.adId : null,
         rewarded: rewardedAds.length > 0 ? rewardedAds[0].adId : null,
-        rewardedList: rewardedAds.map(ad => ad.adId)
+        rewardedList: rewardedAds.map(ad => ad.adId),
+        rewardedAmount: rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50
       },
       fullConfig: {
         banner: bannerAd,

@@ -176,39 +176,38 @@ const ICONS = [
 
 // Initial fallback for UI while loading (empty until backend fetches)
 
-// Top HUD Component
-// Top HUD Component - with Neon Styling
-const TopHUD = ({ coins, score, onProfilePress, onLogout, onHelp }: any) => (
-  <View style={[styles.dashboardContainer, localStyles.topHudContainer]}>
-    <TouchableOpacity onPress={onProfilePress} style={localStyles.profileButton}>
-      <MaterialIcon name="account-circle" family="material" size={48} color="#FFFFFF" />
-    </TouchableOpacity>
+// Top HUD Component - with Modern Floating Design
+const TopHUD = ({ coins, score, onProfilePress, onHelp }: any) => (
+  <View style={localStyles.topHudWrapper}>
+    <View style={localStyles.topHudInner}>
+      {/* Profile Section */}
+      <TouchableOpacity onPress={onProfilePress} style={localStyles.topHudProfileBtn}>
+        <View style={localStyles.topHudAvatarCircle}>
+          <MaterialIcon name="person" family="material" size={24} color="#00E0FF" />
+        </View>
+      </TouchableOpacity>
 
-    <View style={localStyles.statsRow}>
-      <View style={localStyles.statBadgeNeon}>
-        <MaterialIcon name="stars" family="material" size={20} color={ICON_COLORS.SUCCESS} />
-        <Text style={localStyles.statValue}>{score.toLocaleString()}</Text>
+      {/* Stats Section */}
+      <View style={localStyles.topHudStats}>
+        <View style={localStyles.topHudStatItem}>
+          <MaterialIcon name="stars" family="material" size={16} color={ICON_COLORS.SUCCESS} />
+          <Text style={localStyles.topHudStatText}>{score.toLocaleString()}</Text>
+        </View>
+        <View style={localStyles.topHudDivider} />
+        <View style={localStyles.topHudStatItem}>
+          <MaterialIcon name="toll" family="material" size={16} color={ICON_COLORS.GOLD} />
+          <Text style={localStyles.topHudStatText}>{typeof coins === 'number' ? coins.toLocaleString() : coins}</Text>
+        </View>
       </View>
-      <View style={[localStyles.statBadgeNeon, { marginLeft: 10 }]}>
-        <MaterialIcon
-          name={GAME_ICONS.COIN.name}
-          family={GAME_ICONS.COIN.family}
-          size={20}
-          color={ICON_COLORS.GOLD}
-        />
-        <Text style={localStyles.statValue}>{coins}</Text>
-      </View>
-    </View>
 
-    <View style={localStyles.topButtons}>
-      <HelpButton onPress={onHelp} />
-
-      <TouchableOpacity onPress={onLogout} style={localStyles.logoutButton}>
-        <MaterialIcon name="logout" family="material" size={28} color={ICON_COLORS.ERROR} />
+      {/* Help Section */}
+      <TouchableOpacity onPress={onHelp} style={localStyles.topHudHelpBtn}>
+        <MaterialIcon name="help-outline" family="material" size={22} color="rgba(255,255,255,0.7)" />
       </TouchableOpacity>
     </View>
-  </View >
+  </View>
 );
+
 
 // Bottom Navigation Bar Component
 // Bottom Navigation Bar Component - with Center Map Button
@@ -250,28 +249,49 @@ const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) =>
 );
 
 // Profile Popup Component
-const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel }: any) => {
+const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout }: any) => {
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [vibrationSupported, setVibrationSupported] = useState(true);
 
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
   // Load vibration setting on mount
   useEffect(() => {
-    const loadVibrationSetting = async () => {
-      try {
-        await SettingsService.ensureLoaded();
-        setVibrationEnabled(SettingsService.getSetting('vibrationEnabled'));
-        setVibrationSupported(SettingsService.isVibrationSupported());
-      } catch (error) {
-        console.error('Error loading vibration setting:', error);
-        // Set safe defaults if loading fails
-        setVibrationEnabled(true);
-        setVibrationSupported(true);
-      }
-    };
     if (visible) {
+      // Load vibration setting
+      const loadVibrationSetting = async () => {
+        try {
+          await SettingsService.ensureLoaded();
+          setVibrationEnabled(SettingsService.getSetting('vibrationEnabled'));
+          setVibrationSupported(SettingsService.isVibrationSupported());
+        } catch (error) {
+          console.error('Error loading vibration setting:', error);
+          setVibrationEnabled(true);
+          setVibrationSupported(true);
+        }
+      };
       loadVibrationSetting();
+
+      // Start animations
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      scaleAnim.setValue(0.9);
+      opacityAnim.setValue(0);
     }
-  }, [visible]);
+  }, [visible, scaleAnim, opacityAnim]);
 
   const toggleVibration = async () => {
     if (!vibrationSupported) return;
@@ -302,110 +322,129 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
 
   return (
     <View style={localStyles.popupOverlay}>
-      <View style={localStyles.popupContent}>
+      <Animated.View style={[
+        localStyles.popupContent,
+        {
+          opacity: opacityAnim,
+          transform: [{ scale: scaleAnim }]
+        }
+      ]}>
+        {/* Header Background Decoration */}
+        <View style={localStyles.profileHeaderBg}>
+          <View style={localStyles.profileHeaderCircle} />
+        </View>
+
         <TouchableOpacity style={localStyles.closePopupBtn} onPress={onClose}>
           <MaterialIcon name="close" family="material" size={24} color="#FFF" />
         </TouchableOpacity>
 
-        <View style={localStyles.popupAvatar}>
-          <MaterialIcon name="account-circle" family="material" size={80} color={ICON_COLORS.PRIMARY} />
-        </View>
-
-        <Text style={localStyles.popupName}>{cleanName}</Text>
-        <Text style={localStyles.popupLabel}>Space Commander</Text>
-
-        {/* Stats Section */}
-        <View style={localStyles.profileStatsContainer}>
-          <View style={localStyles.profileStatCard}>
-            <View style={localStyles.profileStatIconContainer}>
-              <MaterialIcon name="trending-up" family="material" size={28} color={ICON_COLORS.SUCCESS} />
+        <View style={localStyles.profileMainCard}>
+          <View style={localStyles.popupAvatar}>
+            <View style={localStyles.avatarRing}>
+              <MaterialIcon name="account-circle" family="material" size={90} color={ICON_COLORS.PRIMARY} />
             </View>
-            <Text style={localStyles.profileStatLabel}>Level</Text>
-            <Text style={localStyles.profileStatValue}>{currentLevel}</Text>
-            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.SUCCESS + '20' }]} />
+            <View style={localStyles.onlineStatus} />
           </View>
 
-          <View style={localStyles.profileStatCard}>
-            <View style={localStyles.profileStatIconContainer}>
-              <MaterialIcon
-                name={GAME_ICONS.COIN.name}
-                family={GAME_ICONS.COIN.family}
-                size={28}
-                color={ICON_COLORS.GOLD}
-              />
-            </View>
-            <Text style={localStyles.profileStatLabel}>Coins</Text>
-            <Text style={localStyles.profileStatValue}>{coins.toLocaleString()}</Text>
-            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.GOLD + '20' }]} />
-          </View>
+          <Text style={localStyles.popupName}>{cleanName}</Text>
+          <Text style={localStyles.popupLabel}>SPACE COMMANDER</Text>
 
-          <View style={localStyles.profileStatCard}>
-            <View style={localStyles.profileStatIconContainer}>
-              <MaterialIcon name="stars" family="material" size={28} color={ICON_COLORS.WARNING} />
-            </View>
-            <Text style={localStyles.profileStatLabel}>Score</Text>
-            <Text style={localStyles.profileStatValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
-            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.WARNING + '20' }]} />
-          </View>
-
-          <View style={localStyles.profileStatCard}>
-            <View style={localStyles.profileStatIconContainer}>
-              <MaterialIcon name="play-circle-filled" family="material" size={28} color={ICON_COLORS.INFO} />
-            </View>
-            <Text style={localStyles.profileStatLabel}>Ad Earn</Text>
-            <Text style={localStyles.profileStatValue}>{(userGameData?.totalAdEarnings || 0).toLocaleString()}</Text>
-            <View style={[localStyles.profileStatGlow, { backgroundColor: ICON_COLORS.INFO + '20' }]} />
+          <View style={localStyles.rankBadge}>
+            <MaterialIcon name="verified" family="material" size={14} color="#00E0FF" />
+            <Text style={localStyles.rankText}>ELITE EXPLORER</Text>
           </View>
         </View>
 
-        {/* Settings Section */}
-        <View style={localStyles.profileSettingsContainer}>
-          <Text style={localStyles.profileSectionTitle}>Settings</Text>
-
-          <TouchableOpacity
-            style={[
-              localStyles.profileSettingItem,
-              !vibrationSupported && localStyles.profileSettingDisabled
-            ]}
-            onPress={toggleVibration}
-            disabled={!vibrationSupported}
-          >
-            <View style={localStyles.profileSettingLeft}>
-              <MaterialIcon
-                name={GAME_ICONS.VIBRATION.name}
-                family={GAME_ICONS.VIBRATION.family}
-                size={24}
-                color={
-                  !vibrationSupported
-                    ? ICON_COLORS.DISABLED
-                    : vibrationEnabled
-                      ? ICON_COLORS.SUCCESS
-                      : ICON_COLORS.DISABLED
-                }
-              />
-              <Text style={[
-                localStyles.profileSettingLabel,
-                !vibrationSupported && localStyles.profileSettingLabelDisabled
-              ]}>
-                Vibration {!vibrationSupported && '(Not Available)'}
-              </Text>
+        {/* Nested Cards Section */}
+        <View style={localStyles.cardsContainer}>
+          <Text style={localStyles.sectionHeader}>COMMANDER STATS</Text>
+          <View style={localStyles.profileStatsGrid}>
+            <View style={localStyles.nestedCard}>
+              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 224, 255, 0.1)' }]}>
+                <MaterialIcon name="trending-up" family="material" size={22} color={ICON_COLORS.SUCCESS} />
+              </View>
+              <View style={localStyles.cardContent}>
+                <Text style={localStyles.cardValue}>{currentLevel}</Text>
+                <Text style={localStyles.cardLabel}>LEVEL</Text>
+              </View>
             </View>
-            <View style={[
-              localStyles.profileToggle,
-              vibrationEnabled && vibrationSupported && localStyles.profileToggleActive,
-              !vibrationSupported && localStyles.profileToggleDisabled
-            ]}>
+
+            <View style={localStyles.nestedCard}>
+              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 214, 10, 0.1)' }]}>
+                <MaterialIcon name="monetization-on" family="material" size={22} color={ICON_COLORS.GOLD} />
+              </View>
+              <View style={localStyles.cardContent}>
+                <Text style={localStyles.cardValue}>{coins.toLocaleString()}</Text>
+                <Text style={localStyles.cardLabel}>COINS</Text>
+              </View>
+            </View>
+
+            <View style={localStyles.nestedCard}>
+              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}>
+                <MaterialIcon name="stars" family="material" size={22} color="#FF3B30" />
+              </View>
+              <View style={localStyles.cardContent}>
+                <Text style={localStyles.cardValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
+                <Text style={localStyles.cardLabel}>EXP</Text>
+              </View>
+            </View>
+
+            <View style={localStyles.nestedCard}>
+              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(88, 86, 214, 0.1)' }]}>
+                <MaterialIcon name="visibility" family="material" size={22} color="#5856D6" />
+              </View>
+              <View style={localStyles.cardContent}>
+                <Text style={localStyles.cardValue}>{(userGameData?.totalAdEarnings || 0).toLocaleString()}</Text>
+                <Text style={localStyles.cardLabel}>AD REWARD</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
+          <View style={localStyles.settingsCard}>
+            <TouchableOpacity
+              style={[
+                localStyles.settingRow,
+                !vibrationSupported && localStyles.profileSettingDisabled
+              ]}
+              onPress={toggleVibration}
+              disabled={!vibrationSupported}
+            >
+              <View style={localStyles.settingInfo}>
+                <View style={localStyles.settingIconWrap}>
+                  <MaterialIcon
+                    name={GAME_ICONS.VIBRATION.name}
+                    family={GAME_ICONS.VIBRATION.family}
+                    size={20}
+                    color={vibrationEnabled ? ICON_COLORS.PRIMARY : "#94A3B8"}
+                  />
+                </View>
+                <Text style={localStyles.settingText}>Haptic Feedback</Text>
+              </View>
               <View style={[
-                localStyles.profileToggleThumb,
-                vibrationEnabled && vibrationSupported && localStyles.profileToggleThumbActive
-              ]} />
-            </View>
-          </TouchableOpacity>
+                localStyles.modernToggle,
+                vibrationEnabled && vibrationSupported && localStyles.toggleActive
+              ]}>
+                <View style={[
+                  localStyles.toggleCircle,
+                  vibrationEnabled && vibrationSupported && localStyles.circleActive
+                ]} />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+
+        {/* Logout Section */}
+        <TouchableOpacity style={localStyles.modernLogoutBtn} onPress={onLogout}>
+          <MaterialIcon name="power-settings-new" family="material" size={20} color="#FFF" />
+          <Text style={localStyles.logoutBtnText}>DISCONNECT SESSION</Text>
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 };
+
+
 
 // Earn Coins Popup Component
 const EarnCoinsPopup = ({ visible, onClose, onWatchAd, rewardAmount }: any) => {
@@ -486,6 +525,8 @@ const Roadmap: React.FC = () => {
   });
   const [dataLoaded, setDataLoaded] = useState(false);
   const [adRewardAmount, setAdRewardAmount] = useState(0);
+  const [baseRewardAmount, setBaseRewardAmount] = useState(10);
+  const [starBonusAmount, setStarBonusAmount] = useState(5);
   const [abilityStartingCounts, setAbilityStartingCounts] = useState<Record<string, number>>({});
   const [loadingDirection, setLoadingDirection] = useState<'toFight' | 'toBase'>('toFight');
   const toastRef = useRef<ToastRef>(null);
@@ -528,18 +569,33 @@ const Roadmap: React.FC = () => {
         // We need to extract ONLY purchased abilities for the inventory
         const backendAbilities = result.data.abilities || {};
 
-        // Fetch Dynamic Configs (Abilities and Ads) early to know which abilities exist
+        // Fetch Dynamic Configs (Abilities and Ads) e,arly to know which abilities exist
         let abilitiesConfig: any[] = [];
         let adReward = 50;
         try {
-          const [aConfig, adConfig] = await Promise.all([
+          // Fetch abilities, ad config, AND ad units to get the correct reward amount
+          const [aConfig, adConfig, adUnitsData, gameConfigData] = await Promise.all([
             ConfigService.getAbilitiesConfig(),
-            ConfigService.getAdConfig()
+            ConfigService.getAdConfig(),
+            ConfigService.getAdUnits(), // Fetch ad units which contain the reward amount
+            ConfigService.getGameConfig() // Fetch game config which contains level rewards
           ]);
           abilitiesConfig = aConfig || [];
-          if (adConfig && adConfig.rewardConfig) {
+
+          // Prioritize dynamic ad unit reward, fallback to legacy adConfig, then default 50
+          if (adUnitsData && adUnitsData.rewardedAmount) {
+            adReward = adUnitsData.rewardedAmount;
+            console.log('💰 Using Rewarded Amount from AdUnit:', adReward);
+          } else if (adConfig && adConfig.rewardConfig) {
             adReward = adConfig.rewardConfig.coinsPerAd;
-            setAdRewardAmount(adReward);
+          }
+          setAdRewardAmount(adReward);
+
+          // Update game settings (base coins and star bonus from DB)
+          if (gameConfigData && gameConfigData.gameSettings) {
+            setBaseRewardAmount(gameConfigData.gameSettings.baseCoins || 10);
+            setStarBonusAmount(gameConfigData.gameSettings.starBonusBase || 5);
+            console.log('💰 Using Game Rewards from DB:', gameConfigData.gameSettings);
           }
         } catch (configErr) {
           console.warn('Failed to load dynamic configs:', configErr);
@@ -595,6 +651,8 @@ const Roadmap: React.FC = () => {
   // Handle watching the ad from popup
   const handleWatchAd = async (amount: number) => {
     try {
+      console.log(`🎬 handleWatchAd called with amount: ${amount}`);
+
       // Call backend first to get server-validated reward amount
       const result = await BackendService.updateCoins(amount, 'add', true);
 
@@ -604,6 +662,17 @@ const Roadmap: React.FC = () => {
         const actualAmount = result.previousBalance !== undefined
           ? result.newBalance - result.previousBalance
           : amount;
+
+        // Update userGameData to reflect new totalCoins and totalAdEarnings
+        setUserGameData((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            totalCoins: result.newBalance,
+            totalAdEarnings: (prev.totalAdEarnings || 0) + actualAmount
+          };
+        });
+
         toastRef.current?.show(`Earned ${actualAmount} bonus coins!`, 'success');
         console.log(`✅ Synced ${actualAmount} rewarded coins to backend`);
       } else {
@@ -870,26 +939,62 @@ const Roadmap: React.FC = () => {
           console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
           const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
 
-          if (sessionResult.success) {
-            console.log('✅ Game session submitted successfully:', sessionResult.data?.sessionId);
+          if (sessionResult.success && sessionResult.data) {
+            console.log('✅ Game session submitted successfully:', sessionResult.data.sessionId);
+
+            // CORRECT STATE WITH SERVER DATA
+            // The backend is the source of truth for rewards (DB-configured values)
+            const serverData = sessionResult.data;
+
+            if (serverData.updatedGameData) {
+              console.log('🔄 Syncing local state with server response...');
+
+              setUserGameData((prev: any) => ({
+                ...prev,
+                ...serverData.updatedGameData
+              }));
+
+              // Update individual state atoms to match server truth
+              if (serverData.updatedGameData.totalCoins !== undefined) {
+                setCoins(serverData.updatedGameData.totalCoins);
+              }
+              if (serverData.updatedGameData.totalScore !== undefined) {
+                setScore(serverData.updatedGameData.totalScore);
+              }
+
+              // Check if our optimistic coin calculation was wrong and notify
+              if (coinsEarned !== serverData.coinsEarned) {
+                console.log(`💰 Coin correction: Optimistic ${coinsEarned} -> Real ${serverData.coinsEarned}`);
+                // Optional: Toast nice message if the reward was actually higher
+                if (serverData.coinsEarned > (coinsEarned || 0)) {
+                  // toastRef.current?.show(`Bonus! You earned ${serverData.coinsEarned} coins!`, 'success');
+                }
+              }
+            }
           } else {
             console.error('❌ Failed to submit game session:', sessionResult.error);
+            // Fallback: Try to explicit update if session failed but we want to persist optimistic
+            // (Existing logic handles this via catch block or subsequent calls)
           }
 
-          // Update user game data in backend
-          try {
-            const updateResult = await BackendService.updateUserGameData(updatedGameData);
-            if (updateResult.success) {
-              console.log('✅ User game data updated in backend');
-            } else {
-              console.error('❌ Failed to update user game data:', updateResult.error);
-              // Continue anyway - local state is already updated
+          // Skip the separate updateUserGameData call since submitGameSession handles it now
+          // But we assume the submitGameSession was successful.
+          if (!sessionResult.success) {
+            // Only try manual update if session submission messed up
+            try {
+              const updateResult = await BackendService.updateUserGameData(updatedGameData);
+              if (updateResult.success) {
+                console.log('✅ User game data updated in backend (fallback)');
+              } else {
+                console.error('❌ Failed to update user game data:', updateResult.error);
+                toastRef.current?.show('Progress saved locally. Backend sync will retry later.', 'warning');
+              }
+            } catch (error) {
+              console.error('❌ Backend update error:', error);
               toastRef.current?.show('Progress saved locally. Backend sync will retry later.', 'warning');
             }
-          } catch (error) {
-            console.error('❌ Backend update error:', error);
-            // Continue anyway - local state is already updated
-            toastRef.current?.show('Progress saved locally. Backend sync will retry later.', 'warning');
+          } else {
+            console.log('✅ Backend sync complete via session submission');
           }
 
         } catch (error) {
@@ -1183,8 +1288,11 @@ const Roadmap: React.FC = () => {
   //   return dots;
   // }, [levels, dataLoaded]);
 
+
+
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: '#000' }}>
+
       {/* Background - Persistent across screens if needed, or specific per screen */}
       {/* GameScreen has its own background, Roadmap has its own. */}
 
@@ -1233,7 +1341,6 @@ const Roadmap: React.FC = () => {
               safeVibrate();
               setShowProfilePopup(true);
             }}
-            onLogout={handleLogout}
             onHelp={() => {
               safeVibrate();
               setShowInstructionModal(true);
@@ -1246,7 +1353,7 @@ const Roadmap: React.FC = () => {
             renderItem={({ item, index }) => <LevelItem item={item} index={levels.length - 1 - index} />}
             keyExtractor={(item) => item.id.toString()}
             style={styles.scrollView}
-            contentContainerStyle={[styles.roadmapContainer, { paddingBottom: 220, paddingTop: 120 }]}
+            contentContainerStyle={[styles.roadmapContainer, { paddingBottom: 220, paddingTop: 150 }]}
             showsVerticalScrollIndicator={false}
             initialNumToRender={6}
             maxToRenderPerBatch={3}
@@ -1259,6 +1366,7 @@ const Roadmap: React.FC = () => {
               index,
             })}
             initialScrollIndex={userGameData ? Math.max(0, levels.length - (userGameData.currentLevel || 1)) : levels.length - 1}
+            ListEmptyComponent={<Text style={{ color: 'white', marginTop: 200, textAlign: 'center' }}>No Levels Loaded</Text>}
             onScrollToIndexFailed={(info) => {
               setTimeout(() => {
                 flatListRef.current?.scrollToIndex({
@@ -1316,6 +1424,7 @@ const Roadmap: React.FC = () => {
             userGameData={userGameData}
             coins={coins}
             currentLevel={currentLevel}
+            onLogout={handleLogout}
           />
 
           {/* Earn Coins Popup */}
@@ -1333,6 +1442,9 @@ const Roadmap: React.FC = () => {
           <HelpSlider
             visible={showInstructionModal}
             onClose={() => setShowInstructionModal(false)}
+            adRewardAmount={adRewardAmount}
+            levelReward={baseRewardAmount}
+            starBonus={starBonusAmount}
           />
 
         </View>
@@ -1348,66 +1460,77 @@ const Roadmap: React.FC = () => {
 export default Roadmap;
 
 const localStyles = StyleSheet.create({
-  topHudContainer: {
-    // Override the generic dashboardContainer positioning/styles where needed
-    // Maintain the container style (styles.dashboardContainer) from RoadmapStyles:
-    // backgroundColor: 'rgba(5, 5, 10, 0.98)', borderWidth: 2, borderColor: '#00E0FF', etc.
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    height: 85, // Increased height to prevent profile clipping
-    paddingVertical: 10,
-    paddingHorizontal: 15,
+  // Top HUD Styles
+  topHudWrapper: {
+    position: 'absolute',
     top: 50,
+    left: '5%',
+    right: '5%',
     zIndex: 100,
   },
-  profileButton: {
-    padding: 2,
-    borderWidth: 2,
-    borderColor: '#00E0FF',
-    borderRadius: 30, // Circle
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  statsRow: {
+  topHudInner: {
+    backgroundColor: 'rgba(10, 10, 20, 0.95)',
+    borderRadius: 25,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 224, 255, 0.4)',
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  statBadgeNeon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.5)', // Neon Blue tint
+    padding: 8,
+    paddingRight: 15,
     shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowRadius: 15,
+    elevation: 10,
   },
-  statValue: {
+  topHudProfileBtn: {
+    marginRight: 12,
+  },
+  topHudAvatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)',
+    borderWidth: 1.5,
+    borderColor: '#00E0FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topHudStats: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    marginRight: 12,
+  },
+  topHudStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  topHudStatText: {
     color: '#FFF',
     fontSize: 14,
-    fontWeight: 'bold',
-    marginLeft: 6,
+    fontWeight: '900',
+    marginLeft: 8,
     fontFamily: 'monospace',
-    textShadowColor: 'rgba(0, 224, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 5,
+    letterSpacing: 0.5,
   },
-  topButtons: {
-    flexDirection: 'row',
+  topHudDivider: {
+    width: 1.5,
+    height: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 15,
+  },
+  topHudHelpBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 15,
-  },
-  helpButton: {
-    padding: 5,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   logoutButton: {
     padding: 5,
@@ -1488,6 +1611,7 @@ const localStyles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'monospace',
   },
+  // Profile popup Styles
   popupOverlay: {
     position: 'absolute',
     top: 0,
@@ -1500,189 +1624,233 @@ const localStyles = StyleSheet.create({
     zIndex: 2000,
   },
   popupContent: {
-    width: '90%',
-    backgroundColor: 'rgba(5, 5, 10, 0.98)',
-    borderTopLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    borderTopRightRadius: 10,
-    borderBottomLeftRadius: 10,
-    borderWidth: 2,
-    borderColor: '#00E0FF',
-    padding: 30,
-    alignItems: 'center',
+    width: '92%',
+    maxWidth: 450,
+    backgroundColor: '#0A0A14',
+    borderRadius: 32,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 224, 255, 0.3)',
     shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 25,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 30,
     elevation: 20,
     overflow: 'hidden',
+    paddingBottom: 25,
   },
-  closePopupBtn: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-    padding: 5,
-  },
-  popupAvatar: {
-    marginBottom: 20,
-    shadowColor: ICON_COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-  },
-  popupName: {
-    color: '#FFF',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    textAlign: 'center',
-    textShadowColor: '#00E0FF',
-    textShadowRadius: 10,
-  },
-  popupLabel: {
-    color: '#00E0FF',
-    fontSize: 14,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-    marginBottom: 20,
-  },
-  profileStatsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 25,
-    paddingHorizontal: 5,
-  },
-  profileStatCard: {
-    width: '48%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.2)',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  profileStatIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  profileStatGlow: {
+  profileHeaderBg: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    borderRadius: 16,
-    opacity: 0.1,
+    height: 120,
+    backgroundColor: 'rgba(0, 224, 255, 0.05)',
+    overflow: 'hidden',
   },
-  profileStatLabel: {
-    color: '#94A3B8',
-    fontSize: 11,
-    marginTop: 8,
-    marginBottom: 4,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    textAlign: 'center',
+  profileHeaderCircle: {
+    position: 'absolute',
+    top: -100,
+    right: -50,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)',
   },
-  profileStatValue: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: '900',
-    textShadowColor: '#00E0FF',
-    textShadowRadius: 8,
-    fontFamily: 'monospace',
-    textAlign: 'center',
+  closePopupBtn: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    padding: 8,
+    borderRadius: 20,
+    // Explicitly remove shadow/elevation that might be inherited or caused by interaction
+    elevation: 0,
+    shadowOpacity: 0,
   },
-  profileSettingsContainer: {
-    width: '100%',
-    marginTop: 10,
+  profileMainCard: {
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 20,
   },
-  profileSectionTitle: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
+  popupAvatar: {
+    position: 'relative',
     marginBottom: 15,
-    textAlign: 'center',
-    textShadowColor: '#00E0FF',
-    textShadowRadius: 5,
   },
-  profileSettingItem: {
+  avatarRing: {
+    padding: 4,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: '#00E0FF',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  onlineStatus: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#00FF88',
+    borderWidth: 3,
+    borderColor: '#0A0A14',
+  },
+  popupName: {
+    color: '#FFF',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textShadowColor: 'rgba(0, 224, 255, 0.5)',
+    textShadowRadius: 10,
+  },
+  popupLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 3,
+    marginTop: 4,
+  },
+  rankBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(0, 224, 255, 0.05)',
-    borderRadius: 12,
-    marginBottom: 10,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: 'rgba(0, 224, 255, 0.2)',
   },
-  profileSettingLeft: {
+  rankText: {
+    color: '#00E0FF',
+    fontSize: 10,
+    fontWeight: '900',
+    marginLeft: 6,
+    letterSpacing: 1,
+  },
+  cardsContainer: {
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 12,
+    marginTop: 10,
+  },
+  profileStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  nestedCard: {
+    width: '48%',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 20,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  cardIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardValue: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+  },
+  cardLabel: {
+    color: '#64748B',
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  settingsCard: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 20,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  settingInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  profileSettingLabel: {
-    color: '#FFF',
-    fontSize: 16,
-    marginLeft: 12,
+  settingIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  settingText: {
+    color: '#E2E8F0',
+    fontSize: 15,
     fontWeight: '600',
   },
-  profileToggle: {
-    width: 50,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(148, 163, 184, 0.3)',
+  modernToggle: {
+    width: 46,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#1E1E2E',
+    padding: 3,
     justifyContent: 'center',
-    paddingHorizontal: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.5)',
   },
-  profileToggleActive: {
-    backgroundColor: 'rgba(0, 224, 255, 0.3)',
-    borderColor: '#00E0FF',
+  toggleActive: {
+    backgroundColor: 'rgba(0, 224, 255, 0.2)',
   },
-  profileToggleThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#94A3B8',
-    alignSelf: 'flex-start',
+  toggleCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#475569',
   },
-  profileToggleThumbActive: {
+  circleActive: {
     backgroundColor: '#00E0FF',
-    alignSelf: 'flex-end',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
+    transform: [{ translateX: 22 }],
+  },
+  modernLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    marginHorizontal: 20,
+    marginTop: 25,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.2)',
+  },
+  logoutBtnText: {
+    color: '#FF3B30',
+    fontSize: 13,
+    fontWeight: '900',
+    marginLeft: 10,
+    letterSpacing: 1.5,
   },
   profileSettingDisabled: {
     opacity: 0.5,
-  },
-  profileSettingLabelDisabled: {
-    color: '#94A3B8',
-  },
-  profileToggleDisabled: {
-    opacity: 0.3,
   },
   // Earn Coins Popup Styles
   earnCoinsPopupContent: {
@@ -1749,30 +1917,6 @@ const localStyles = StyleSheet.create({
   earnCoinsButtons: {
     width: '100%',
     gap: 15,
-  },
-  earnCoinsWatchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: ICON_COLORS.GOLD,
-    borderRadius: 25,
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    shadowColor: ICON_COLORS.GOLD,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-    elevation: 10,
-  },
-  earnCoinsWatchBtnDisabled: {
-    backgroundColor: '#94A3B8',
-    shadowColor: '#94A3B8',
-  },
-  earnCoinsWatchBtnText: {
-    color: '#000',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
   },
   earnCoinsWatchBtnComponent: {
     backgroundColor: 'rgba(255, 214, 10, 0.1)',

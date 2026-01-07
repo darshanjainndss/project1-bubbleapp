@@ -31,7 +31,7 @@ const FALLBACK_AD_CONFIG: AdConfig = {
 class ConfigService {
   private abilitiesConfig: AbilityConfig[] | null = null;
   private adConfig: AdConfig | null = null;
-  private adUnits: { banner: string | null; rewarded: string | null; rewardedList?: string[] } | null = null;
+  private adUnits: { banner: string | null; rewarded: string | null; rewardedList?: string[]; rewardedAmount?: number } | null = null;
   private gameConfig: GameConfig | null = null;
   private isLoading = false;
 
@@ -226,6 +226,13 @@ class ConfigService {
         this.gameConfig = {
           abilities: FALLBACK_ABILITIES,
           ads: FALLBACK_AD_CONFIG,
+          gameSettings: {
+            baseCoins: 10,
+            coinsPerLevelMultiplier: 2.5,
+            starBonusBase: 5,
+            starBonusLevelMultiplier: 0.5,
+            completionBonusMultiplier: 1.2
+          },
           platform: platform,
           rewardAmount: 50
         };
@@ -236,6 +243,13 @@ class ConfigService {
       this.gameConfig = {
         abilities: FALLBACK_ABILITIES,
         ads: FALLBACK_AD_CONFIG,
+        gameSettings: {
+          baseCoins: 10,
+          coinsPerLevelMultiplier: 2.5,
+          starBonusBase: 5,
+          starBonusLevelMultiplier: 0.5,
+          completionBonusMultiplier: 1.2
+        },
         platform: Platform.OS as 'android' | 'ios',
         rewardAmount: 50
       };
@@ -247,7 +261,7 @@ class ConfigService {
   // UTILITY METHODS
   // ============================================================================
 
-  async getAdUnits(forceRefresh = false): Promise<{ banner: string | null; rewarded: string | null; rewardedList?: string[] }> {
+  async getAdUnits(forceRefresh = false): Promise<{ banner: string | null; rewarded: string | null; rewardedList?: string[]; rewardedAmount?: number }> {
     console.log(`🔍 getAdUnits called with forceRefresh: ${forceRefresh}`);
 
     // Return cached data if available and not forcing refresh
@@ -301,12 +315,12 @@ class ConfigService {
         return this.adUnits;
       } else {
         console.warn('Failed to fetch ad units from backend, using default');
-        this.adUnits = { banner: null, rewarded: null, rewardedList: [] };
+        this.adUnits = { banner: null, rewarded: null, rewardedList: [], rewardedAmount: 50 };
         return this.adUnits;
       }
     } catch (error) {
       console.error('Error fetching ad units:', error);
-      this.adUnits = { banner: null, rewarded: null, rewardedList: [] };
+      this.adUnits = { banner: null, rewarded: null, rewardedList: [], rewardedAmount: 50 };
       return this.adUnits;
     }
   }
@@ -324,7 +338,7 @@ class ConfigService {
   }
 
   // Force refresh ad units only (useful when ad units are updated in database)
-  async refreshAdUnits(): Promise<{ banner: string | null; rewarded: string | null; rewardedList?: string[] }> {
+  async refreshAdUnits(): Promise<{ banner: string | null; rewarded: string | null; rewardedList?: string[]; rewardedAmount?: number }> {
     console.log('🔄 Force refreshing ad units from database...');
     this.adUnits = null;
 

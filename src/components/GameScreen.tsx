@@ -13,6 +13,7 @@ import { GameHUD } from "./game/GameHUD";
 import OptimizedLaser from "./game/OptimizedLaser";
 import { useAuth } from '../context/AuthContext';
 import SettingsService from '../services/SettingsService';
+import ConfigService from '../services/ConfigService';
 
 import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
 import { getPos, getHexNeighbors } from "../utils/gameUtils";
@@ -65,6 +66,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
   const [shootingBubble, setShootingBubble] = useState<any>(null);
   const [nextColor, setNextColor] = useState(COLORS[0]);
   const [score, setScore] = useState(0);
+  const [sessionCoins, setSessionCoins] = useState(0);
   const [moves, setMoves] = useState(30);
   const [showHint, setShowHint] = useState(true);
   const cannonAngleRef = useRef(0);
@@ -148,6 +150,16 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
     fire: 0
   });
 
+  const [gameSettings, setGameSettings] = useState<any>(null);
+
+  useEffect(() => {
+    ConfigService.getGameConfig().then(config => {
+      if (config?.gameSettings) {
+        setGameSettings(config.gameSettings);
+      }
+    });
+  }, []);
+
   // Progress tracking
   const lastProgressUpdate = useRef(0);
   const PROGRESS_UPDATE_INTERVAL = 3000; // Send progress every 3 seconds
@@ -221,10 +233,30 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
           const stars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
 
           // Calculate coins earned
-          const baseCoins = Math.floor(10 + (level * 2.5));
-          const starBonus = stars * Math.floor(5 + (level * 0.5));
-          const completionBonus = Math.floor(level * 1.2);
-          const coinsEarned = gameState === 'won' ? (baseCoins + starBonus + completionBonus) : 0;
+          let baseCoinsBase = 10;
+          let coinsPerLevelMultiplier = 2.5;
+          let starBonusBase = 5;
+          let starBonusLevelMultiplier = 0.5;
+          let completionBonusMultiplier = 1.2;
+
+          if (gameSettings) {
+            baseCoinsBase = gameSettings.baseCoins || 10;
+            coinsPerLevelMultiplier = gameSettings.coinsPerLevelMultiplier || 2.5;
+            starBonusBase = gameSettings.starBonusBase || 5;
+            starBonusLevelMultiplier = gameSettings.starBonusLevelMultiplier || 0.5;
+            completionBonusMultiplier = gameSettings.completionBonusMultiplier || 1.2;
+          }
+
+          const levelBonus = Math.floor(level * coinsPerLevelMultiplier);
+          const base = baseCoinsBase + levelBonus;
+
+          const starLevelBonus = Math.floor(level * starBonusLevelMultiplier);
+          const starTotalPerStar = starBonusBase + starLevelBonus;
+          const starBonus = stars * starTotalPerStar;
+
+          const completionBonus = Math.floor(level * completionBonusMultiplier);
+          const coinsEarned = gameState === 'won' ? Math.floor(base + starBonus + completionBonus) : 0;
+          setSessionCoins(coinsEarned);
 
           const sessionData = {
             level,
@@ -1083,7 +1115,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
                     color={ICON_COLORS.GOLD}
                   />
                   <Text style={styles.modalCoinsText}>
-                    +{earnedCoins} COINS
+                    +{sessionCoins} COINS
                   </Text>
                 </View>
               )}

@@ -16,9 +16,18 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface HelpSliderProps {
   visible: boolean;
   onClose: () => void;
+  adRewardAmount?: number;
+  levelReward?: number;
+  starBonus?: number;
 }
 
-const HelpSlider: React.FC<HelpSliderProps> = ({ visible, onClose }) => {
+const HelpSlider: React.FC<HelpSliderProps> = ({
+  visible,
+  onClose,
+  adRewardAmount = 50,
+  levelReward = 10,
+  starBonus = 5
+}) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
@@ -85,6 +94,28 @@ const HelpSlider: React.FC<HelpSliderProps> = ({ visible, onClose }) => {
         "METAL GRIDS: Require two direct hits.",
         "ICE BLOCKS: Must be shattered first.",
         "VOID SPACE: Obstacles can shift mid-game.",
+      ]
+    },
+    {
+      title: "BASECOIN REWARDS",
+      icon: "monetization-on",
+      color: "#00FF88", // Success Green
+      items: [
+        `Earn ${levelReward} Base-coins per level victory.`,
+        `Get ${starBonus} extra coins for every Star earned.`,
+        "Perfect shots & streaks add score bonuses.",
+        "Coins are used to refuel & buy abilities."
+      ]
+    },
+    {
+      title: "WATCH & EARN",
+      icon: "play-circle-filled",
+      color: "#FFD700", // Gold
+      items: [
+        `Watch a short ad to earn ${adRewardAmount} coins instantly!`,
+        "Use coins to buy powerful abilities.",
+        "No limit on how many times you can earn.",
+        "Look for the 'Earn' button in the menu."
       ]
     },
     {

@@ -46,9 +46,20 @@ const RewardedAdButton: React.FC<RewardedAdButtonProps> = ({
         ]);
 
         console.log('📦 RewardedAdButton: Fetched data from service');
+        console.log('📦 AdUnits data:', units);
 
-        if (!rewardAmount && adConfig?.rewardConfig?.coinsPerAd) {
-          setDisplayRewardAmount(adConfig.rewardConfig.coinsPerAd);
+        // Prioritize rewardedAmount from AdUnit collection (database)
+        if (!rewardAmount) {
+          if (units?.rewardedAmount) {
+            console.log('💰 Using rewardedAmount from AdUnit collection:', units.rewardedAmount);
+            setDisplayRewardAmount(units.rewardedAmount);
+          } else if (adConfig?.rewardConfig?.coinsPerAd) {
+            console.log('💰 Fallback to adConfig.rewardConfig.coinsPerAd:', adConfig.rewardConfig.coinsPerAd);
+            setDisplayRewardAmount(adConfig.rewardConfig.coinsPerAd);
+          } else {
+            console.log('💰 Using default reward amount: 50');
+            setDisplayRewardAmount(50);
+          }
         }
 
         const ids = units.rewardedList && units.rewardedList.length > 0
@@ -60,6 +71,9 @@ const RewardedAdButton: React.FC<RewardedAdButtonProps> = ({
       } catch (error) {
         console.error('❌ RewardedAdButton: Error fetching ad units:', error);
         setAdUnitIds([TestIds.REWARDED]);
+        if (!rewardAmount) {
+          setDisplayRewardAmount(50); // Fallback to default
+        }
       }
     };
 

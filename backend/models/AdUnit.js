@@ -25,6 +25,10 @@ const adUnitSchema = new mongoose.Schema({
         required: true,
         default: true
     },
+    rewardedAmount: {
+        type: Number,
+        default: 50
+    },
     createdAt: {
         type: Date,
         default: Date.now
