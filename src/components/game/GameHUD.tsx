@@ -6,12 +6,12 @@ import { GAME_ICONS, ICON_COLORS } from "../../config/icons";
 import { styles } from "../../styles/GameScreenStyles";
 
 const COLOR_MAP: Record<string, any> = {
-  "#ff3b30": require("../../images/red.webp"),
-  "#ff9500": require("../../images/orange.webp"),
-  "#ffd60a": require("../../images/yellow.webp"),
-  "#34c759": require("../../images/green.webp"),
-  "#007aff": require("../../images/blue.webp"),
-  "#af52de": require("../../images/purple.webp"),
+    "#ff3b30": require("../../images/red.webp"),
+    "#ff9500": require("../../images/orange.webp"),
+    "#ffd60a": require("../../images/yellow.webp"),
+    "#34c759": require("../../images/green.webp"),
+    "#007aff": require("../../images/blue.webp"),
+    "#af52de": require("../../images/purple.webp"),
 };
 
 interface GameHUDProps {
@@ -72,9 +72,7 @@ export const GameHUD = ({
                             <View style={[styles.starProgressDot, score > 1000 && styles.starProgressDotActive]} />
                         </View>
                     </View>
-                    <View style={styles.verticalDivider} />
                     <HelpButton onPress={onShowInstructions || (() => { })} />
-                    <View style={styles.verticalDivider} />
                     <TouchableOpacity
                         style={styles.topExitBtn}
                         onPress={onBackPress}

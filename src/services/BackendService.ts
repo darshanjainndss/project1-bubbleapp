@@ -1272,6 +1272,7 @@ class BackendService {
     platform: 'android' | 'ios';
     priority?: number;
     isActive?: boolean;
+    rewardedAmount?: number;
   }): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const baseUrl = await this.ensureWorkingUrl();
@@ -1302,6 +1303,7 @@ class BackendService {
     platform?: 'android' | 'ios';
     priority?: number;
     isActive?: boolean;
+    rewardedAmount?: number;
   }): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const baseUrl = await this.ensureWorkingUrl();
@@ -1369,6 +1371,52 @@ class BackendService {
     } catch (error) {
       console.error('Get best ad unit error:', error);
       return { success: false, error: 'Network error fetching best ad unit' };
+    }
+  }
+
+  async initializeAdUnits(): Promise<{ success: boolean; results?: any[]; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adunit/initialize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, results: data.results };
+      } else {
+        return { success: false, error: data.message || 'Failed to initialize ad units' };
+      }
+    } catch (error) {
+      console.error('Initialize ad units error:', error);
+      return { success: false, error: 'Network error initializing ad units' };
+    }
+  }
+
+  async resetAdUnits(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/adunit/reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data: data.data, count: data.count };
+      } else {
+        return { success: false, error: data.message || 'Failed to reset ad units' };
+      }
+    } catch (error) {
+      console.error('Reset ad units error:', error);
+      return { success: false, error: 'Network error resetting ad units' };
     }
   }
 

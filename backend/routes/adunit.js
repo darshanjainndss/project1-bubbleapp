@@ -13,7 +13,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const { platform, adType, isActive } = req.query;
-    
+
     // Build filter object
     const filter = {};
     if (platform) {
@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
     }
 
     const adUnits = await AdUnit.find(filter).sort({ platform: 1, adType: 1, priority: 1 });
-    
+
     res.json({
       success: true,
       data: adUnits,
@@ -62,9 +62,9 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const adUnit = await AdUnit.findById(id);
-    
+
     if (!adUnit) {
       return res.status(404).json({
         success: false,
@@ -96,7 +96,8 @@ router.post('/', async (req, res) => {
       adType,
       platform,
       priority = 1,
-      isActive = true
+      isActive = true,
+      rewardedAmount = 50
     } = req.body;
 
     // Validate required fields
@@ -136,7 +137,8 @@ router.post('/', async (req, res) => {
       adType,
       platform,
       priority,
-      isActive
+      isActive,
+      rewardedAmount
     });
 
     const savedAdUnit = await newAdUnit.save();
@@ -155,22 +157,24 @@ router.post('/', async (req, res) => {
     });
   }
 });
+
 // @route   PUT /api/adunit/:id
 // @desc    Update ad unit by ID
 // @access  Public
 router.put('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id;
     const {
       adId,
       adType,
       platform,
       priority,
-      isActive
+      isActive,
+      rewardedAmount
     } = req.body;
 
     const adUnit = await AdUnit.findById(id);
-    
+
     if (!adUnit) {
       return res.status(404).json({
         success: false,
@@ -210,6 +214,7 @@ router.put('/:id', async (req, res) => {
     if (platform !== undefined) adUnit.platform = platform;
     if (priority !== undefined) adUnit.priority = priority;
     if (isActive !== undefined) adUnit.isActive = isActive;
+    if (rewardedAmount !== undefined) adUnit.rewardedAmount = rewardedAmount;
 
     const updatedAdUnit = await adUnit.save();
 
@@ -236,7 +241,7 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     const adUnit = await AdUnit.findByIdAndDelete(id);
-    
+
     if (!adUnit) {
       return res.status(404).json({
         success: false,
@@ -282,7 +287,7 @@ router.get('/best/:platform/:adType', async (req, res) => {
     }
 
     const adUnit = await AdUnit.getAdId(platform, adType);
-    
+
     if (!adUnit) {
       return res.status(404).json({
         success: false,
@@ -300,6 +305,40 @@ router.get('/best/:platform/:adType', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch best ad unit',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// @route   POST /api/adunit/initialize
+// @desc    Initialize ad units
+// @access  Public
+router.post('/initialize', async (req, res) => {
+  try {
+    const adUnitsData = req.body.adUnits || [];
+    const results = [];
+
+    for (const adUnitData of adUnitsData) {
+      const existingAdUnit = await AdUnit.findOne({ adId: adUnitData.adId });
+      if (existingAdUnit) {
+        results.push({ adId: adUnitData.adId, action: 'skipped', message: 'Ad unit already exists' });
+      } else {
+        const newAdUnit = new AdUnit(adUnitData);
+        const savedAdUnit = await newAdUnit.save();
+        results.push({ adId: adUnitData.adId, action: 'created', data: savedAdUnit });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Ad units initialization completed',
+      results
+    });
+  } catch (error) {
+    console.error('Error initializing ad units:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to initialize ad units',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

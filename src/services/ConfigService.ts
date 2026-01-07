@@ -664,6 +664,7 @@ class ConfigService {
     platform: 'android' | 'ios';
     priority?: number;
     isActive?: boolean;
+    rewardedAmount?: number;
   }): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const result = await BackendService.createAdUnit(unitData);
@@ -684,6 +685,7 @@ class ConfigService {
     platform?: 'android' | 'ios';
     priority?: number;
     isActive?: boolean;
+    rewardedAmount?: number;
   }): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const result = await BackendService.updateAdUnit(id, updates);
@@ -719,6 +721,34 @@ class ConfigService {
     } catch (error) {
       console.error('Error fetching best ad unit:', error);
       return { success: false, error: 'Failed to fetch best ad unit' };
+    }
+  }
+
+  async initializeAdUnits(): Promise<{ success: boolean; results?: any[]; error?: string }> {
+    try {
+      const result = await BackendService.initializeAdUnits();
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error initializing ad units:', error);
+      return { success: false, error: 'Failed to initialize ad units' };
+    }
+  }
+
+  async resetAdUnits(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+    try {
+      const result = await BackendService.resetAdUnits();
+      if (result.success) {
+        // Clear cache to force refresh
+        await this.clearCache();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error resetting ad units:', error);
+      return { success: false, error: 'Failed to reset ad units' };
     }
   }
 }

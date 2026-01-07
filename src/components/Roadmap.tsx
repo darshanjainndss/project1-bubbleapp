@@ -201,9 +201,7 @@ const TopHUD = ({ coins, score, onProfilePress, onHelp }: any) => (
       </View>
 
       {/* Help Section */}
-      <TouchableOpacity onPress={onHelp} style={localStyles.topHudHelpBtn}>
-        <MaterialIcon name="help-outline" family="material" size={22} color="rgba(255,255,255,0.7)" />
-      </TouchableOpacity>
+      <HelpButton onPress={onHelp} />
     </View>
   </View>
 );
@@ -338,107 +336,116 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
           <MaterialIcon name="close" family="material" size={24} color="#FFF" />
         </TouchableOpacity>
 
-        <View style={localStyles.profileMainCard}>
-          <View style={localStyles.popupAvatar}>
-            <View style={localStyles.avatarRing}>
-              <MaterialIcon name="account-circle" family="material" size={90} color={ICON_COLORS.PRIMARY} />
-            </View>
-            <View style={localStyles.onlineStatus} />
-          </View>
-
-          <Text style={localStyles.popupName}>{cleanName}</Text>
-          <Text style={localStyles.popupLabel}>SPACE COMMANDER</Text>
-
-          <View style={localStyles.rankBadge}>
-            <MaterialIcon name="verified" family="material" size={14} color="#00E0FF" />
-            <Text style={localStyles.rankText}>ELITE EXPLORER</Text>
-          </View>
-        </View>
-
-        {/* Nested Cards Section */}
-        <View style={localStyles.cardsContainer}>
-          <Text style={localStyles.sectionHeader}>COMMANDER STATS</Text>
-          <View style={localStyles.profileStatsGrid}>
-            <View style={localStyles.nestedCard}>
-              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 224, 255, 0.1)' }]}>
-                <MaterialIcon name="trending-up" family="material" size={22} color={ICON_COLORS.SUCCESS} />
-              </View>
-              <View style={localStyles.cardContent}>
-                <Text style={localStyles.cardValue}>{currentLevel}</Text>
-                <Text style={localStyles.cardLabel}>LEVEL</Text>
-              </View>
-            </View>
-
-            <View style={localStyles.nestedCard}>
-              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 214, 10, 0.1)' }]}>
-                <MaterialIcon name="monetization-on" family="material" size={22} color={ICON_COLORS.GOLD} />
-              </View>
-              <View style={localStyles.cardContent}>
-                <Text style={localStyles.cardValue}>{coins.toLocaleString()}</Text>
-                <Text style={localStyles.cardLabel}>COINS</Text>
-              </View>
-            </View>
-
-            <View style={localStyles.nestedCard}>
-              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}>
-                <MaterialIcon name="stars" family="material" size={22} color="#FF3B30" />
-              </View>
-              <View style={localStyles.cardContent}>
-                <Text style={localStyles.cardValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
-                <Text style={localStyles.cardLabel}>EXP</Text>
-              </View>
-            </View>
-
-            <View style={localStyles.nestedCard}>
-              <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(88, 86, 214, 0.1)' }]}>
-                <MaterialIcon name="visibility" family="material" size={22} color="#5856D6" />
-              </View>
-              <View style={localStyles.cardContent}>
-                <Text style={localStyles.cardValue}>{(userGameData?.totalAdEarnings || 0).toLocaleString()}</Text>
-                <Text style={localStyles.cardLabel}>AD REWARD</Text>
-              </View>
-            </View>
-          </View>
-
-          <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
-          <View style={localStyles.settingsCard}>
-            <TouchableOpacity
-              style={[
-                localStyles.settingRow,
-                !vibrationSupported && localStyles.profileSettingDisabled
-              ]}
-              onPress={toggleVibration}
-              disabled={!vibrationSupported}
-            >
-              <View style={localStyles.settingInfo}>
-                <View style={localStyles.settingIconWrap}>
-                  <MaterialIcon
-                    name={GAME_ICONS.VIBRATION.name}
-                    family={GAME_ICONS.VIBRATION.family}
-                    size={20}
-                    color={vibrationEnabled ? ICON_COLORS.PRIMARY : "#94A3B8"}
-                  />
+        <FlatList
+          data={[1]} // Using FlatList as a container for better performance and scroll handling
+          keyExtractor={() => 'profile-content'}
+          renderItem={() => (
+            <View style={{ paddingBottom: 20 }}>
+              <View style={localStyles.profileMainCard}>
+                <View style={localStyles.popupAvatar}>
+                  <View style={localStyles.avatarRing}>
+                    <MaterialIcon name="account-circle" family="material" size={SCREEN_WIDTH > 380 ? 90 : 70} color={ICON_COLORS.PRIMARY} />
+                  </View>
+                  <View style={localStyles.onlineStatus} />
                 </View>
-                <Text style={localStyles.settingText}>Haptic Feedback</Text>
-              </View>
-              <View style={[
-                localStyles.modernToggle,
-                vibrationEnabled && vibrationSupported && localStyles.toggleActive
-              ]}>
-                <View style={[
-                  localStyles.toggleCircle,
-                  vibrationEnabled && vibrationSupported && localStyles.circleActive
-                ]} />
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* Logout Section */}
-        <TouchableOpacity style={localStyles.modernLogoutBtn} onPress={onLogout}>
-          <MaterialIcon name="power-settings-new" family="material" size={20} color="#FFF" />
-          <Text style={localStyles.logoutBtnText}>DISCONNECT SESSION</Text>
-        </TouchableOpacity>
+                <Text style={localStyles.popupName}>{cleanName}</Text>
+                <Text style={localStyles.popupLabel}>SPACE COMMANDER</Text>
+
+                <View style={localStyles.rankBadge}>
+                  <MaterialIcon name="verified" family="material" size={14} color="#00E0FF" />
+                  <Text style={localStyles.rankText}>ELITE EXPLORER</Text>
+                </View>
+              </View>
+
+              {/* Nested Cards Section */}
+              <View style={localStyles.cardsContainer}>
+                <Text style={localStyles.sectionHeader}>COMMANDER STATS</Text>
+                <View style={localStyles.profileStatsGrid}>
+                  <View style={localStyles.nestedCard}>
+                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 224, 255, 0.1)' }]}>
+                      <MaterialIcon name="trending-up" family="material" size={22} color={ICON_COLORS.SUCCESS} />
+                    </View>
+                    <View style={localStyles.cardContent}>
+                      <Text style={localStyles.cardValue}>{currentLevel}</Text>
+                      <Text style={localStyles.cardLabel}>LEVEL</Text>
+                    </View>
+                  </View>
+
+                  <View style={localStyles.nestedCard}>
+                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 214, 10, 0.1)' }]}>
+                      <MaterialIcon name="monetization-on" family="material" size={22} color={ICON_COLORS.GOLD} />
+                    </View>
+                    <View style={localStyles.cardContent}>
+                      <Text style={localStyles.cardValue}>{coins.toLocaleString()}</Text>
+                      <Text style={localStyles.cardLabel}>COINS</Text>
+                    </View>
+                  </View>
+
+                  <View style={localStyles.nestedCard}>
+                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}>
+                      <MaterialIcon name="stars" family="material" size={22} color="#FF3B30" />
+                    </View>
+                    <View style={localStyles.cardContent}>
+                      <Text style={localStyles.cardValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
+                      <Text style={localStyles.cardLabel}>EXP</Text>
+                    </View>
+                  </View>
+
+                  <View style={localStyles.nestedCard}>
+                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(88, 86, 214, 0.1)' }]}>
+                      <MaterialIcon name="visibility" family="material" size={SCREEN_WIDTH > 380 ? 22 : 18} color="#5856D6" />
+                    </View>
+                    <View style={localStyles.cardContent}>
+                      <Text style={localStyles.cardValue}>{(userGameData?.totalAdEarnings || 0).toLocaleString()}</Text>
+                      <Text style={localStyles.cardLabel}>AD REWARD</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
+                <View style={localStyles.settingsCard}>
+                  <TouchableOpacity
+                    style={[
+                      localStyles.settingRow,
+                      !vibrationSupported && localStyles.profileSettingDisabled
+                    ]}
+                    onPress={toggleVibration}
+                    disabled={!vibrationSupported}
+                  >
+                    <View style={localStyles.settingInfo}>
+                      <View style={localStyles.settingIconWrap}>
+                        <MaterialIcon
+                          name={GAME_ICONS.VIBRATION.name}
+                          family={GAME_ICONS.VIBRATION.family}
+                          size={SCREEN_WIDTH > 380 ? 20 : 18}
+                          color={vibrationEnabled ? ICON_COLORS.PRIMARY : "#94A3B8"}
+                        />
+                      </View>
+                      <Text style={localStyles.settingText}>Haptic Feedback</Text>
+                    </View>
+                    <View style={[
+                      localStyles.modernToggle,
+                      vibrationEnabled && vibrationSupported && localStyles.toggleActive
+                    ]}>
+                      <View style={[
+                        localStyles.toggleCircle,
+                        vibrationEnabled && vibrationSupported && localStyles.circleActive
+                      ]} />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Logout Section */}
+              <TouchableOpacity style={localStyles.modernLogoutBtn} onPress={onLogout}>
+                <MaterialIcon name="power-settings-new" family="material" size={20} color="#FFF" />
+                <Text style={localStyles.logoutBtnText}>DISCONNECT SESSION</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          showsVerticalScrollIndicator={false}
+        />
       </Animated.View>
     </View>
   );
@@ -462,7 +469,7 @@ const EarnCoinsPopup = ({ visible, onClose, onWatchAd, rewardAmount }: any) => {
           <MaterialIcon
             name={GAME_ICONS.COIN.name}
             family={GAME_ICONS.COIN.family}
-            size={80}
+            size={SCREEN_WIDTH > 400 ? 80 : 60}
             color={ICON_COLORS.GOLD}
           />
         </View>
@@ -477,7 +484,7 @@ const EarnCoinsPopup = ({ visible, onClose, onWatchAd, rewardAmount }: any) => {
           <MaterialIcon
             name={GAME_ICONS.COIN.name}
             family={GAME_ICONS.COIN.family}
-            size={32}
+            size={SCREEN_WIDTH > 400 ? 32 : 24}
             color={ICON_COLORS.GOLD}
           />
           <Text style={localStyles.earnCoinsRewardText}>+{rewardAmount} Coins</Text>
@@ -1303,6 +1310,9 @@ const Roadmap: React.FC = () => {
           onLevelComplete={handleLevelComplete}
           initialAbilities={abilityInventory} // Pass purchased abilities
           initialStartingCounts={abilityStartingCounts}
+          adRewardAmount={adRewardAmount}
+          levelReward={baseRewardAmount}
+          starBonus={starBonusAmount}
         />
       ) : (
         <View style={{ flex: 1 }}>
@@ -1464,19 +1474,20 @@ const localStyles = StyleSheet.create({
   topHudWrapper: {
     position: 'absolute',
     top: 50,
-    left: '5%',
-    right: '5%',
+    left: SCREEN_WIDTH > 600 ? (SCREEN_WIDTH - 600) / 2 : '5%',
+    right: SCREEN_WIDTH > 600 ? (SCREEN_WIDTH - 600) / 2 : '5%',
+    maxWidth: 600,
     zIndex: 100,
   },
   topHudInner: {
     backgroundColor: 'rgba(10, 10, 20, 0.95)',
-    borderRadius: 25,
+    borderRadius: SCREEN_WIDTH > 380 ? 25 : 20,
     borderWidth: 1.5,
     borderColor: 'rgba(0, 224, 255, 0.4)',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    paddingRight: 15,
+    padding: SCREEN_WIDTH > 380 ? 8 : 6,
+    paddingRight: SCREEN_WIDTH > 380 ? 15 : 10,
     shadowColor: '#00E0FF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -1484,12 +1495,12 @@ const localStyles = StyleSheet.create({
     elevation: 10,
   },
   topHudProfileBtn: {
-    marginRight: 12,
+    marginRight: SCREEN_WIDTH > 380 ? 12 : 8,
   },
   topHudAvatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: SCREEN_WIDTH > 380 ? 44 : 38,
+    height: SCREEN_WIDTH > 380 ? 44 : 38,
+    borderRadius: SCREEN_WIDTH > 380 ? 22 : 19,
     backgroundColor: 'rgba(0, 224, 255, 0.1)',
     borderWidth: 1.5,
     borderColor: '#00E0FF',
@@ -1512,9 +1523,9 @@ const localStyles = StyleSheet.create({
   },
   topHudStatText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: SCREEN_WIDTH > 380 ? 14 : 11,
     fontWeight: '900',
-    marginLeft: 8,
+    marginLeft: SCREEN_WIDTH > 380 ? 8 : 4,
     fontFamily: 'monospace',
     letterSpacing: 0.5,
   },
@@ -1523,14 +1534,6 @@ const localStyles = StyleSheet.create({
     height: 15,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     marginHorizontal: 15,
-  },
-  topHudHelpBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
   logoutButton: {
     padding: 5,
@@ -1624,10 +1627,11 @@ const localStyles = StyleSheet.create({
     zIndex: 2000,
   },
   popupContent: {
-    width: '92%',
-    maxWidth: 450,
+    width: SCREEN_WIDTH > 500 ? 460 : '94%',
+    maxWidth: 500,
+    maxHeight: SCREEN_HEIGHT * 0.85,
     backgroundColor: '#0A0A14',
-    borderRadius: 32,
+    borderRadius: SCREEN_WIDTH > 400 ? 32 : 24,
     borderWidth: 1.5,
     borderColor: 'rgba(0, 224, 255, 0.3)',
     shadowColor: '#00E0FF',
@@ -1636,24 +1640,23 @@ const localStyles = StyleSheet.create({
     shadowRadius: 30,
     elevation: 20,
     overflow: 'hidden',
-    paddingBottom: 25,
   },
   profileHeaderBg: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
+    height: SCREEN_WIDTH > 400 ? 140 : 100,
     backgroundColor: 'rgba(0, 224, 255, 0.05)',
     overflow: 'hidden',
   },
   profileHeaderCircle: {
     position: 'absolute',
-    top: -100,
-    right: -50,
-    width: 250,
-    height: 250,
-    borderRadius: 125,
+    top: SCREEN_WIDTH > 400 ? -120 : -80,
+    right: SCREEN_WIDTH > 400 ? -60 : -40,
+    width: SCREEN_WIDTH > 400 ? 300 : 200,
+    height: SCREEN_WIDTH > 400 ? 300 : 200,
+    borderRadius: SCREEN_WIDTH > 400 ? 150 : 100,
     backgroundColor: 'rgba(0, 224, 255, 0.1)',
   },
   closePopupBtn: {
@@ -1670,8 +1673,8 @@ const localStyles = StyleSheet.create({
   },
   profileMainCard: {
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 20,
+    marginTop: SCREEN_WIDTH > 380 ? 45 : 30,
+    marginBottom: SCREEN_WIDTH > 380 ? 20 : 10,
   },
   popupAvatar: {
     position: 'relative',
@@ -1679,17 +1682,17 @@ const localStyles = StyleSheet.create({
   },
   avatarRing: {
     padding: 4,
-    borderRadius: 60,
+    borderRadius: SCREEN_WIDTH > 380 ? 60 : 50,
     borderWidth: 2,
     borderColor: '#00E0FF',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
   onlineStatus: {
     position: 'absolute',
-    bottom: 5,
-    right: 5,
-    width: 18,
-    height: 18,
+    bottom: SCREEN_WIDTH > 380 ? 5 : 3,
+    right: SCREEN_WIDTH > 380 ? 5 : 3,
+    width: SCREEN_WIDTH > 380 ? 18 : 14,
+    height: SCREEN_WIDTH > 380 ? 18 : 14,
     borderRadius: 9,
     backgroundColor: '#00FF88',
     borderWidth: 3,
@@ -1697,7 +1700,7 @@ const localStyles = StyleSheet.create({
   },
   popupName: {
     color: '#FFF',
-    fontSize: 26,
+    fontSize: SCREEN_WIDTH > 380 ? 28 : 22,
     fontWeight: '900',
     letterSpacing: 1,
     textShadowColor: 'rgba(0, 224, 255, 0.5)',
@@ -1746,10 +1749,10 @@ const localStyles = StyleSheet.create({
     gap: 12,
   },
   nestedCard: {
-    width: '48%',
+    width: SCREEN_WIDTH > 380 ? '48%' : '100%',
     backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 20,
-    padding: 14,
+    padding: SCREEN_WIDTH > 380 ? 16 : 14,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -1796,8 +1799,8 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
   },
   settingIconWrap: {
-    width: 36,
-    height: 36,
+    width: SCREEN_WIDTH > 380 ? 36 : 32,
+    height: SCREEN_WIDTH > 380 ? 36 : 32,
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
@@ -1854,7 +1857,7 @@ const localStyles = StyleSheet.create({
   },
   // Earn Coins Popup Styles
   earnCoinsPopupContent: {
-    width: '85%',
+    width: SCREEN_WIDTH > 500 ? 400 : '85%',
     backgroundColor: 'rgba(5, 5, 10, 0.98)',
     borderTopLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -1862,7 +1865,7 @@ const localStyles = StyleSheet.create({
     borderBottomLeftRadius: 10,
     borderWidth: 2,
     borderColor: ICON_COLORS.GOLD,
-    padding: 30,
+    padding: SCREEN_WIDTH > 400 ? 30 : 20,
     alignItems: 'center',
     shadowColor: ICON_COLORS.GOLD,
     shadowOffset: { width: 0, height: 0 },
@@ -1880,7 +1883,7 @@ const localStyles = StyleSheet.create({
   },
   earnCoinsTitle: {
     color: '#FFF',
-    fontSize: 26,
+    fontSize: SCREEN_WIDTH > 400 ? 26 : 22,
     fontWeight: 'bold',
     marginBottom: 15,
     textAlign: 'center',
@@ -1889,9 +1892,9 @@ const localStyles = StyleSheet.create({
   },
   earnCoinsDescription: {
     color: '#94A3B8',
-    fontSize: 16,
+    fontSize: SCREEN_WIDTH > 400 ? 16 : 14,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: SCREEN_WIDTH > 400 ? 22 : 18,
     marginBottom: 25,
     paddingHorizontal: 10,
   },

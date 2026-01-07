@@ -51,12 +51,15 @@ const COLOR_MAP: Record<string, any> = {
 
 
 
-const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities, initialStartingCounts }: {
+const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities, initialStartingCounts, adRewardAmount = 50, levelReward = 10, starBonus = 5 }: {
   onBackPress?: () => void,
   level?: number,
   onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home', sessionData?: any) => void,
   initialAbilities?: any,
-  initialStartingCounts?: Record<string, number>
+  initialStartingCounts?: Record<string, number>,
+  adRewardAmount?: number,
+  levelReward?: number,
+  starBonus?: number
 }) => {
   const { user } = useAuth(); // Get Firebase user
 
@@ -1238,10 +1241,12 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
         onCancel={() => setShowBackConfirm(false)}
       />
 
-      {/* Help Slider */}
       <HelpSlider
         visible={showInstructions}
         onClose={() => setShowInstructions(false)}
+        adRewardAmount={adRewardAmount}
+        levelReward={levelReward}
+        starBonus={starBonus}
       />
 
       <ToastNotification ref={toastRef} />
