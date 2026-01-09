@@ -26,13 +26,15 @@ interface LoginScreenProps {
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const [activeTab, setActiveTab] = useState<'login' | 'quickplay'>('quickplay');
+  const [activeTab, setActiveTab] = useState<'login'>('login');
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const toastRef = React.useRef<ToastRef>(null);
 
   const validateEmail = (email: string): boolean => {
@@ -77,46 +79,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleAuth = async () => {
     setLoading(true);
     try {
       await AuthService.signInWithGoogle();
-      toastRef.current?.show('Google Sign-In Successful!', 'success');
+      toastRef.current?.show('Signed in with Google!', 'success');
       onLoginSuccess();
     } catch (error: any) {
-      toastRef.current?.show(error.message || 'Google Sign-In Failed', 'error');
+      if (error.message !== 'Sign-in was cancelled') {
+        toastRef.current?.show(error.message, 'error');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQuickPlay = async () => {
-    if (!playerName.trim()) {
-      toastRef.current?.show('Please enter your commander name', 'warning');
-      return;
-    }
 
-    if (playerName.trim().length < 2) {
-      toastRef.current?.show('Commander name must be at least 2 characters long', 'warning');
-      return;
-    }
 
-    setLoading(true);
-    try {
-      // Create a temporary guest account or use anonymous auth
-      // For now, we'll simulate a quick login
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 1000)); // Simulate loading
 
-      // TODO: Set up guest/anonymous authentication with the player name
-      // This could store the name locally and create a temporary session
-
-      onLoginSuccess();
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to start game. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <KeyboardAvoidingView
@@ -144,123 +124,68 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <Text style={styles.gameSubtitle}>ADVENTURE</Text>
           </View>
 
-          {/* Tab Selector */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'quickplay' && styles.activeTab]}
-              onPress={() => setActiveTab('quickplay')}
-            >
-              <MaterialIcon
-                name={GAME_ICONS.PLAY.name}
-                family={GAME_ICONS.PLAY.family}
-                size={ICON_SIZES.MEDIUM}
-                color={activeTab === 'quickplay' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY}
-              />
-              <Text style={[
-                styles.tabText,
-                { color: activeTab === 'quickplay' ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
-              ]}>
-                QUICK PLAY
-              </Text>
-            </TouchableOpacity>
+          {/* Sign In Header */}
 
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'login' && styles.activeTab]}
-              onPress={() => setActiveTab('login')}
-            >
-              <MaterialIcon
-                name="login"
-                family="material"
-                size={ICON_SIZES.MEDIUM}
-                color={activeTab === 'login' ? ICON_COLORS.WHITE : ICON_COLORS.SECONDARY}
-              />
-              <Text style={[
-                styles.tabText,
-                { color: activeTab === 'login' ? '#fff' : 'rgba(255, 255, 255, 0.6)' }
-              ]}>
-                SIGN IN
-              </Text>
-            </TouchableOpacity>
-          </View>
 
           {/* Tab Content */}
           <View style={styles.contentContainer}>
-            {activeTab === 'quickplay' ? (
-              // Quick Play Content
-              <View style={styles.quickPlayContent}>
-                <Text style={styles.contentTitle}>QUICK PLAY</Text>
+            {/* Login Content */}
+            <View style={styles.loginContent}>
+              <Text style={styles.contentTitle}>
+                {isSignUp ? 'JOIN THE FLEET' : 'WELCOME BACK'}
+              </Text>
 
-                <View style={styles.inputContainer}>
-                  <MaterialIcon
-                    name="person"
-                    family="material"
-                    size={ICON_SIZES.MEDIUM}
-                    color={ICON_COLORS.SUCCESS}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter your commander name"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={playerName}
-                    onChangeText={setPlayerName}
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    maxLength={20}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={styles.quickPlayButton}
-                  onPress={handleQuickPlay}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#000" size="small" />
-                  ) : (
-                    <>
-                      <MaterialIcon
-                        name={GAME_ICONS.PLAY.name}
-                        family={GAME_ICONS.PLAY.family}
-                        size={ICON_SIZES.MEDIUM}
-                        color="#000"
-                      />
-                      <Text style={styles.quickPlayButtonText}>START ADVENTURE</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <Text style={styles.quickPlayNote}>
-                  Progress won't be saved without an account
-                </Text>
+              <View style={styles.inputContainer}>
+                <MaterialIcon
+                  name="email"
+                  family="material"
+                  size={ICON_SIZES.MEDIUM}
+                  color={ICON_COLORS.SECONDARY}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email Address"
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
-            ) : (
-              // Login Content
-              <View style={styles.loginContent}>
-                <Text style={styles.contentTitle}>
-                  {isSignUp ? 'JOIN THE FLEET' : 'WELCOME BACK'}
-                </Text>
 
-                <View style={styles.inputContainer}>
+              <View style={styles.inputContainer}>
+                <MaterialIcon
+                  name="lock"
+                  family="material"
+                  size={ICON_SIZES.MEDIUM}
+                  color={ICON_COLORS.SECONDARY}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeIcon}
+                >
                   <MaterialIcon
-                    name="email"
+                    name={showPassword ? "visibility-off" : "visibility"}
                     family="material"
                     size={ICON_SIZES.MEDIUM}
                     color={ICON_COLORS.SECONDARY}
-                    style={styles.inputIcon}
                   />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email Address"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
+                </TouchableOpacity>
+              </View>
 
+              {isSignUp && (
                 <View style={styles.inputContainer}>
                   <MaterialIcon
                     name="lock"
@@ -271,84 +196,83 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Password"
+                    placeholder="Confirm Password"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
                     autoCapitalize="none"
                   />
-                </View>
-
-                {isSignUp && (
-                  <View style={styles.inputContainer}>
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeIcon}
+                  >
                     <MaterialIcon
-                      name="lock"
+                      name={showConfirmPassword ? "visibility-off" : "visibility"}
                       family="material"
                       size={ICON_SIZES.MEDIUM}
                       color={ICON_COLORS.SECONDARY}
-                      style={styles.inputIcon}
                     />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Confirm Password"
-                      placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      secureTextEntry
-                      autoCapitalize="none"
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.loginButton}
+                onPress={handleEmailAuth}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcon
+                      name={isSignUp ? "person-add" : "login"}
+                      family="material"
+                      size={ICON_SIZES.MEDIUM}
+                      color={ICON_COLORS.WHITE}
                     />
-                  </View>
+                    <Text style={styles.loginButtonText}>
+                      {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
+                    </Text>
+                  </>
                 )}
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.loginButton}
-                  onPress={handleEmailAuth}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <MaterialIcon
-                        name={isSignUp ? "person-add" : "login"}
-                        family="material"
-                        size={ICON_SIZES.MEDIUM}
-                        color={ICON_COLORS.WHITE}
-                      />
-                      <Text style={styles.loginButtonText}>
-                        {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.switchButton}
+                onPress={() => setIsSignUp(!isSignUp)}
+              >
+                <Text style={styles.switchButtonText}>
+                  {isSignUp
+                    ? 'Already a commander? Sign In'
+                    : "New recruit? Join the Fleet"
+                  }
+                </Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.googleButton}
-                  onPress={handleGoogleSignIn}
-                  disabled={loading}
-                >
-                  <View style={styles.googleIcon}>
-                    <Text style={styles.googleIconText}>G</Text>
-                  </View>
-                  <Text style={styles.googleButtonText}>
-                    Continue with Google
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.switchButton}
-                  onPress={() => setIsSignUp(!isSignUp)}
-                >
-                  <Text style={styles.switchButtonText}>
-                    {isSignUp
-                      ? 'Already a commander? Sign In'
-                      : "New recruit? Join the Fleet"
-                    }
-                  </Text>
-                </TouchableOpacity>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
               </View>
-            )}
+
+              <TouchableOpacity
+                style={styles.googleButton}
+                onPress={handleGoogleAuth}
+                disabled={loading}
+              >
+                <MaterialIcon
+                  name="google"
+                  family="material-community"
+                  size={ICON_SIZES.MEDIUM}
+                  color={ICON_COLORS.WHITE}
+                />
+                <Text style={styles.googleButtonText}>
+                  {isSignUp ? 'SIGN UP WITH GOOGLE' : 'SIGN IN WITH GOOGLE'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -470,42 +394,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
   },
+  eyeIcon: {
+    padding: 8,
+  },
 
-  // Quick Play Styles
-  quickPlayContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickPlayButton: {
-    backgroundColor: '#00FF88', // Neon green background
-    borderRadius: 12,
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#00FF88',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-    elevation: 8,
-    gap: 10,
-    marginVertical: 20,
-    width: '100%',
-  },
-  quickPlayButtonText: {
-    color: '#000', // Black text on neon background
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  quickPlayNote: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.5)',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginTop: 10,
-  },
+
 
   // Login Styles
   loginContent: {
@@ -533,38 +426,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  googleButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    marginBottom: 15,
-    gap: 10,
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#4285f4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleIconText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-    fontFamily: 'Arial',
-  },
-  googleButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
   switchButton: {
     alignItems: 'center',
     marginTop: 10,
@@ -573,6 +434,39 @@ const styles = StyleSheet.create({
     color: '#00E0FF',
     fontSize: 12,
     fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 15,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  dividerText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    paddingHorizontal: 10,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  googleButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 10,
+  },
+  googleButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
 

@@ -6,18 +6,18 @@ const gameSessionSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    default: function() {
+    default: function () {
       return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
   },
-  
+
   // User reference
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  
+
   // Game details
   level: {
     type: Number,
@@ -40,7 +40,7 @@ const gameSessionSchema = new mongoose.Schema({
     min: 0,
     max: 3
   },
-  
+
   // Abilities used during the game
   abilitiesUsed: {
     lightning: {
@@ -64,14 +64,14 @@ const gameSessionSchema = new mongoose.Schema({
       min: 0
     }
   },
-  
+
   // Rewards
   coinsEarned: {
     type: Number,
     default: 0,
     min: 0
   },
-  
+
   // Session metadata
   duration: {
     type: Number, // in seconds
@@ -82,13 +82,13 @@ const gameSessionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  
+
   // Game outcome
   isWin: {
     type: Boolean,
     required: true
   },
-  
+
   // Additional stats
   bubblesDestroyed: {
     type: Number,
@@ -116,18 +116,18 @@ gameSessionSchema.index({ completedAt: -1 });
 gameSessionSchema.index({ sessionId: 1 });
 
 // Static method to get user's best score for a level
-gameSessionSchema.statics.getUserBestScore = async function(userId, level) {
+gameSessionSchema.statics.getUserBestScore = async function (userId, level) {
   const result = await this.findOne({
     userId: userId,
     level: level,
     isWin: true
   }).sort({ score: -1 });
-  
+
   return result ? result.score : 0;
 };
 
 // Static method to get user's game statistics
-gameSessionSchema.statics.getUserStats = async function(userId) {
+gameSessionSchema.statics.getUserStats = async function (userId) {
   const stats = await this.aggregate([
     {
       $match: { userId: new mongoose.Types.ObjectId(userId) }
@@ -152,7 +152,7 @@ gameSessionSchema.statics.getUserStats = async function(userId) {
       }
     }
   ]);
-  
+
   if (stats.length === 0) {
     return {
       totalGames: 0,
@@ -174,7 +174,7 @@ gameSessionSchema.statics.getUserStats = async function(userId) {
       }
     };
   }
-  
+
   const stat = stats[0];
   stat.winRate = stat.totalGames > 0 ? (stat.totalWins / stat.totalGames * 100).toFixed(1) : 0;
   stat.abilitiesUsed = {
@@ -183,21 +183,21 @@ gameSessionSchema.statics.getUserStats = async function(userId) {
     freeze: stat.freezeUsed || 0,
     fire: stat.fireUsed || 0
   };
-  
+
   // Remove the individual ability fields
   delete stat.lightningUsed;
   delete stat.bombUsed;
   delete stat.freezeUsed;
   delete stat.fireUsed;
-  
+
   return stat;
 };
 
 // Static method to get level leaderboard
-gameSessionSchema.statics.getLevelLeaderboard = async function(level, limit = 50) {
+gameSessionSchema.statics.getLevelLeaderboard = async function (level, limit = 50) {
   return this.aggregate([
     {
-      $match: { 
+      $match: {
         level: level,
         isWin: true
       }
@@ -244,28 +244,41 @@ gameSessionSchema.statics.getLevelLeaderboard = async function(level, limit = 50
 };
 
 // Instance method to calculate coins earned
-gameSessionSchema.methods.calculateCoinsEarned = function() {
+gameSessionSchema.methods.calculateCoinsEarned = async function () {
+  const GameConfig = require('./GameConfig');
+  const config = await GameConfig.getConfig();
+  const rewards = config.winningRewards;
+
   let coins = 0;
-  
+
   // Base coins for completing the level
   if (this.isWin) {
-    coins += 10;
-    
+    // Formula: Base + (Level * Multiplier)
+    const levelBonus = Math.floor(this.level * (rewards.coinsPerLevelMultiplier || 0));
+    coins += (rewards.baseCoins || 0) + levelBonus;
+
     // Bonus coins based on stars
-    coins += this.stars * 5;
-    
-    // Bonus coins based on score
-    if (this.score >= 1000) coins += 20;
-    else if (this.score >= 500) coins += 10;
-    else if (this.score >= 100) coins += 5;
-    
+    // Formula: Stars * (Base + (Level * Multiplier))
+    const starLevelBonus = Math.floor(this.level * (rewards.starBonusLevelMultiplier || 0));
+    const starTotalPerStar = (rewards.starBonusBase || 0) + starLevelBonus;
+    coins += this.stars * starTotalPerStar;
+
+    // Completion Bonus
+    // Formula: Level * Multiplier
+    const completionBonus = Math.floor(this.level * (rewards.completionBonusMultiplier || 0));
+    coins += completionBonus;
+
     // Bonus for perfect game (no abilities used)
     const totalAbilities = Object.values(this.abilitiesUsed).reduce((sum, count) => sum + count, 0);
     if (totalAbilities === 0) {
-      coins += 15;
+      coins += 15; // Still keeping a small fixed bonus for perfect game or should add to config?
+      // For now keeping it fixed or we can add it to config, but user didn't specify.
     }
   }
-  
+
+  // Ensure integer
+  coins = Math.floor(coins);
+
   this.coinsEarned = coins;
   return coins;
 };

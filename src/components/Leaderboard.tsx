@@ -27,6 +27,7 @@ interface LeaderboardEntry {
   highScore: number;
   totalScore: number;
   gamesWon: number;
+  currentLevel?: number;
   rank: number;
 }
 
@@ -109,7 +110,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             // Get user email for display name
             const userEmail = user?.email || 'User';
             const displayName = userEmail.split('@')[0];
-            
+
             data.push({
               userId: currentUserId,
               displayName: displayName,
@@ -125,7 +126,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             rank: index + 1
           }));
         }
-        
+
         setLeaderboardData(data);
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } else {
@@ -186,13 +187,18 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
           <Text style={[styles.userName, isCurrentUser && { color: '#00FF88' }]} numberOfLines={1}>
             {isCurrentUser ? 'YOU' : item.displayName.toUpperCase()}
           </Text>
+          {item.currentLevel && (
+            <Text style={styles.levelText}>Level {item.currentLevel}</Text>
+          )}
         </View>
 
         <View style={styles.scoreInfo}>
           <Text style={[styles.totalScoreText, { color: isCurrentUser ? '#00FF88' : '#FFF' }]}>
+            <MaterialIcon name="stars" family="material" size={15} color={ICON_COLORS.SUCCESS} />
             {item.totalScore.toLocaleString()}
           </Text>
-          <Text style={styles.ptsText}>PTS</Text>
+          <Text style={styles.ptsText}>PTS </Text>
+
         </View>
       </View>
     );
@@ -481,12 +487,20 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
   },
+  levelText: {
+    color: '#00E0FF',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+    fontFamily: 'monospace',
+  },
   scoreInfo: {
     alignItems: 'flex-end',
     minWidth: 100,
   },
   totalScoreText: {
-    fontSize: 20,
+
+    fontSize: 15,
     fontWeight: '900',
     fontFamily: 'monospace',
     color: '#FFF',

@@ -148,6 +148,18 @@ export const styles = StyleSheet.create({
         shadowOpacity: 0.6,
         shadowRadius: 8,
         elevation: 8,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    ammoBubbleImage: {
+        width: '120%',
+        height: '120%',
+    },
+    ammoBubbleFallback: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 20,
     },
     statValue: {
         color: '#fff',

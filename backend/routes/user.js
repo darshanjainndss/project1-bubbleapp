@@ -67,7 +67,7 @@ const handleValidationErrors = (req, res, next) => {
 router.get('/profile', auth, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -105,7 +105,7 @@ router.put('/profile', auth, [
 ], handleValidationErrors, async (req, res) => {
   try {
     const { displayName, profilePicture } = req.body;
-    
+
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({
@@ -141,12 +141,18 @@ router.put('/profile', auth, [
 router.get('/game-data', auth, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
+    }
+
+    // Initialize abilities if they don't exist
+    if (!user.gameData.abilities || user.gameData.abilities.size === 0) {
+      await user.initializeUserAbilities();
+      await user.save();
     }
 
     // Get user's rank
@@ -175,7 +181,7 @@ router.get('/game-data', auth, async (req, res) => {
 router.put('/game-data', auth, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -184,8 +190,8 @@ router.put('/game-data', auth, async (req, res) => {
     }
 
     const allowedUpdates = [
-      'totalScore', 'highScore', 'currentLevel', 'gamesPlayed', 
-      'gamesWon', 'achievements', 'lastPlayedAt'
+      'totalScore', 'highScore', 'currentLevel', 'gamesPlayed',
+      'achievements', 'lastPlayedAt'
     ];
 
     // Update only allowed fields
@@ -212,13 +218,10 @@ router.put('/game-data', auth, async (req, res) => {
   }
 });
 
-// @route   PUT /api/user/coins
-// @desc    Update user coins
-// @access  Private
 router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (req, res) => {
   try {
-    const { amount, operation } = req.body;
-    
+    const { amount, operation, isAdReward } = req.body;
+
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({
@@ -227,18 +230,41 @@ router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (r
       });
     }
 
+    // Server-side enforcement of ad reward amount from database
+    let actualAmount = amount;
+    if (isAdReward) {
+      const AdUnit = require('../models/AdUnit');
+      const rewardedAds = await AdUnit.find({
+        platform: 'android', // You can make this dynamic based on user's platform
+        adType: 'rewarded',
+        isActive: true
+      }).sort({ priority: 1 }).limit(1);
+
+      const allowedReward = rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50;
+
+      if (amount !== allowedReward) {
+        console.warn(`⚠️ User ${req.userId} attempted to claim ${amount} coins for an ad, but allowed is ${allowedReward}. Enforcing allowed.`);
+        actualAmount = allowedReward;
+      }
+    }
+
     const currentCoins = user.gameData.totalCoins;
 
     if (operation === 'add') {
-      user.gameData.totalCoins += amount;
+      user.gameData.totalCoins += actualAmount;
+      if (isAdReward) {
+        user.gameData.totalAdEarnings = (user.gameData.totalAdEarnings || 0) + actualAmount;
+        if (!user.gameData.rewardedAdHistory) user.gameData.rewardedAdHistory = [];
+        user.gameData.rewardedAdHistory.push({ amount: actualAmount, watchedAt: new Date() });
+      }
     } else if (operation === 'subtract') {
-      if (currentCoins < amount) {
+      if (currentCoins < actualAmount) {
         return res.status(400).json({
           success: false,
           message: 'Insufficient coins'
         });
       }
-      user.gameData.totalCoins -= amount;
+      user.gameData.totalCoins -= actualAmount;
     }
 
     await user.save();
@@ -265,7 +291,7 @@ router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (r
 router.put('/abilities', auth, validateAbilitiesUpdate, handleValidationErrors, async (req, res) => {
   try {
     const { abilities } = req.body;
-    
+
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({
@@ -275,9 +301,13 @@ router.put('/abilities', auth, validateAbilitiesUpdate, handleValidationErrors, 
     }
 
     // Update abilities
+    const Ability = require('../models/Ability');
+    const activeAbilities = await Ability.find({ isActive: true }).select('name');
+    const activeAbilityNames = activeAbilities.map(a => a.name);
+
     Object.keys(abilities).forEach(ability => {
-      if (['lightning', 'bomb', 'freeze', 'fire'].includes(ability)) {
-        user.gameData.abilities[ability] = abilities[ability];
+      if (activeAbilityNames.includes(ability)) {
+        user.gameData.abilities.set(ability, abilities[ability]);
       }
     });
 
@@ -311,7 +341,7 @@ router.post('/purchase-abilities', auth, [
 ], handleValidationErrors, async (req, res) => {
   try {
     const { ability, quantity } = req.body;
-    
+
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({
@@ -320,15 +350,22 @@ router.post('/purchase-abilities', auth, [
       });
     }
 
-    // Define ability costs
-    const abilityCosts = {
-      lightning: 50,
-      bomb: 75,
-      freeze: 60,
-      fire: 65
-    };
+    // Initialize abilities if they don't exist
+    if (!user.gameData.abilities || user.gameData.abilities.size === 0) {
+      await user.initializeUserAbilities();
+    }
 
-    const totalCost = abilityCosts[ability] * quantity;
+    const Ability = require('../models/Ability');
+    const abilityDoc = await Ability.findOne({ name: ability, isActive: true });
+
+    if (!abilityDoc) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ability not found or inactive'
+      });
+    }
+
+    const totalCost = abilityDoc.price * quantity;
 
     // Check if user has enough coins
     if (user.gameData.totalCoins < totalCost) {
@@ -342,16 +379,18 @@ router.post('/purchase-abilities', auth, [
 
     // Deduct coins and add abilities
     user.gameData.totalCoins -= totalCost;
-    user.gameData.abilities[ability] += quantity;
+    user.addAbilities(ability, quantity);
 
     await user.save();
+
+    const newAbilityCount = user.getAbilityCount(ability);
 
     res.json({
       success: true,
       message: `Purchased ${quantity} ${ability} ability(ies)`,
       coinsSpent: totalCost,
       newCoinBalance: user.gameData.totalCoins,
-      newAbilityCount: user.gameData.abilities[ability]
+      newAbilityCount: newAbilityCount
     });
 
   } catch (error) {
@@ -369,7 +408,7 @@ router.post('/purchase-abilities', auth, [
 router.get('/rank', auth, async (req, res) => {
   try {
     const rank = await User.getUserRank(req.userId);
-    
+
     if (rank === null) {
       return res.status(404).json({
         success: false,
@@ -397,7 +436,7 @@ router.get('/rank', auth, async (req, res) => {
 router.get('/stats', auth, async (req, res) => {
   try {
     const stats = await GameSession.getUserStats(req.userId);
-    
+
     res.json({
       success: true,
       stats

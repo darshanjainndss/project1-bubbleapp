@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  View, StyleSheet, Dimensions, Image, Text, StatusBar, Animated, TouchableOpacity,
+  View, StyleSheet, Dimensions, Image, Text, StatusBar, Animated, TouchableOpacity, ActivityIndicator,
 } from "react-native";
 import LottieView from 'lottie-react-native';
 import SpaceBackground from "./SpaceBackground";
@@ -12,6 +12,8 @@ import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
 import { GameHUD } from "./game/GameHUD";
 import OptimizedLaser from "./game/OptimizedLaser";
 import { useAuth } from '../context/AuthContext';
+import SettingsService from '../services/SettingsService';
+import ConfigService from '../services/ConfigService';
 
 import { getLevelPattern, getLevelMoves, getLevelMetalGridConfig, COLORS } from "../data/levelPatterns";
 import { getPos, getHexNeighbors } from "../utils/gameUtils";
@@ -49,11 +51,15 @@ const COLOR_MAP: Record<string, any> = {
 
 
 
-const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities }: {
+const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities, initialStartingCounts, adRewardAmount = 50, levelReward = 10, starBonus = 5 }: {
   onBackPress?: () => void,
   level?: number,
-  onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home') => void,
-  initialAbilities?: any
+  onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home', sessionData?: any) => void,
+  initialAbilities?: any,
+  initialStartingCounts?: Record<string, number>,
+  adRewardAmount?: number,
+  levelReward?: number,
+  starBonus?: number
 }) => {
   const { user } = useAuth(); // Get Firebase user
 
@@ -63,6 +69,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
   const [shootingBubble, setShootingBubble] = useState<any>(null);
   const [nextColor, setNextColor] = useState(COLORS[0]);
   const [score, setScore] = useState(0);
+  const [sessionCoins, setSessionCoins] = useState(0);
   const [moves, setMoves] = useState(30);
   const [showHint, setShowHint] = useState(true);
   const cannonAngleRef = useRef(0);
@@ -79,7 +86,26 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
   const [showInstructions, setShowInstructions] = useState(false);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(Date.now());
-  const [abilityInventory, setAbilityInventory] = useState(initialAbilities || { lightning: 2, bomb: 2, freeze: 2, fire: 2 });
+  // Base abilities per level (2 of each) + any purchased abilities
+  const getBaseAbilitiesPerLevel = () => ({
+    lightning: initialStartingCounts?.lightning ?? 2,
+    bomb: initialStartingCounts?.bomb ?? 2,
+    freeze: initialStartingCounts?.freeze ?? 2,
+    fire: initialStartingCounts?.fire ?? 2,
+  });
+  const [abilityInventory, setAbilityInventory] = useState(() => {
+    if (initialAbilities) {
+      // Add base abilities to purchased abilities
+      const base = getBaseAbilitiesPerLevel();
+      return {
+        lightning: base.lightning + (initialAbilities.lightning || 0),
+        bomb: base.bomb + (initialAbilities.bomb || 0),
+        freeze: base.freeze + (initialAbilities.freeze || 0),
+        fire: base.fire + (initialAbilities.fire || 0),
+      };
+    }
+    return getBaseAbilitiesPerLevel();
+  });
   const toastRef = useRef<ToastRef>(null);
 
   // Shared Animation Values
@@ -118,6 +144,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
   const [hasFreezePower, setHasFreezePower] = useState(false);
   const [fireActive, setFireActive] = useState(false);
   const [hasFirePower, setHasFirePower] = useState(false);
+  const [nextLevelLoading, setNextLevelLoading] = useState(false);
 
   const [abilitiesUsedCount, setAbilitiesUsedCount] = useState({
     lightning: 0,
@@ -126,6 +153,16 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     fire: 0
   });
 
+  const [gameSettings, setGameSettings] = useState<any>(null);
+
+  useEffect(() => {
+    ConfigService.getGameConfig().then(config => {
+      if (config?.gameSettings) {
+        setGameSettings(config.gameSettings);
+      }
+    });
+  }, []);
+
   // Progress tracking
   const lastProgressUpdate = useRef(0);
   const PROGRESS_UPDATE_INTERVAL = 3000; // Send progress every 3 seconds
@@ -133,6 +170,8 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
   // Function to send progress updates to backend
   const sendProgressUpdate = useCallback(async (currentScore: number, currentMoves: number) => {
     if (!user || !BackendService.isAuthenticated()) return;
+
+
 
     const now = Date.now();
     if (now - lastProgressUpdate.current < PROGRESS_UPDATE_INTERVAL) return;
@@ -176,10 +215,17 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             return;
           }
 
+
+
+          console.log('🔍 Checking backend authentication...');
+          console.log('🔍 BackendService.isAuthenticated():', BackendService.isAuthenticated());
+          console.log('🔍 User object:', user?.email || user?.displayName || 'Anonymous');
+
           // Check if BackendService is authenticated
           if (!BackendService.isAuthenticated()) {
             console.log('BackendService not authenticated, attempting to authenticate...');
             const authResult = await BackendService.ensureAuthenticated(user);
+            console.log('🔍 Authentication result:', authResult);
             if (!authResult) {
               console.log('Failed to authenticate with backend, skipping submission');
               return;
@@ -190,10 +236,30 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
           const stars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
 
           // Calculate coins earned
-          const baseCoins = Math.floor(10 + (level * 2.5));
-          const starBonus = stars * Math.floor(5 + (level * 0.5));
-          const completionBonus = Math.floor(level * 1.2);
-          const coinsEarned = gameState === 'won' ? (baseCoins + starBonus + completionBonus) : 0;
+          let baseCoinsBase = 10;
+          let coinsPerLevelMultiplier = 2.5;
+          let starBonusBase = 5;
+          let starBonusLevelMultiplier = 0.5;
+          let completionBonusMultiplier = 1.2;
+
+          if (gameSettings) {
+            baseCoinsBase = gameSettings.baseCoins || 10;
+            coinsPerLevelMultiplier = gameSettings.coinsPerLevelMultiplier || 2.5;
+            starBonusBase = gameSettings.starBonusBase || 5;
+            starBonusLevelMultiplier = gameSettings.starBonusLevelMultiplier || 0.5;
+            completionBonusMultiplier = gameSettings.completionBonusMultiplier || 1.2;
+          }
+
+          const levelBonus = Math.floor(level * coinsPerLevelMultiplier);
+          const base = baseCoinsBase + levelBonus;
+
+          const starLevelBonus = Math.floor(level * starBonusLevelMultiplier);
+          const starTotalPerStar = starBonusBase + starLevelBonus;
+          const starBonus = stars * starTotalPerStar;
+
+          const completionBonus = Math.floor(level * completionBonusMultiplier);
+          const coinsEarned = gameState === 'won' ? Math.floor(base + starBonus + completionBonus) : 0;
+          setSessionCoins(coinsEarned);
 
           const sessionData = {
             level,
@@ -201,12 +267,12 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             moves: moves,
             stars,
             duration: Math.floor((Date.now() - gameStartTime) / 1000),
-            isWin: gameState === 'won',
             abilitiesUsed: abilitiesUsedCount,
             bubblesDestroyed: 0,
             chainReactions: 0,
             perfectShots: 0,
-            coinsEarned: coinsEarned
+            coinsEarned: coinsEarned,
+            isWin: gameState === 'won'
           };
 
           console.log('Submitting game session:', sessionData);
@@ -226,18 +292,27 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     submitGameSession();
   }, [gameState, level, score, moves, gameStartTime, abilitiesUsedCount, user]);
 
-  // Sync abilities from backend if not provided
+  // Combine base abilities (2 each per level) with purchased abilities
   useEffect(() => {
-    if (!initialAbilities && user) {
-      const fetchAbilities = async () => {
-        const result = await BackendService.getUserGameData();
-        if (result.success && result.data?.abilities) {
-          setAbilityInventory(result.data.abilities);
-        }
+    if (!initialAbilities) {
+      // Always start each level with base 2 of each ability
+      const baseAbilities = getBaseAbilitiesPerLevel();
+      console.log('🎮 GameScreen: No purchased abilities, using base only:', baseAbilities);
+      setAbilityInventory(baseAbilities);
+    } else {
+      // Add base abilities to purchased abilities when level changes OR when purchases are made
+      const base = getBaseAbilitiesPerLevel();
+      const combinedAbilities = {
+        lightning: base.lightning + (initialAbilities.lightning || 0),
+        bomb: base.bomb + (initialAbilities.bomb || 0),
+        freeze: base.freeze + (initialAbilities.freeze || 0),
+        fire: base.fire + (initialAbilities.fire || 0),
       };
-      fetchAbilities();
+      console.log('🎮 GameScreen: Purchased abilities:', initialAbilities);
+      console.log('🎮 GameScreen: Combined abilities (base + purchased):', combinedAbilities);
+      setAbilityInventory(combinedAbilities);
     }
-  }, [user, initialAbilities]);
+  }, [initialAbilities, level]); // Removed user dependency, added initialAbilities as primary trigger
 
   const isProcessing = useRef(false);
   const isAiming = useRef(false);
@@ -267,6 +342,28 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
     setBlasts(prev => prev.filter(b => b.id !== id));
   }, []);
 
+  // Function to trigger screen shake on bubble blast
+  const triggerScreenShake = useCallback(() => {
+    shakeAnim.setValue(0);
+    Animated.timing(shakeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => shakeAnim.setValue(0));
+  }, [shakeAnim]);
+
+  // Enhanced setBlasts that triggers screen shake
+  const setBlastsWithShake = useCallback((update: any) => {
+    setBlasts((prev: any[]) => {
+      const newBlasts = typeof update === 'function' ? update(prev) : update;
+      // Only trigger shake if new blasts are being added
+      if (Array.isArray(newBlasts) && newBlasts.length > prev.length) {
+        triggerScreenShake();
+      }
+      return newBlasts;
+    });
+  }, [triggerScreenShake]);
+
   // Lightning power-up activation
   const activateLightning = () => {
     if (lightningActive) {
@@ -276,6 +373,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setLightningActive(true);
       setHasLightningPower(true);
       toastRef.current?.show('Lightning Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setBombActive(false); setHasBombPower(false);
       setFreezeActive(false); setHasFreezePower(false);
@@ -292,6 +390,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setBombActive(true);
       setHasBombPower(true);
       toastRef.current?.show('Bomb Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setFreezeActive(false); setHasFreezePower(false);
@@ -307,6 +406,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setFreezeActive(true);
       setHasFreezePower(true);
       toastRef.current?.show('Freeze Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setBombActive(false); setHasBombPower(false);
@@ -322,6 +422,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setFireActive(true);
       setHasFirePower(true);
       toastRef.current?.show('Fire Ability Activated!', 'info');
+      SettingsService.vibrateClick(); // Vibration feedback
       // Deactivate others
       setLightningActive(false); setHasLightningPower(false);
       setBombActive(false); setHasBombPower(false);
@@ -333,6 +434,25 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
 
   const initGame = useCallback(() => {
     setGameStartTime(Date.now());
+
+    // Reset abilities to base (2 each) + purchased abilities for every level
+    if (!initialAbilities) {
+      const baseAbilities = getBaseAbilitiesPerLevel();
+      console.log('🎮 initGame: No purchased abilities, using base only:', baseAbilities);
+      setAbilityInventory(baseAbilities);
+    } else {
+      const base = getBaseAbilitiesPerLevel();
+      const combinedAbilities = {
+        lightning: base.lightning + (initialAbilities.lightning || 0),
+        bomb: base.bomb + (initialAbilities.bomb || 0),
+        freeze: base.freeze + (initialAbilities.freeze || 0),
+        fire: base.fire + (initialAbilities.fire || 0),
+      };
+      console.log('🎮 initGame: Purchased abilities:', initialAbilities);
+      console.log('🎮 initGame: Combined abilities (base + purchased):', combinedAbilities);
+      setAbilityInventory(combinedAbilities);
+    }
+
     const grid: any[] = [];
     const pattern = getLevelPattern(level);
     const metalGridConfig = getLevelMetalGridConfig(level);
@@ -606,6 +726,9 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
 
     isProcessing.current = true;
 
+    // Vibration feedback for shooting
+    SettingsService.vibrateClick();
+
     // Set the current shot color for the wave effect
     setCurrentShotColor(nextColor);
 
@@ -623,13 +746,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setCurrentShotColor('');
     });
 
-    // Trigger Screen Shake
-    shakeAnim.setValue(0);
-    Animated.timing(shakeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true
-    }).start(() => shakeAnim.setValue(0));
+    // Screen shake moved to bubble blast events
 
     Animated.sequence([
       Animated.timing(recoilAnim, { toValue: 20, duration: 40, useNativeDriver: true }),
@@ -654,14 +771,13 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       }
     );
 
-    // Reset power-ups after use and update backend
+    // Reset power-ups after use (no backend sync needed since abilities reset each level)
     if (hasLightningPower) {
       setHasLightningPower(false);
       setLightningActive(false);
       setAbilitiesUsedCount(prev => ({ ...prev, lightning: prev.lightning + 1 }));
       const newInv = { ...abilityInventory, lightning: abilityInventory.lightning - 1 };
       setAbilityInventory(newInv);
-      BackendService.updateAbilities(newInv);
     }
     if (hasBombPower) {
       setHasBombPower(false);
@@ -669,7 +785,6 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setAbilitiesUsedCount(prev => ({ ...prev, bomb: prev.bomb + 1 }));
       const newInv = { ...abilityInventory, bomb: abilityInventory.bomb - 1 };
       setAbilityInventory(newInv);
-      BackendService.updateAbilities(newInv);
     }
     if (hasFreezePower) {
       setHasFreezePower(false);
@@ -677,7 +792,6 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setAbilitiesUsedCount(prev => ({ ...prev, freeze: prev.freeze + 1 }));
       const newInv = { ...abilityInventory, freeze: abilityInventory.freeze - 1 };
       setAbilityInventory(newInv);
-      BackendService.updateAbilities(newInv);
     }
     if (hasFirePower) {
       setHasFirePower(false);
@@ -685,7 +799,6 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       setAbilitiesUsedCount(prev => ({ ...prev, fire: prev.fire + 1 }));
       const newInv = { ...abilityInventory, fire: abilityInventory.fire - 1 };
       setAbilityInventory(newInv);
-      BackendService.updateAbilities(newInv);
     }
 
     const step = () => {
@@ -761,7 +874,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
       bubblesRef,
       setBubbles,
       setScore,
-      setBlasts,
+      setBlasts: setBlastsWithShake,
       setShootingBubble,
       setNextColor,
       setMoves,
@@ -779,9 +892,30 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
 
   const goToNextLevel = async () => {
     if (onLevelComplete) {
-      const stars = score > 1000 ? 3 : score > 500 ? 2 : score > 100 ? 1 : 0;
+      const stars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
+
+      // Calculate coins earned
+      const baseCoins = Math.floor(10 + (level * 2.5));
+      const starBonus = stars * Math.floor(5 + (level * 0.5));
+      const completionBonus = Math.floor(level * 1.2);
+      const coinsEarned = baseCoins + starBonus + completionBonus;
+
+      // Prepare session data
+      const sessionData = {
+        level,
+        score,
+        moves: moves,
+        stars,
+        duration: Math.floor((Date.now() - gameStartTime) / 1000),
+        abilitiesUsed: abilitiesUsedCount,
+        bubblesDestroyed: 0, // Could be tracked if needed
+        chainReactions: 0, // Could be tracked if needed
+        perfectShots: 0, // Could be tracked if needed
+        coinsEarned: coinsEarned
+      };
+
       // Session submission is now handled by useEffect when gameState changes
-      onLevelComplete(level, score, stars);
+      onLevelComplete(level, score, stars, coinsEarned, 'next', sessionData);
     }
   };
 
@@ -799,12 +933,12 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
             moves: moves,
             stars,
             duration: Math.floor((Date.now() - gameStartTime) / 1000),
-            isWin: false, // Game was not completed
             abilitiesUsed: abilitiesUsedCount,
             bubblesDestroyed: 0,
             chainReactions: 0,
             perfectShots: 0,
-            coinsEarned: 0
+            coinsEarned: 0,
+            isWin: false
           };
 
           const sessionResult = await BackendService.submitGameSession(sessionData);
@@ -858,6 +992,8 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
           if (pageY < cannonPos.y + 100 && pageY > GRID_TOP - 50) {
             isAiming.current = true;
             updateAim(pageX, pageY);
+            // Light vibration feedback when starting to aim
+            SettingsService.vibrateClick();
           }
         }}
         onResponderMove={(e) => {
@@ -918,6 +1054,15 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
         // Pre-calculate results for consistency
         const earnedStars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
 
+        // Debug logging
+        console.log('🎮 Game Over Modal - Debug Info:');
+        console.log('📊 Score:', score);
+        console.log('⭐ Earned Stars:', earnedStars);
+        console.log('🎯 Game State:', gameState);
+        console.log('🔍 gameState === "won"?', gameState === 'won');
+        console.log('🔍 earnedStars >= 2?', earnedStars >= 2);
+        console.log('🔍 Show Next Button?', earnedStars >= 2);
+
         // Coin Calculation Strategy:
         // Base: 10 + (2.5 * level)
         // Star Bonus: Stars * (5 + (0.5 * level))
@@ -959,6 +1104,11 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
 
               <Text style={styles.modalScore}>SCORE: {score}</Text>
 
+              {/* Debug Info - Remove this after fixing */}
+              <Text style={[styles.modalScore, { fontSize: 12, color: '#888' }]}>
+                Debug: Stars={earnedStars}, GameState="{gameState}", Show Next={earnedStars >= 2 ? 'Yes' : 'No'}
+              </Text>
+
               {gameState === 'won' && (
                 <View style={styles.modalCoins}>
                   <MaterialIcon
@@ -968,16 +1118,38 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                     color={ICON_COLORS.GOLD}
                   />
                   <Text style={styles.modalCoinsText}>
-                    +{earnedCoins} COINS
+                    +{sessionCoins} COINS
                   </Text>
                 </View>
               )}
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => {
+                  SettingsService.vibrateClick(); // Button feedback
                   if (gameState === 'won' && onLevelComplete) {
+                    // Calculate coins earned
+                    const baseCoins = Math.floor(10 + (level * 2.5));
+                    const starBonus = earnedStars * Math.floor(5 + (level * 0.5));
+                    const completionBonus = Math.floor(level * 1.2);
+                    const coinsEarned = baseCoins + starBonus + completionBonus;
+
+                    // Prepare session data
+                    const sessionData = {
+                      level,
+                      score,
+                      moves: moves,
+                      stars: earnedStars,
+                      duration: Math.floor((Date.now() - gameStartTime) / 1000),
+                      abilitiesUsed: abilitiesUsedCount,
+                      bubblesDestroyed: 0,
+                      chainReactions: 0,
+                      perfectShots: 0,
+                      coinsEarned: coinsEarned,
+                      isWin: gameState === 'won'
+                    };
+
                     // If won, report completion with 'home' action so parent updates data but goes back
-                    onLevelComplete(level, score, earnedStars, earnedCoins, 'home');
+                    onLevelComplete(level, score, earnedStars, coinsEarned, 'home', sessionData);
                   } else {
                     onBackPress && onBackPress();
                   }
@@ -989,7 +1161,10 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                     color={ICON_COLORS.WHITE}
                   />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.modalBtnPrimary} onPress={restartLevel}>
+                <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {
+                  SettingsService.vibrateClick(); // Button feedback
+                  restartLevel();
+                }}>
                   <MaterialIcon
                     name={GAME_ICONS.RESTART.name}
                     family={GAME_ICONS.RESTART.family}
@@ -997,19 +1172,53 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
                     color={ICON_COLORS.WHITE}
                   />
                 </TouchableOpacity>
-                {gameState === 'won' && (
-                  <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {
-                    if (onLevelComplete) {
-                      // Pass reliable calculated data including coins and 'next' action
-                      onLevelComplete(level, score, earnedStars, earnedCoins, 'next');
-                    }
-                  }}>
-                    <MaterialIcon
-                      name={GAME_ICONS.NEXT.name}
-                      family={GAME_ICONS.NEXT.family}
-                      size={ICON_SIZES.LARGE}
-                      color={ICON_COLORS.WHITE}
-                    />
+                {earnedStars >= 2 && (
+                  <TouchableOpacity
+                    style={[styles.modalBtnPrimary, nextLevelLoading && { opacity: 0.5 }]}
+                    onPress={() => {
+                      if (nextLevelLoading) return; // Prevent multiple clicks
+
+                      setNextLevelLoading(true);
+                      SettingsService.vibrateClick(); // Button feedback
+
+                      if (onLevelComplete) {
+                        // Calculate coins earned
+                        const baseCoins = Math.floor(10 + (level * 2.5));
+                        const starBonus = earnedStars * Math.floor(5 + (level * 0.5));
+                        const completionBonus = Math.floor(level * 1.2);
+                        const coinsEarned = baseCoins + starBonus + completionBonus;
+
+                        // Prepare session data
+                        const sessionData = {
+                          level,
+                          score,
+                          moves: moves,
+                          stars: earnedStars,
+                          duration: Math.floor((Date.now() - gameStartTime) / 1000),
+                          abilitiesUsed: abilitiesUsedCount,
+                          bubblesDestroyed: 0,
+                          chainReactions: 0,
+                          perfectShots: 0,
+                          coinsEarned: coinsEarned,
+                          isWin: gameState === 'won'
+                        };
+
+                        // Pass reliable calculated data including coins and 'next' action
+                        onLevelComplete(level, score, earnedStars, coinsEarned, 'next', sessionData);
+                      }
+                    }}
+                    disabled={nextLevelLoading}
+                  >
+                    {nextLevelLoading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <MaterialIcon
+                        name={GAME_ICONS.NEXT.name}
+                        family={GAME_ICONS.NEXT.family}
+                        size={ICON_SIZES.LARGE}
+                        color={ICON_COLORS.WHITE}
+                      />
+                    )}
                   </TouchableOpacity>
                 )}
               </View>
@@ -1032,10 +1241,12 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities 
         onCancel={() => setShowBackConfirm(false)}
       />
 
-      {/* Help Slider */}
       <HelpSlider
         visible={showInstructions}
         onClose={() => setShowInstructions(false)}
+        adRewardAmount={adRewardAmount}
+        levelReward={levelReward}
+        starBonus={starBonus}
       />
 
       <ToastNotification ref={toastRef} />

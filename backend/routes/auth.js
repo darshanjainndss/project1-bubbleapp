@@ -259,6 +259,62 @@ router.post('/google-login', validateGoogleLogin, handleValidationErrors, async 
   }
 });
 
+// @route   POST /api/auth/anonymous-login
+// @desc    Login/Register anonymous user
+// @access  Public
+router.post('/anonymous-login', async (req, res) => {
+  try {
+    const { firebaseId, displayName } = req.body;
+
+    if (!firebaseId || !displayName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Firebase ID and display name are required'
+      });
+    }
+
+    // Check if anonymous user exists by Firebase ID
+    let user = await User.findOne({ firebaseId, isActive: true });
+
+    if (!user) {
+      // Create new anonymous user
+      user = new User({
+        email: `anon.${firebaseId}@example.com`, // Unique email for anonymous users
+        displayName: displayName.trim(),
+        firebaseId,
+        isGoogleLogin: false,
+        isAnonymous: true,
+        isVerified: false // Anonymous users are not verified
+      });
+      await user.save();
+    } else {
+      // Update existing anonymous user display name
+      user.displayName = displayName.trim();
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    // Update last login
+    await user.updateLastLogin();
+
+    res.json({
+      success: true,
+      message: 'Anonymous login successful',
+      token,
+      user: user.getPublicProfile()
+    });
+
+  } catch (error) {
+    console.error('Anonymous login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during anonymous login'
+    });
+  }
+});
+
 // @route   POST /api/auth/logout
 // @desc    Logout user (client-side token removal)
 // @access  Private

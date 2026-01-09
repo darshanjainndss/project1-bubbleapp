@@ -95,12 +95,12 @@ router.post('/progress', auth, async (req, res) => {
 
     // Update progress data
     user.gameData.lastPlayedAt = new Date();
-    
+
     // Update level stars if this is better than previous attempt
     const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
     if (stars > currentStars) {
       user.gameData.levelStars.set(level.toString(), stars);
-      
+
       // Add to completed levels if not already there
       if (!user.gameData.completedLevels.includes(level)) {
         user.gameData.completedLevels.push(level);
@@ -190,7 +190,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     });
 
     // Calculate coins earned
-    const coinsEarned = gameSession.calculateCoinsEarned();
+    const coinsEarned = await gameSession.calculateCoinsEarned();
 
     // Save game session
     await gameSession.save();
@@ -211,13 +211,9 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       user.gameData.completedLevels.push(level);
     }
 
-    if (isWin) {
-      user.gameData.gamesWon += 1;
-      
-      // Update high score if this is better
-      if (score > user.gameData.highScore) {
-        user.gameData.highScore = score;
-      }
+    // Update high score if this is better
+    if (score > user.gameData.highScore) {
+      user.gameData.highScore = score;
     }
 
     // Check if next level should be unlocked (2+ stars required)
@@ -256,7 +252,6 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
         totalCoins: user.gameData.totalCoins,
         currentLevel: user.gameData.currentLevel,
         gamesPlayed: user.gameData.gamesPlayed,
-        gamesWon: user.gameData.gamesWon,
         completedLevels: user.gameData.completedLevels,
         levelStars: Object.fromEntries(user.gameData.levelStars),
         abilities: user.gameData.abilities
@@ -278,7 +273,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
 router.get('/sessions', auth, async (req, res) => {
   try {
     const { page = 1, limit = 20, level } = req.query;
-    
+
     const query = { userId: req.userId };
     if (level) {
       query.level = parseInt(level);
@@ -321,7 +316,7 @@ router.get('/level/:level/leaderboard', async (req, res) => {
     const { limit = 50 } = req.query;
 
     const leaderboard = await GameSession.getLevelLeaderboard(
-      parseInt(level), 
+      parseInt(level),
       parseInt(limit)
     );
 
@@ -348,7 +343,7 @@ router.get('/level/:level/best-score', auth, async (req, res) => {
     const { level } = req.params;
 
     const bestScore = await GameSession.getUserBestScore(
-      req.userId, 
+      req.userId,
       parseInt(level)
     );
 
@@ -375,14 +370,9 @@ function checkAchievements(user, gameSession) {
   const achievements = [];
   const existingAchievements = user.gameData.achievements;
 
-  // First Win
-  if (gameSession.isWin && user.gameData.gamesWon === 1 && !existingAchievements.includes('first_win')) {
-    achievements.push('first_win');
-  }
-
   // Perfect Game (no abilities used)
   const totalAbilities = Object.values(gameSession.abilitiesUsed).reduce((sum, count) => sum + count, 0);
-  if (gameSession.isWin && totalAbilities === 0 && !existingAchievements.includes('perfect_game')) {
+  if (totalAbilities === 0 && !existingAchievements.includes('perfect_game')) {
     achievements.push('perfect_game');
   }
 
@@ -397,24 +387,13 @@ function checkAchievements(user, gameSession) {
   }
 
   // Speed Demon (complete level in under 60 seconds)
-  if (gameSession.isWin && gameSession.duration < 60 && !existingAchievements.includes('speed_demon')) {
+  if (gameSession.duration < 60 && !existingAchievements.includes('speed_demon')) {
     achievements.push('speed_demon');
   }
 
   // Bubble Destroyer
   if (gameSession.bubblesDestroyed >= 100 && !existingAchievements.includes('bubble_destroyer')) {
     achievements.push('bubble_destroyer');
-  }
-
-  // Win Streak achievements
-  if (user.gameData.gamesWon >= 10 && !existingAchievements.includes('winner_10')) {
-    achievements.push('winner_10');
-  }
-  if (user.gameData.gamesWon >= 50 && !existingAchievements.includes('winner_50')) {
-    achievements.push('winner_50');
-  }
-  if (user.gameData.gamesWon >= 100 && !existingAchievements.includes('winner_100')) {
-    achievements.push('winner_100');
   }
 
   // Level achievements

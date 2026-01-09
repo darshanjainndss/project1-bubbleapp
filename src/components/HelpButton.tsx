@@ -72,7 +72,7 @@ const HelpButton: React.FC<HelpButtonProps> = ({ onPress }) => {
     <TouchableOpacity
       style={styles.container}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={0.6}
     >
       <Animated.View
         style={[
@@ -86,14 +86,13 @@ const HelpButton: React.FC<HelpButtonProps> = ({ onPress }) => {
       >
         <View style={styles.iconContainer}>
           <MaterialIcon
-            name="help-outline"
+            name="info"
             family="material"
-            size={22}
+            size={24}
             color="#00E0FF"
           />
         </View>
       </Animated.View>
-      <Text style={styles.helpLabel}>GUIDE</Text>
     </TouchableOpacity>
   );
 };
@@ -105,38 +104,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   helpButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(5, 15, 25, 0.9)',
-    borderWidth: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(5, 15, 25, 0.95)',
+    borderWidth: 1.5,
     borderColor: '#00E0FF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#00E0FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
+    shadowOpacity: 0.9,
     shadowRadius: 15,
-    elevation: 10,
-    marginBottom: 4,
+    elevation: 12,
   },
   iconContainer: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 224, 255, 0.15)',
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 224, 255, 0.12)',
   },
   helpLabel: {
     color: '#00E0FF',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.5,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 2,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 224, 255, 0.8)',
+    textShadowColor: 'rgba(0, 224, 255, 0.9)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 5,
+    textShadowRadius: 6,
+    marginTop: 4,
   },
 });
 

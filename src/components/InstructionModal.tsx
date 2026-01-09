@@ -55,6 +55,17 @@ const InstructionModal: React.FC<InstructionModalProps> = ({ visible, onClose })
       icon: "stars"
     },
     {
+      title: "LEVEL PROGRESSION",
+      content: [
+        "🔓 UNLOCK RULE: You need 2 STARS to advance",
+        "⭐ REQUIREMENT: 1 Star = Level Passed but stuck",
+        "⭐⭐ REQUIREMENT: 2 Stars = Next Level Unlocked!",
+        "🚫 STUCK?: Replay previous levels to get better scores",
+        "📈 JOURNEY: Advance through 2000 levels!"
+      ],
+      icon: "trending-up"
+    },
+    {
       title: "POWER-UP ARSENAL",
       content: [
         "⚡ LIGHTNING: Obliterates entire cosmic row",
@@ -84,7 +95,7 @@ const InstructionModal: React.FC<InstructionModalProps> = ({ visible, onClose })
         "🎯 STRATEGY: Limited shots - make them count!",
         "⭐ STAR RATINGS:",
         "   • ⭐ Bronze: 100+ points",
-        "   • ⭐⭐ Silver: 500+ points", 
+        "   • ⭐⭐ Silver: 500+ points",
         "   • ⭐⭐⭐ Gold: 1000+ points"
       ],
       icon: "emoji-events"
@@ -127,11 +138,12 @@ const InstructionModal: React.FC<InstructionModalProps> = ({ visible, onClose })
           <View style={styles.header}>
             <Text style={styles.iconText}>{
               currentPageData.icon === 'play-circle' ? '🎮' :
-              currentPageData.icon === 'touch-app' ? '👆' :
-              currentPageData.icon === 'stars' ? '⭐' :
-              currentPageData.icon === 'flash-on' ? '⚡' :
-              currentPageData.icon === 'shield' ? '🛡️' :
-              currentPageData.icon === 'emoji-events' ? '🏆' : '❓'
+                currentPageData.icon === 'touch-app' ? '👆' :
+                  currentPageData.icon === 'stars' ? '⭐' :
+                    currentPageData.icon === 'trending-up' ? '📈' :
+                      currentPageData.icon === 'flash-on' ? '⚡' :
+                        currentPageData.icon === 'shield' ? '🛡️' :
+                          currentPageData.icon === 'emoji-events' ? '🏆' : '❓'
             }</Text>
             <Text style={styles.title}>{currentPageData.title}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -140,8 +152,8 @@ const InstructionModal: React.FC<InstructionModalProps> = ({ visible, onClose })
           </View>
 
           {/* Content */}
-          <ScrollView 
-            style={styles.content} 
+          <ScrollView
+            style={styles.content}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 10 }}
           >

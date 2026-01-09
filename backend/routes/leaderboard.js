@@ -31,12 +31,13 @@ router.get('/', async (req, res) => {
 
     const leaderboard = await User.aggregate([
       {
-        $match: { 
+        $match: {
           isActive: true,
           $or: [
             { 'gameData.gamesPlayed': { $gt: 0 } },
             { 'gameData.highScore': { $gt: 0 } }
-          ]
+          ],
+          email: { $exists: true, $ne: null }
         }
       },
       {
@@ -66,7 +67,6 @@ router.get('/', async (req, res) => {
               else: { $arrayElemAt: [{ $split: ['$email', '@'] }, 0] }
             }
           },
-          rank: { $add: [{ $indexOfArray: [[], null] }, 1] },
           winRate: {
             $cond: {
               if: { $eq: ['$gamesPlayed', 0] },
@@ -147,7 +147,7 @@ router.get('/', async (req, res) => {
 router.get('/weekly', async (req, res) => {
   try {
     const { limit = 50 } = req.query;
-    
+
     // Get date from 7 days ago
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
@@ -268,7 +268,7 @@ router.get('/weekly', async (req, res) => {
 router.get('/monthly', async (req, res) => {
   try {
     const { limit = 50 } = req.query;
-    
+
     // Get date from 30 days ago
     const monthAgo = new Date();
     monthAgo.setDate(monthAgo.getDate() - 30);
@@ -390,7 +390,7 @@ router.get('/friends/:userId', async (req, res) => {
   try {
     // This is a placeholder for friends leaderboard
     // You would need to implement a friends system first
-    
+
     res.json({
       success: true,
       message: 'Friends leaderboard not implemented yet',
@@ -416,7 +416,7 @@ router.get('/top-players', async (req, res) => {
 
     const topPlayers = await User.aggregate([
       {
-        $match: { 
+        $match: {
           isActive: true,
           'gameData.gamesPlayed': { $gte: 5 } // At least 5 games played
         }
@@ -444,10 +444,10 @@ router.get('/top-players', async (req, res) => {
         }
       },
       {
-        $sort: { 
-          'gameData.highScore': -1, 
+        $sort: {
+          'gameData.highScore': -1,
           winRate: -1,
-          'gameData.totalScore': -1 
+          'gameData.totalScore': -1
         }
       },
       {
@@ -494,10 +494,10 @@ router.get('/top-players', async (req, res) => {
         }
       },
       {
-        $sort: { 
-          highScore: -1, 
+        $sort: {
+          highScore: -1,
           winRate: -1,
-          totalScore: -1 
+          totalScore: -1
         }
       },
       {
