@@ -33,6 +33,16 @@ const gameConfigSchema = new mongoose.Schema({
         }
     },
 
+    // Score-based rewards
+    scoreRange: {
+        type: Number,
+        default: 100
+    },
+    reward: {
+        type: mongoose.Schema.Types.Decimal128,
+        default: 1
+    },
+
     // Metadata
     updatedAt: {
         type: Date,
@@ -48,24 +58,7 @@ gameConfigSchema.pre('save', function (next) {
 
 // Static methods
 gameConfigSchema.statics.getConfig = async function () {
-    let config = await this.findOne({ key: 'default' });
-
-    if (!config) {
-        // Create default config if it doesn't exist
-        config = await this.create({
-            key: 'default',
-            winningRewards: {
-                baseCoins: 10,
-                coinsPerLevelMultiplier: 2.5,
-                starBonusBase: 5,
-                starBonusLevelMultiplier: 0.5,
-                completionBonusMultiplier: 1.2
-            }
-        });
-        console.log('🌱 Application: Auto-seeded default GameConfig');
-    }
-
-    return config;
+    return await this.findOne({ key: 'default' });
 };
 
 module.exports = mongoose.model('GameConfig', gameConfigSchema);

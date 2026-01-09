@@ -134,7 +134,22 @@ router.get('/game', async (req, res) => {
       config: {
         abilities: abilitiesData,
         ads: adConfig,
-        gameSettings: gameSettings ? gameSettings.winningRewards : null,
+        gameSettings: gameSettings ? {
+          ...(gameSettings.winningRewards?.toObject ? gameSettings.winningRewards.toObject() : gameSettings.winningRewards),
+          scoreRange: (gameSettings.scoreRange !== undefined && gameSettings.scoreRange !== null) ? (Number(gameSettings.scoreRange) || 100) : 100,
+          reward: (gameSettings.reward !== undefined && gameSettings.reward !== null)
+            ? (parseFloat(gameSettings.reward.toString() === '[object Object]' ? gameSettings.reward.$numberDecimal : gameSettings.reward.toString()) || 0)
+            : 0
+        } : {
+          // Default fallbacks if no config in DB (but not seeding it)
+          baseCoins: 10,
+          coinsPerLevelMultiplier: 2.5,
+          starBonusBase: 5,
+          starBonusLevelMultiplier: 0.5,
+          completionBonusMultiplier: 1.2,
+          scoreRange: 100,
+          reward: 1
+        },
         platform,
         rewardAmount
       }
@@ -144,6 +159,52 @@ router.get('/game', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch game configuration',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// @route   POST /api/config/game
+// @desc    Update game configuration
+// @access  Public (In production this should be protected)
+router.post('/game', async (req, res) => {
+  try {
+    const { scoreRange, reward, winningRewards } = req.body;
+
+    let config = await GameConfig.findOne({ key: 'default' });
+
+    if (!config) {
+      config = new GameConfig({ key: 'default' });
+    }
+
+    if (scoreRange !== undefined) config.scoreRange = scoreRange;
+    if (reward !== undefined) config.reward = reward;
+
+    if (winningRewards) {
+      config.winningRewards = {
+        ...config.winningRewards,
+        ...winningRewards
+      };
+    }
+
+    await config.save();
+
+    res.json({
+      success: true,
+      message: 'Game configuration updated successfully',
+      config: {
+        ...config.winningRewards,
+        scoreRange: (config.scoreRange !== undefined && config.scoreRange !== null) ? (Number(config.scoreRange) || 100) : 100,
+        reward: (config.reward !== undefined && config.reward !== null)
+          ? (parseFloat(config.reward.toString() === '[object Object]' ? config.reward.$numberDecimal : config.reward.toString()) || 0)
+          : 0
+      }
+    });
+  } catch (error) {
+    console.error('Error updating game config:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update game configuration',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

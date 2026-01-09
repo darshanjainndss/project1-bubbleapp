@@ -19,6 +19,8 @@ interface HelpSliderProps {
   adRewardAmount?: number;
   levelReward?: number;
   starBonus?: number;
+  scoreRange?: number;
+  scoreReward?: number;
 }
 
 const HelpSlider: React.FC<HelpSliderProps> = ({
@@ -26,7 +28,9 @@ const HelpSlider: React.FC<HelpSliderProps> = ({
   onClose,
   adRewardAmount = 50,
   levelReward = 10,
-  starBonus = 5
+  starBonus = 5,
+  scoreRange = 100,
+  scoreReward = 1
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -103,7 +107,7 @@ const HelpSlider: React.FC<HelpSliderProps> = ({
       items: [
         `Earn ${levelReward} Base-coins per level victory.`,
         `Get ${starBonus} extra coins for every Star earned.`,
-        "Perfect shots & streaks add score bonuses.",
+        `SCORE REWARD: Get ${scoreReward * 0.1} coins per ${scoreRange} points.`,
         "Coins are used to refuel & buy abilities."
       ]
     },

@@ -161,6 +161,12 @@ router.get('/game-data', auth, async (req, res) => {
     const gameData = user.getGameData();
     gameData.rank = rank;
 
+    // Sanitize any potential NaN values from historical corrupted state
+    gameData.totalScore = Number(gameData.totalScore) || 0;
+    gameData.highScore = Number(gameData.highScore) || 0;
+    gameData.totalCoins = Number(gameData.totalCoins) || 0;
+    gameData.gamesPlayed = Number(gameData.gamesPlayed) || 0;
+
     res.json({
       success: true,
       gameData

@@ -96,25 +96,33 @@ router.post('/progress', auth, async (req, res) => {
     // Update progress data
     user.gameData.lastPlayedAt = new Date();
 
-    // Update level stars if this is better than previous attempt
-    const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
-    if (stars > currentStars) {
-      user.gameData.levelStars.set(level.toString(), stars);
+    // Only update permanent level progress and high scores if this is NOT a partial heartbeat update
+    // Aborted or unfinished games should not count towards permanent progress
+    // We strictly check for isPartial === false or isPartial === 'false'
+    const isActuallyComplete = isPartial === false || isPartial === 'false';
 
-      // Add to completed levels if not already there
-      if (!user.gameData.completedLevels.includes(level)) {
-        user.gameData.completedLevels.push(level);
+    if (isActuallyComplete) {
+      // Update level stars if this is better than previous attempt
+      const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
+      if (stars > currentStars) {
+        user.gameData.levelStars.set(level.toString(), stars);
+
+        // Add to completed levels if not already there
+        if (!user.gameData.completedLevels.includes(level)) {
+          user.gameData.completedLevels.push(level);
+        }
       }
-    }
 
-    // Update high score if this is better
-    if (score > user.gameData.highScore) {
-      user.gameData.highScore = score;
-    }
+      // Update high score if this is better
+      const currentHighScore = Number(user.gameData.highScore) || 0;
+      if (score > currentHighScore) {
+        user.gameData.highScore = score;
+      }
 
-    // Check if next level should be unlocked (2+ stars required)
-    if (stars >= 2 && level >= user.gameData.currentLevel) {
-      user.gameData.currentLevel = level + 1;
+      // Check if next level should be unlocked (2+ stars required)
+      if (stars >= 2 && level >= user.gameData.currentLevel) {
+        user.gameData.currentLevel = level + 1;
+      }
     }
 
     await user.save();
@@ -123,10 +131,10 @@ router.post('/progress', auth, async (req, res) => {
       success: true,
       message: 'Progress updated successfully',
       updatedGameData: {
-        totalScore: user.gameData.totalScore,
-        highScore: user.gameData.highScore,
-        totalCoins: user.gameData.totalCoins,
-        currentLevel: user.gameData.currentLevel,
+        totalScore: Number(user.gameData.totalScore) || 0,
+        highScore: Number(user.gameData.highScore) || 0,
+        totalCoins: Number(user.gameData.totalCoins) || 0,
+        currentLevel: Number(user.gameData.currentLevel) || 1,
         completedLevels: user.gameData.completedLevels,
         levelStars: Object.fromEntries(user.gameData.levelStars),
         abilities: user.gameData.abilities
@@ -195,34 +203,39 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     // Save game session
     await gameSession.save();
 
-    // Update user game data
-    user.gameData.gamesPlayed += 1;
-    user.gameData.totalScore += score;
+    // Update basic user metrics
+    user.gameData.gamesPlayed = (Number(user.gameData.gamesPlayed) || 0) + 1;
     user.gameData.lastPlayedAt = new Date();
 
-    // Update level stars (always update, even on loss)
-    const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
-    if (stars > currentStars) {
-      user.gameData.levelStars.set(level.toString(), stars);
+    // Only update total score and level progress if the game was won
+    if (isWin) {
+      user.gameData.totalScore = (Number(user.gameData.totalScore) || 0) + score;
+
+      // Update level stars if this is better than previous attempt
+      const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
+      if (stars > currentStars) {
+        user.gameData.levelStars.set(level.toString(), stars);
+      }
+
+      // Add to completed levels if not already there and has at least 1 star
+      if (stars > 0 && !user.gameData.completedLevels.includes(level)) {
+        user.gameData.completedLevels.push(level);
+      }
+
+      // Update high score if this is better
+      const currentHighScore = Number(user.gameData.highScore) || 0;
+      if (score > currentHighScore) {
+        user.gameData.highScore = score;
+      }
+
+      // Check if next level should be unlocked (2+ stars required)
+      if (stars >= 2 && level >= user.gameData.currentLevel) {
+        user.gameData.currentLevel = level + 1;
+      }
     }
 
-    // Add to completed levels if not already there and has at least 1 star
-    if (stars > 0 && !user.gameData.completedLevels.includes(level)) {
-      user.gameData.completedLevels.push(level);
-    }
-
-    // Update high score if this is better
-    if (score > user.gameData.highScore) {
-      user.gameData.highScore = score;
-    }
-
-    // Check if next level should be unlocked (2+ stars required)
-    if (stars >= 2 && level >= user.gameData.currentLevel) {
-      user.gameData.currentLevel = level + 1;
-    }
-
-    // Add coins earned
-    user.gameData.totalCoins += coinsEarned;
+    // Add coins earned (which should be 0 on loss anyway based on model logic)
+    user.gameData.totalCoins = (Number(user.gameData.totalCoins) || 0) + coinsEarned;
 
     // Deduct abilities used
     Object.keys(abilitiesUsed).forEach(ability => {
@@ -247,11 +260,11 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       coinsEarned,
       newAchievements,
       updatedGameData: {
-        totalScore: user.gameData.totalScore,
-        highScore: user.gameData.highScore,
-        totalCoins: user.gameData.totalCoins,
-        currentLevel: user.gameData.currentLevel,
-        gamesPlayed: user.gameData.gamesPlayed,
+        totalScore: Number(user.gameData.totalScore) || 0,
+        highScore: Number(user.gameData.highScore) || 0,
+        totalCoins: Number(user.gameData.totalCoins) || 0,
+        currentLevel: Number(user.gameData.currentLevel) || 1,
+        gamesPlayed: Number(user.gameData.gamesPlayed) || 0,
         completedLevels: user.gameData.completedLevels,
         levelStars: Object.fromEntries(user.gameData.levelStars),
         abilities: user.gameData.abilities

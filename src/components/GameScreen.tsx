@@ -258,7 +258,8 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
           const starBonus = stars * starTotalPerStar;
 
           const completionBonus = Math.floor(level * completionBonusMultiplier);
-          const coinsEarned = gameState === 'won' ? Math.floor(base + starBonus + completionBonus) : 0;
+          const scoreReward = (score / (gameSettings?.scoreRange || 100)) * (gameSettings?.reward || 0);
+          const coinsEarned = gameState === 'won' ? Math.floor(base + starBonus + completionBonus + scoreReward) : 0;
           setSessionCoins(coinsEarned);
 
           const sessionData = {
@@ -1105,10 +1106,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
               <Text style={styles.modalScore}>SCORE: {score}</Text>
 
               {/* Debug Info - Remove this after fixing */}
-              <Text style={[styles.modalScore, { fontSize: 12, color: '#888' }]}>
-                Debug: Stars={earnedStars}, GameState="{gameState}", Show Next={earnedStars >= 2 ? 'Yes' : 'No'}
-              </Text>
-
+         
               {gameState === 'won' && (
                 <View style={styles.modalCoins}>
                   <MaterialIcon

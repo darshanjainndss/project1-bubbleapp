@@ -9,6 +9,8 @@ import {
   Image,
   FlatList,
   Alert,
+  TextInput,
+  Modal,
 } from "react-native";
 import LottieView from 'lottie-react-native';
 import GameScreen from './GameScreen';
@@ -246,10 +248,96 @@ const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) =>
   </View>
 );
 
+// Withdraw Modal Component
+const WithdrawModal = ({ visible, onClose, scoreEarnings }: any) => {
+  const [walletAddress, setWalletAddress] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleWithdraw = async () => {
+    if (!walletAddress.trim()) {
+      Alert.alert("Error", "Please enter your wallet address");
+      return;
+    }
+    if (!withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+    if (Number(withdrawAmount) > scoreEarnings) {
+      Alert.alert("Error", "Withdrawal amount exceeds your current earnings");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Simulate API call for now
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 1500));
+      Alert.alert(
+        "Success",
+        `Withdrawal request for ${withdrawAmount} submitted! It will be processed shortly.`,
+        [{ text: "OK", onPress: onClose }]
+      );
+    } catch (error) {
+      Alert.alert("Error", "Withdrawal failed. Please try again later.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={localStyles.modalOverlay}>
+        <View style={localStyles.withdrawCard}>
+          <Text style={localStyles.withdrawTitle}>WITHDRAW</Text>
+          <Text style={localStyles.withdrawLabel}>AVAILABLE: {Number(scoreEarnings).toFixed(8)}</Text>
+
+          <TextInput
+            style={localStyles.withdrawInput}
+            placeholder="Wallet Address"
+            placeholderTextColor="#64748B"
+            value={walletAddress}
+            onChangeText={setWalletAddress}
+            autoCorrect={false}
+          />
+
+          <TextInput
+            style={localStyles.withdrawInput}
+            placeholder="Amount"
+            placeholderTextColor="#64748B"
+            value={withdrawAmount}
+            onChangeText={setWithdrawAmount}
+            keyboardType="numeric"
+          />
+
+          <TouchableOpacity
+            style={[localStyles.withdrawBtn, isSubmitting && { opacity: 0.7 }]}
+            onPress={handleWithdraw}
+            disabled={isSubmitting}
+          >
+            <Text style={localStyles.withdrawBtnText}>
+              {isSubmitting ? "PROCESSING..." : "SUBMIT REQUEST"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={localStyles.withdrawCancelBtn} onPress={onClose} disabled={isSubmitting}>
+            <Text style={localStyles.withdrawCancelText}>CANCEL</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 // Profile Popup Component
-const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout }: any) => {
+const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout, scoreRange, reward, onWithdrawPress }: any) => {
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [vibrationSupported, setVibrationSupported] = useState(true);
+
+  const currentScoreEarnings = useMemo(() => {
+    return (Number(scoreRange) || 100) > 0 ?
+      (Number(userGameData?.totalScore || 0) / Number(scoreRange || 100) * Number(reward || 0)) :
+      0;
+  }, [userGameData?.totalScore, scoreRange, reward]);
 
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -401,6 +489,21 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                       <Text style={localStyles.cardLabel}>AD REWARD</Text>
                     </View>
                   </View>
+
+                  <View style={[localStyles.nestedCard, { width: '100%' }]}>
+                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 255, 136, 0.1)' }]}>
+                      <MaterialIcon name="bolt" family="material" size={22} color="#ff9900ff" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={localStyles.cardValue}>
+                        {currentScoreEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 20 })}
+                      </Text>
+                      <Text style={localStyles.cardLabel}>SCORE EARNINGS</Text>
+                    </View>
+                    <TouchableOpacity style={localStyles.withdrawInlineBtn} onPress={onWithdrawPress}>
+                      <Text style={localStyles.withdrawInlineText}>WITHDRAW</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
@@ -522,11 +625,13 @@ const Roadmap: React.FC = () => {
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [showInstructionModal, setShowInstructionModal] = useState(false);
   const [showEarnCoinsPopup, setShowEarnCoinsPopup] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [userGameData, setUserGameData] = useState<any>({
     completedLevels: [],
     levelStars: {},
     currentLevel: 1,
     highScore: 0,
+    totalScore: 0,
     totalCoins: 0,
     abilities: {}
   });
@@ -534,9 +639,12 @@ const Roadmap: React.FC = () => {
   const [adRewardAmount, setAdRewardAmount] = useState(0);
   const [baseRewardAmount, setBaseRewardAmount] = useState(10);
   const [starBonusAmount, setStarBonusAmount] = useState(5);
+  const [scoreRange, setScoreRange] = useState(100);
+  const [scoreReward, setScoreReward] = useState(0);
   const [abilityStartingCounts, setAbilityStartingCounts] = useState<Record<string, number>>({});
   const [loadingDirection, setLoadingDirection] = useState<'toFight' | 'toBase'>('toFight');
   const toastRef = useRef<ToastRef>(null);
+  const isInitialLoad = useRef(true);
 
   const handleLogout = async () => {
     await BackendService.logout();
@@ -559,7 +667,9 @@ const Roadmap: React.FC = () => {
 
 
     try {
-      if (showLoading && !dataLoaded) setIsLoading(true);
+      // ONLY show loading indicator if data has been loaded before (subsequent refreshes)
+      // On initial mount, we let the app-wide LoadingScreen handle the UI
+      if (showLoading && !isInitialLoad.current) setIsLoading(true);
       const isAuth = await BackendService.ensureAuthenticated(user);
       if (!isAuth) {
         if (showLoading) setIsLoading(false);
@@ -600,8 +710,10 @@ const Roadmap: React.FC = () => {
 
           // Update game settings (base coins and star bonus from DB)
           if (gameConfigData && gameConfigData.gameSettings) {
-            setBaseRewardAmount(gameConfigData.gameSettings.baseCoins || 10);
-            setStarBonusAmount(gameConfigData.gameSettings.starBonusBase || 5);
+            setBaseRewardAmount(gameConfigData.gameSettings.baseCoins ?? 10);
+            setStarBonusAmount(gameConfigData.gameSettings.starBonusBase ?? 5);
+            setScoreRange(gameConfigData.gameSettings.scoreRange ?? 100);
+            setScoreReward(gameConfigData.gameSettings.reward ?? 0);
             console.log('💰 Using Game Rewards from DB:', gameConfigData.gameSettings);
           }
         } catch (configErr) {
@@ -640,8 +752,9 @@ const Roadmap: React.FC = () => {
       console.error('Data load error:', err);
     } finally {
       if (showLoading) setIsLoading(false);
+      isInitialLoad.current = false;
     }
-  }, [user?.uid, dataLoaded]);
+  }, [user?.uid]);
 
   useEffect(() => {
     loadUserData();
@@ -878,18 +991,18 @@ const Roadmap: React.FC = () => {
       console.log('🏆 Level Complete:', completedLevel, 'Score:', finalScore, 'Stars:', stars, 'Coins:', coinsEarned, 'Action:', action);
 
       // 1. OPTIMISTIC UPDATE: Update local state immediately for instant UI feedback
-      // Only advance to next level if we got 2+ stars OR if it's the current level
-      const shouldAdvanceLevel = stars >= 2 || completedLevel === currentLevel;
+      // Only advance to next level if we WON and got 2+ stars
+      const isWin = sessionData?.isWin ?? (stars > 0);
+      const shouldAdvanceLevel = isWin && (stars >= 2 || completedLevel === currentLevel);
       const newCurrentLevel = shouldAdvanceLevel ? Math.max(completedLevel + 1, currentLevel) : currentLevel;
 
-      // SWITCH TO CUMULATIVE SCORE DISPLAY
-      // Optimistically add the new level score to the total score
+      // Optimistically add the new level score to the total score only if WON
       const currentTotalScore = userGameData?.totalScore || score || 0;
-      const newTotalScore = currentTotalScore + finalScore;
+      const newTotalScore = isWin ? (currentTotalScore + finalScore) : currentTotalScore;
 
-      // Calculate new total coins optimistically
+      // Calculate new total coins optimistically only if WON
       const currentTotalCoins = userGameData?.totalCoins || coins || 0;
-      const newTotalCoins = currentTotalCoins + (coinsEarned || 0);
+      const newTotalCoins = isWin ? (currentTotalCoins + (coinsEarned || 0)) : currentTotalCoins;
 
       // Keep purchased abilities (base abilities are provided per level automatically)
 
@@ -1435,6 +1548,18 @@ const Roadmap: React.FC = () => {
             coins={coins}
             currentLevel={currentLevel}
             onLogout={handleLogout}
+            scoreRange={scoreRange}
+            reward={scoreReward}
+            onWithdrawPress={() => {
+              setShowProfilePopup(false);
+              setShowWithdrawModal(true);
+            }}
+          />
+
+          <WithdrawModal
+            visible={showWithdrawModal}
+            onClose={() => setShowWithdrawModal(false)}
+            scoreEarnings={(Number(scoreRange) || 100) > 0 ? (Number(userGameData?.totalScore || 0) / Number(scoreRange) * Number(scoreReward)) : 0}
           />
 
           {/* Earn Coins Popup */}
@@ -1455,6 +1580,8 @@ const Roadmap: React.FC = () => {
             adRewardAmount={adRewardAmount}
             levelReward={baseRewardAmount}
             starBonus={starBonusAmount}
+            scoreRange={scoreRange}
+            scoreReward={scoreReward}
           />
 
         </View>
@@ -1470,6 +1597,83 @@ const Roadmap: React.FC = () => {
 export default Roadmap;
 
 const localStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  withdrawCard: {
+    width: SCREEN_WIDTH * 0.85,
+    backgroundColor: '#0A0A14',
+    borderRadius: 30,
+    padding: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 255, 0.3)',
+    alignItems: 'center',
+  },
+  withdrawTitle: {
+    color: '#00E0FF',
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 5,
+    letterSpacing: 2,
+  },
+  withdrawLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 20,
+    letterSpacing: 1,
+  },
+  withdrawInput: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    paddingVertical: SCREEN_WIDTH > 380 ? 12 : 10,
+    color: '#FFF',
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  withdrawBtn: {
+    width: '100%',
+    backgroundColor: '#00FF88',
+    borderRadius: 15,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  withdrawBtnText: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  withdrawCancelBtn: {
+    marginTop: 15,
+    padding: 10,
+  },
+  withdrawCancelText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  withdrawInlineBtn: {
+    backgroundColor: 'rgba(0, 255, 136, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 136, 0.3)',
+  },
+  withdrawInlineText: {
+    color: '#00FF88',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
   // Top HUD Styles
   topHudWrapper: {
     position: 'absolute',

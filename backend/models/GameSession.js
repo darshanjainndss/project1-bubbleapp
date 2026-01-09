@@ -274,6 +274,15 @@ gameSessionSchema.methods.calculateCoinsEarned = async function () {
       coins += 15; // Still keeping a small fixed bonus for perfect game or should add to config?
       // For now keeping it fixed or we can add it to config, but user didn't specify.
     }
+
+    // Score-based bonus reward
+    // Formula: (Score / scoreRange) * reward
+    // The user example: if score is 100 and scoreRange is 100, then (100/100) * reward
+    if ((config.scoreRange || 100) > 0) {
+      const rewardValue = config.reward ? parseFloat(config.reward.toString()) : 0;
+      const scoreReward = (this.score / (config.scoreRange || 100)) * rewardValue;
+      coins += scoreReward;
+    }
   }
 
   // Ensure integer

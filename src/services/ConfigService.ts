@@ -231,7 +231,9 @@ class ConfigService {
             coinsPerLevelMultiplier: 2.5,
             starBonusBase: 5,
             starBonusLevelMultiplier: 0.5,
-            completionBonusMultiplier: 1.2
+            completionBonusMultiplier: 1.2,
+            scoreRange: 100,
+            reward: 1
           },
           platform: platform,
           rewardAmount: 50
@@ -248,7 +250,9 @@ class ConfigService {
           coinsPerLevelMultiplier: 2.5,
           starBonusBase: 5,
           starBonusLevelMultiplier: 0.5,
-          completionBonusMultiplier: 1.2
+          completionBonusMultiplier: 1.2,
+          scoreRange: 100,
+          reward: 1
         },
         platform: Platform.OS as 'android' | 'ios',
         rewardAmount: 50

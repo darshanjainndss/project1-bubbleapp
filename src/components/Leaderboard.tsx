@@ -241,10 +241,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                 </View>
                 <View style={styles.userTexts}>
                   <Text style={styles.greeting}>{(user?.email || 'User').split('@')[0]}</Text>
-                  <View style={styles.rankRow}>
-                    <Text style={styles.rankLabel}>CURRENT RANK</Text>
-                    <Text style={styles.rankValue}>#{userGameData.rank || '---'}</Text>
-                  </View>
+                 
                 </View>
               </View>
               <View style={styles.userStatsGrid}>
