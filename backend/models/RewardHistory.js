@@ -15,7 +15,7 @@ const rewardHistorySchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-    scoreEarning: { // This seems to be the calculated reward value from score
+    reward: { // Renamed from scoreEarning
         type: Number,
         required: true,
         default: 0
@@ -23,6 +23,14 @@ const rewardHistorySchema = new mongoose.Schema({
     coins: {
         type: Number,
         required: true,
+        default: 0
+    },
+    stars: { // Merged from LevelReward
+        type: Number,
+        default: 0
+    },
+    score: { // Merged from LevelReward
+        type: Number,
         default: 0
     },
     status: {

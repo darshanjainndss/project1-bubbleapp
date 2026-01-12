@@ -56,7 +56,7 @@ const RewardHistory: React.FC<RewardHistoryProps> = ({ visible, onClose }) => {
                 setRewards(result.history);
                 // Calculate totals
                 const coinsTotal = result.history.reduce((sum, r) => sum + r.coins, 0);
-                const earningTotal = result.history.reduce((sum, r) => sum + r.scoreEarning, 0);
+                const earningTotal = result.history.reduce((sum, r) => sum + (r.reward || r.scoreEarning || 0), 0);
                 setTotalCoins(coinsTotal);
                 setTotalEarning(earningTotal);
             } else {
@@ -79,6 +79,7 @@ const RewardHistory: React.FC<RewardHistoryProps> = ({ visible, onClose }) => {
         });
 
         const isWithdrawn = reward.status === 'withdrawn';
+        const displayReward = reward.reward || reward.scoreEarning || 0;
 
         return (
             <View key={reward._id} style={[styles.rewardCard, isWithdrawn && styles.withdrawnCard]}>
@@ -104,15 +105,15 @@ const RewardHistory: React.FC<RewardHistoryProps> = ({ visible, onClose }) => {
                         <Text style={styles.coinsEarnedText}>+{reward.coins}</Text>
                     </View>
 
-                    {/* Score Earning */}
-                    <View style={styles.earningContainer}>
+                    {/* Reward Value */}
+                    <View style={styles.rewardContainer}>
                         <MaterialIcon
                             name="payments"
                             family="material"
                             size={ICON_SIZES.SMALL}
                             color="#00FF88"
                         />
-                        <Text style={styles.earningText}>${reward.scoreEarning.toFixed(4)}</Text>
+                        <Text style={styles.rewardText}>${displayReward.toFixed(4)}</Text>
                     </View>
                 </View>
                 {reward.withdrawnDate && (
@@ -420,7 +421,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontFamily: 'monospace',
     },
-    earningContainer: {
+    rewardContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 12,
     },
-    earningText: {
+    rewardText: {
         color: '#00FF88',
         fontSize: 14,
         fontWeight: 'bold',

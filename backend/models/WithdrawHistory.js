@@ -11,7 +11,7 @@ const withdrawHistorySchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    scoreEarning: {
+    reward: { // Renamed from scoreEarning
         type: Number,
         required: true
     },

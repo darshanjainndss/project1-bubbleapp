@@ -29,13 +29,13 @@ router.post('/request', auth, async (req, res) => {
         }
 
         // 2. Calculate total score earnings from these rewards
-        const totalScoreEarning = claimedRewards.reduce((sum, reward) => sum + reward.scoreEarning, 0);
+        const totalScoreEarning = claimedRewards.reduce((sum, r) => sum + (r.reward || r.scoreEarning || 0), 0);
 
         // 3. Create WithdrawHistory entry
         const withdrawRequest = new WithdrawHistory({
             userId: req.userId,
             email: user.email,
-            scoreEarning: totalScoreEarning,
+            reward: totalScoreEarning, // Renamed from scoreEarning
             status: 'pending',
             date: new Date(),
             createdDate: new Date()

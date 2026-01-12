@@ -154,8 +154,11 @@ export interface RewardHistoryItem {
   _id: string;
   email: string;
   level: number;
-  scoreEarning: number;
+  reward: number; // Renamed from scoreEarning
+  scoreEarning?: number; // Legacy support
   coins: number;
+  stars?: number; // Added
+  score?: number; // Added
   status: 'claimed' | 'withdrawn';
   date: string;
   createdDate: string;
@@ -165,7 +168,8 @@ export interface RewardHistoryItem {
 export interface WithdrawHistoryItem {
   _id: string;
   email: string;
-  scoreEarning: number;
+  reward: number; // Renamed from scoreEarning
+  scoreEarning?: number; // Legacy support
   status: 'pending' | 'completed' | 'rejected';
   date: string;
   createdDate: string;

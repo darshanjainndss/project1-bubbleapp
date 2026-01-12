@@ -276,7 +276,7 @@ const WithdrawModal = ({ visible, onClose }: any) => {
       if (rewardRes.success && rewardRes.history) {
         const total = rewardRes.history
           .filter(r => r.status === 'claimed')
-          .reduce((sum, r) => sum + r.scoreEarning, 0);
+          .reduce((sum, r) => sum + (r.reward || r.scoreEarning || 0), 0);
         setClaimedEarnings(total);
       }
 
@@ -320,7 +320,7 @@ const WithdrawModal = ({ visible, onClose }: any) => {
       <View style={localStyles.modalOverlay}>
         <View style={[localStyles.withdrawCard, { maxHeight: '80%', width: '90%' }]}>
           <Text style={localStyles.withdrawTitle}>WITHDRAWAL</Text>
-          <Text style={localStyles.withdrawLabel}>AVAILABLE EARNINGS: ${claimedEarnings.toFixed(4)}</Text>
+          <Text style={localStyles.withdrawLabel}>AVAILABLE REWARDS: ${claimedEarnings.toFixed(4)}</Text>
 
           <TouchableOpacity
             style={[localStyles.withdrawBtn, (isSubmitting || claimedEarnings <= 0) && { opacity: 0.5 }]}
@@ -351,7 +351,7 @@ const WithdrawModal = ({ visible, onClose }: any) => {
                     alignItems: 'center'
                   }}>
                     <View>
-                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>${item.scoreEarning.toFixed(4)}</Text>
+                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>${(item.reward || item.scoreEarning || 0).toFixed(4)}</Text>
                       <Text style={{ color: '#64748B', fontSize: 10 }}>{new Date(item.date).toLocaleDateString()}</Text>
                     </View>
                     <View style={{
@@ -399,7 +399,7 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
       if (result.success && result.history) {
         const total = result.history
           .filter(r => r.status === 'claimed')
-          .reduce((sum, r) => sum + r.scoreEarning, 0);
+          .reduce((sum, r) => sum + (r.reward || r.scoreEarning || 0), 0);
         setClaimedEarnings(total);
       }
     } catch (error) {
@@ -568,7 +568,7 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                       <Text style={localStyles.cardValue}>
                         {currentScoreEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 20 })}
                       </Text>
-                      <Text style={localStyles.cardLabel}>SCORE EARNINGS</Text>
+                      <Text style={localStyles.cardLabel}>REWARDS</Text>
                     </View>
                     <TouchableOpacity style={localStyles.withdrawInlineBtn} onPress={onWithdrawPress}>
                       <Text style={localStyles.withdrawInlineText}>WITHDRAW</Text>
@@ -581,7 +581,7 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={localStyles.cardValue}>Reward History</Text>
-                      <Text style={localStyles.cardLabel}>VIEW PAST EARNINGS</Text>
+                      <Text style={localStyles.cardLabel}>VIEW PAST REWARDS</Text>
                     </View>
                     <MaterialIcon name="chevron-right" family="material" size={24} color="#64748B" />
                   </TouchableOpacity>
@@ -758,7 +758,7 @@ const Roadmap: React.FC = () => {
   const loadUserData = useCallback(async (showLoading = true) => {
     if (!user?.uid) return;
 
-
+    console.log('🔄 loadUserData called with showLoading:', showLoading, 'user:', user?.email || 'no user');
 
     try {
       // ONLY show loading indicator if data has been loaded before (subsequent refreshes)
@@ -766,15 +766,22 @@ const Roadmap: React.FC = () => {
       if (showLoading && !isInitialLoad.current) setIsLoading(true);
       const isAuth = await BackendService.ensureAuthenticated(user);
       if (!isAuth) {
+        console.log('❌ Authentication failed in loadUserData');
         if (showLoading) setIsLoading(false);
         return;
       }
+
+      console.log('🔍 Fetching user game data from backend...');
       const result = await BackendService.getUserGameData();
+      console.log('📊 Backend response:', result.success ? 'SUCCESS' : 'FAILED', result.data ? `Score: ${result.data.totalScore}, Coins: ${result.data.totalCoins}` : result.error);
+
       if (result.success && result.data) {
         setUserGameData(result.data);
         setScore(result.data.totalScore || 0);
         setCoins(result.data.totalCoins || 0);
         setCurrentLevel(result.data.currentLevel || 1);
+
+        console.log('✅ Updated local state - Score:', result.data.totalScore, 'Coins:', result.data.totalCoins, 'Level:', result.data.currentLevel);
 
         // Backend stores TOTAL abilities (base + purchased)
         // We need to extract ONLY purchased abilities for the inventory
@@ -853,6 +860,20 @@ const Roadmap: React.FC = () => {
   useEffect(() => {
     loadUserData();
   }, [user?.uid, loadUserData]);
+
+  // Update local state when userGameData changes (e.g., after game completion)
+  useEffect(() => {
+    if (userGameData) {
+      setScore(userGameData.totalScore || 0);
+      setCoins(userGameData.totalCoins || 0);
+      setCurrentLevel(userGameData.currentLevel || 1);
+      console.log('🔄 Updated local state from userGameData:', {
+        score: userGameData.totalScore,
+        coins: userGameData.totalCoins,
+        level: userGameData.currentLevel
+      });
+    }
+  }, [userGameData?.totalScore, userGameData?.totalCoins, userGameData?.currentLevel]);
 
   // Manual ad initialization removed in favor of RewardedAdButton component
 
@@ -1055,11 +1076,20 @@ const Roadmap: React.FC = () => {
     setLoadingDirection('toBase');
     setIsLoading(true);
 
+    console.log('🔙 handleBackPress called with shouldReload:', shouldReload);
+
     // Wait for loading screen to appear before switching
     setTimeout(() => {
       setShowGameScreen(false);
-      // Refresh data to ensure accuracy
-      if (shouldReload && typeof loadUserData === 'function') loadUserData(false);
+
+      // Always refresh data when returning from game to ensure roadmap shows latest progress
+      if (typeof loadUserData === 'function') {
+        console.log('🔄 Refreshing user data after returning from game...');
+        loadUserData(true); // Force refresh to get latest data from backend
+      } else {
+        console.log('⏭️ No loadUserData function available');
+        setIsLoading(false); // Make sure to hide loading if we can't reload
+      }
 
       // Scroll to current level when returning
       setTimeout(() => {
@@ -1076,39 +1106,40 @@ const Roadmap: React.FC = () => {
           }
         }
         setIsLoading(false);
-      }, 100);
+      }, 800); // Increased delay to ensure data loading completes
     }, 100);
   };
 
   const handleLevelComplete = async (completedLevel: number, finalScore: number, stars: number, coinsEarned?: number, action: 'next' | 'home' = 'next', sessionData?: any) => {
     try {
-      console.log('🏆 Level Complete:', completedLevel, 'Score:', finalScore, 'Stars:', stars, 'Coins:', coinsEarned, 'Action:', action);
+      console.log('🏆 handleLevelComplete called with:', {
+        completedLevel,
+        finalScore,
+        stars,
+        coinsEarned,
+        action,
+        sessionData: sessionData ? 'present' : 'missing'
+      });
+
+      console.log('🔍 Session data details:', sessionData);
 
       // 1. OPTIMISTIC UPDATE: Update local state immediately for instant UI feedback
-      // Only advance to next level if we WON and got 2+ stars
-      const isWin = sessionData?.isWin ?? (stars > 0);
-      const shouldAdvanceLevel = isWin && (stars >= 2 || completedLevel === currentLevel);
+      const isWin = sessionData?.isWin ?? (stars > 0); // Consider any stars as progress
+      const shouldAdvanceLevel = isWin && stars >= 2;
       const newCurrentLevel = shouldAdvanceLevel ? Math.max(completedLevel + 1, currentLevel) : currentLevel;
 
-      // Optimistically add the new level score to the total score only if WON
       const currentTotalScore = userGameData?.totalScore || score || 0;
-      const newTotalScore = isWin ? (currentTotalScore + finalScore) : currentTotalScore;
+      const newTotalScore = stars > 0 ? (currentTotalScore + finalScore) : currentTotalScore; // Add score if any stars earned
 
-      // Calculate new total coins optimistically only if WON
       const currentTotalCoins = userGameData?.totalCoins || coins || 0;
-      const newTotalCoins = isWin ? (currentTotalCoins + (coinsEarned || 0)) : currentTotalCoins;
+      const newTotalCoins = stars > 0 ? (currentTotalCoins + (coinsEarned || 0)) : currentTotalCoins; // Add coins if any stars earned
 
-      // Keep purchased abilities (base abilities are provided per level automatically)
-
-      // Create updated data object
       const updatedGameData = {
         ...userGameData,
         currentLevel: newCurrentLevel,
-        totalScore: newTotalScore, // Optimistic update
-        // We also want to update highScore (single best run) if applicable, though typically less visible
+        totalScore: newTotalScore,
         highScore: Math.max(userGameData?.highScore || 0, finalScore),
         totalCoins: newTotalCoins,
-        // Keep existing purchased abilities (base abilities provided per level)
         abilities: abilityInventory,
         levelStars: {
           ...userGameData.levelStars,
@@ -1121,108 +1152,106 @@ const Roadmap: React.FC = () => {
 
       // Set State Immediately
       setUserGameData(updatedGameData);
-      setScore(newTotalScore); // Show TOTAL score in HUD
+      setScore(newTotalScore);
       setCoins(newTotalCoins);
-      // Keep purchased abilities for next level
       setCurrentLevel(newCurrentLevel);
-
-      // Show appropriate completion message
-      if (stars >= 2) {
-        toastRef.current?.show(`Level Complete! Next level unlocked!`, 'success');
-      } else {
-        toastRef.current?.show(`Level Complete! Need 2+ stars to unlock next level. Try again for more stars!`, 'info');
-      }
+      console.log(`✨ Optimistic update applied: currentLevel=${newCurrentLevel}, coins=${newTotalCoins}`);
 
       // 2. BACKEND SYNC: Submit game session to backend
+      console.log('🔍 User object:', user ? 'exists' : 'missing');
+      console.log('🔍 User UID:', user?.uid);
+      
       if (user) {
-        // Run backend sync in parallel/isolation to prevent it from blocking UI or crashing flow
-        (async () => {
-          try {
-            // Ensure we have a valid token before submitting
-            await BackendService.ensureAuthenticated(user);
+        try {
+          console.log('🔐 Ensuring authentication...');
+          await BackendService.ensureAuthenticated(user);
+          console.log('✅ Authentication confirmed');
 
-            const sessionDataToSubmit = sessionData || {
-              level: completedLevel,
-              score: finalScore,
-              moves: 0,
-              stars,
-              duration: 0,
-              abilitiesUsed: sessionData?.abilitiesUsed || {},
-              bubblesDestroyed: 0,
-              chainReactions: 0,
-              perfectShots: 0,
-              coinsEarned: coinsEarned || 0,
-              isWin: stars > 0
-            };
+          const sessionDataToSubmit = {
+            level: completedLevel,
+            score: finalScore,
+            moves: sessionData?.moves !== undefined ? sessionData.moves : 0,
+            stars: stars,
+            duration: sessionData?.duration || 1,
+            abilitiesUsed: sessionData?.abilitiesUsed || {},
+            bubblesDestroyed: sessionData?.bubblesDestroyed || 0,
+            chainReactions: sessionData?.chainReactions || 0,
+            perfectShots: sessionData?.perfectShots || 0,
+            coinsEarned: coinsEarned || 0,
+            isWin: isWin
+          };
 
-            console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
-            const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
+          console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
+          const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
+          console.log('📥 Backend response:', sessionResult);
 
-            if (sessionResult.success && sessionResult.data) {
-              console.log('✅ Game session submitted successfully:', sessionResult.data.sessionId);
+          if (sessionResult.success && sessionResult.data && sessionResult.data.updatedGameData) {
+            const serverData = sessionResult.data;
+            console.log('✅ Session submitted successfully!');
+            console.log('📊 Server returned updated game data:', serverData.updatedGameData);
+            console.log('💰 Server coins:', serverData.updatedGameData.totalCoins);
+            console.log('🎯 Server score:', serverData.updatedGameData.totalScore);
+            console.log('🏆 Server level:', serverData.updatedGameData.currentLevel);
 
-              // CORRECT STATE WITH SERVER DATA
-              const serverData = sessionResult.data;
-
-              if (serverData.updatedGameData) {
-                console.log('🔄 Syncing local state with server response...');
-
-                setUserGameData((prev: any) => {
-                  const combinedData = {
-                    ...prev,
-                    ...serverData.updatedGameData,
-                    // SAFETY: Ensure we don't regress level if backend is lagging or logic differs
-                    currentLevel: Math.max(prev.currentLevel, serverData.updatedGameData.currentLevel || 1),
-                    // SAFETY: Ensure we don't lose the stars we just earned for this level
-                    levelStars: {
-                      ...(serverData.updatedGameData.levelStars || {}),
-                      [completedLevel]: Math.max(
-                        prev.levelStars?.[completedLevel] || 0,
-                        serverData.updatedGameData.levelStars?.[completedLevel] || 0
-                      )
-                    }
-                  };
-                  return combinedData;
-                });
-
-                // Update individual state atoms
-                if (serverData.updatedGameData.totalCoins !== undefined) {
-                  setCoins(serverData.updatedGameData.totalCoins);
-                }
-                if (serverData.updatedGameData.totalScore !== undefined) {
-                  setScore(serverData.updatedGameData.totalScore);
-                }
+            setUserGameData((prev: any) => ({
+              ...prev,
+              ...serverData.updatedGameData,
+              currentLevel: Math.max(prev.currentLevel, serverData.updatedGameData.currentLevel || 1),
+              levelStars: {
+                ...(serverData.updatedGameData.levelStars || {}),
+                [completedLevel]: Math.max(
+                  prev.levelStars?.[completedLevel] || 0,
+                  serverData.updatedGameData.levelStars?.[completedLevel] || 0
+                )
               }
-            } else {
-              console.error('❌ Failed to submit game session:', sessionResult.error);
-              // Fallback to manual update if session submission failed
-              try {
-                const updateResult = await BackendService.updateUserGameData(updatedGameData);
-                if (updateResult.success) {
-                  console.log('✅ User game data updated in backend (fallback)');
-                }
-              } catch (err) {
-                console.error('Fallback update failed:', err);
-              }
+            }));
+
+            if (serverData.updatedGameData.totalCoins !== undefined) {
+              console.log('💰 Updating coins from', coins, 'to', serverData.updatedGameData.totalCoins);
+              setCoins(serverData.updatedGameData.totalCoins);
             }
-          } catch (innerError) {
-            console.error('❌ Backend sync error (non-fatal):', innerError);
-            toastRef.current?.show('Progress saved locally. Syncing...', 'info');
+            if (serverData.updatedGameData.currentLevel !== undefined) {
+              console.log('🏆 Updating level from', currentLevel, 'to', serverData.updatedGameData.currentLevel);
+              setCurrentLevel(serverData.updatedGameData.currentLevel);
+            }
+            if (serverData.updatedGameData.totalScore !== undefined) {
+              console.log('🎯 Updating score from', score, 'to', serverData.updatedGameData.totalScore);
+              setScore(serverData.updatedGameData.totalScore);
+            }
+          } else {
+            console.warn('⚠️ Session sync failed or incomplete response:', sessionResult);
+            console.warn('⚠️ Attempting manual update fallback...');
+            await BackendService.updateUserGameData(updatedGameData);
           }
-        })();
+        } catch (innerError: any) {
+          console.error('❌ Backend sync error:', innerError);
+          console.error('❌ Error details:', {
+            message: innerError?.message,
+            stack: innerError?.stack,
+            name: innerError?.name
+          });
+          toastRef.current?.show('Progress saved locally.', 'info');
+        }
+      } else {
+        console.error('❌ No user object available for backend sync');
+        toastRef.current?.show('Please log in to save progress.', 'error');
       }
 
-      // Update purchased abilities
+      // 3. ABILITIES SYNC
       try {
         await BackendService.updateAbilities(abilityInventory);
-      } catch (error) { console.error('Abilities sync error', error); }
+      } catch (e) {
+        console.error('Abilities sync error', e);
+      }
 
-      // Trigger background sync only if we are STAYING (which we aren't if action is home)
-      // If action is home, we let handleBackPress logic decide, but we might skip it to avoid race
-
-      // 4. Navigate UI based on Action and Stars
-      if (action === 'next' && stars >= 2) {
+      // 4. NAVIGATION
+      if (action === 'home') {
+        console.log(`🏠 Returning home - ensuring data is refreshed`);
+        // Always reload data when returning home to show updated progress
+        handleBackPress(true); // Changed to true to force reload
+      } else if (action === 'next' && stars >= 2) {
         if (completedLevel < levels.length) {
+          console.log(`🚀 Progressing to level ${completedLevel + 1}`);
           setSelectedLevel(completedLevel + 1);
           setLoadingDirection('toFight');
           setIsLoading(true);
@@ -1232,12 +1261,11 @@ const Roadmap: React.FC = () => {
             setIsLoading(false);
           }, 1000);
         } else {
-          handleBackPress(false); // Skip reload, we just synced
+          handleBackPress(false);
         }
       } else {
-        handleBackPress(false); // Skip reload, we just synced
+        handleBackPress(false);
       }
-
     } catch (error) {
       console.error('Error handling level completion:', error);
       handleBackPress(true);

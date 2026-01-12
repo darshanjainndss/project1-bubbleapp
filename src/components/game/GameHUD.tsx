@@ -67,9 +67,9 @@ export const GameHUD = ({
                         <Text style={styles.statLabel}>SCORE</Text>
                         <Text style={styles.statValue}>{score.toLocaleString()}</Text>
                         <View style={styles.starProgressContainer}>
-                            <View style={[styles.starProgressDot, score > 100 && styles.starProgressDotActive]} />
-                            <View style={[styles.starProgressDot, score > 500 && styles.starProgressDotActive]} />
-                            <View style={[styles.starProgressDot, score > 1000 && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= 100 && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= 400 && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= 800 && styles.starProgressDotActive]} />
                         </View>
                     </View>
                     <HelpButton onPress={onShowInstructions || (() => { })} />

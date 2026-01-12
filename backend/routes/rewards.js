@@ -1,5 +1,5 @@
 const express = require('express');
-const LevelReward = require('../models/LevelReward');
+const RewardHistory = require('../models/RewardHistory');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -11,12 +11,17 @@ router.get('/history', auth, async (req, res) => {
     try {
         const { limit = 50 } = req.query;
 
-        const rewards = await LevelReward.getUserRewardHistory(
-            req.userId,
-            parseInt(limit)
-        );
+        const rewards = await RewardHistory.find({ userId: req.userId })
+            .sort({ level: -1, date: -1 })
+            .limit(parseInt(limit))
+            .lean();
 
-        const totalCoins = await LevelReward.getTotalRewardCoins(req.userId);
+        // Calculate total coins from rewards
+        const totalCoinsResult = await RewardHistory.aggregate([
+            { $match: { userId: new require('mongoose').Types.ObjectId(req.userId) } },
+            { $group: { _id: null, total: { $sum: '$coins' } } }
+        ]);
+        const totalCoins = totalCoinsResult.length > 0 ? totalCoinsResult[0].total : 0;
 
         res.json({
             success: true,
@@ -41,9 +46,10 @@ router.get('/level/:level', auth, async (req, res) => {
     try {
         const { level } = req.params;
 
-        const reward = await LevelReward.findOne({
+        const reward = await RewardHistory.findOne({
             userId: req.userId,
-            level: parseInt(level)
+            level: parseInt(level),
+            status: { $in: ['claimed', 'withdrawn'] }
         });
 
         res.json({
@@ -67,11 +73,11 @@ router.get('/level/:level', auth, async (req, res) => {
 // @access  Private
 router.get('/stats', auth, async (req, res) => {
     try {
-        const rewards = await LevelReward.find({ userId: req.userId });
+        const rewards = await RewardHistory.find({ userId: req.userId });
 
         const stats = {
             totalRewards: rewards.length,
-            totalCoins: rewards.reduce((sum, r) => sum + r.coinsAwarded, 0),
+            totalCoins: rewards.reduce((sum, r) => sum + r.coins, 0),
             twoStarRewards: rewards.filter(r => r.stars === 2).length,
             threeStarRewards: rewards.filter(r => r.stars === 3).length,
             highestLevel: rewards.length > 0 ? Math.max(...rewards.map(r => r.level)) : 0

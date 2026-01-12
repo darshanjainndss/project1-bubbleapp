@@ -90,12 +90,14 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
             year: 'numeric'
         });
 
+        const displayAmount = item.reward || item.scoreEarning || 0;
+
         return (
             <View key={item._id} style={styles.card}>
                 <View style={styles.cardHeader}>
                     <View style={styles.amountContainer}>
                         <MaterialIcon name="payments" family="material" size={20} color="#00E0FF" />
-                        <Text style={styles.amountText}>${item.scoreEarning.toFixed(4)}</Text>
+                        <Text style={styles.amountText}>${displayAmount.toFixed(4)}</Text>
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusBg(item.status) }]}>
                         <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>

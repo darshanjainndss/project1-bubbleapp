@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const GameSession = require('../models/GameSession');
-const LevelReward = require('../models/LevelReward');
+// LevelReward model removed as part of consolidation
 const RewardHistory = require('../models/RewardHistory');
 const GameConfig = require('../models/GameConfig');
 const auth = require('../middleware/auth');
@@ -105,10 +105,15 @@ router.post('/progress', auth, async (req, res) => {
     const isActuallyComplete = isPartial === false || isPartial === 'false';
 
     if (isActuallyComplete) {
+      // Use consistent star threshold: 1=100, 2=400, 3=800
+      const calculatedStars = score >= 800 ? 3 : score >= 400 ? 2 : score >= 100 ? 1 : 0;
+
+      console.log(`📊 Permanent Progress Update: level=${level}, score=${score}, stars_body=${stars}, stars_calc=${calculatedStars}`);
+
       // Update level stars if this is better than previous attempt
       const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
-      if (stars > currentStars) {
-        user.gameData.levelStars.set(level.toString(), stars);
+      if (calculatedStars > currentStars) {
+        user.gameData.levelStars.set(level.toString(), calculatedStars);
 
         // Add to completed levels if not already there
         if (!user.gameData.completedLevels.includes(level)) {
@@ -123,7 +128,8 @@ router.post('/progress', auth, async (req, res) => {
       }
 
       // Check if next level should be unlocked (2+ stars required)
-      if (stars >= 2 && level >= user.gameData.currentLevel) {
+      if (calculatedStars >= 2 && level >= user.gameData.currentLevel) {
+        console.log(`🚀 Level Up (Progress): ${user.gameData.currentLevel} -> ${level + 1}`);
         user.gameData.currentLevel = level + 1;
       }
     }
@@ -180,6 +186,8 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       });
     }
 
+    console.log(`🎮 Processing Session: User=${user.email}, Level=${level}, Score=${score}, Stars=${stars}, isWin=${isWin}`);
+
     // Create game session
     const gameSession = new GameSession({
       userId: req.userId,
@@ -201,11 +209,9 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     });
 
     // Calculate coins earned
-    // Prioritize client-provided calculation to ensure UI sync, but fallback to server calc if missing
     let coinsEarned = 0;
     if (req.body.coinsEarned !== undefined && req.body.coinsEarned !== null) {
-      coinsEarned = parseInt(req.body.coinsEarned);
-      // Update the session record with this value
+      coinsEarned = parseInt(req.body.coinsEarned) || 0;
       gameSession.coinsEarned = coinsEarned;
     } else {
       coinsEarned = await gameSession.calculateCoinsEarned();
@@ -213,6 +219,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
 
     // Save game session
     await gameSession.save();
+    console.log(`✅ Session Saved: ID=${gameSession.sessionId}, Coins=${coinsEarned}`);
 
     // Update basic user metrics
     user.gameData.gamesPlayed = (Number(user.gameData.gamesPlayed) || 0) + 1;
@@ -241,7 +248,10 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
 
       // Check if next level should be unlocked (2+ stars required)
       if (stars >= 2 && level >= user.gameData.currentLevel) {
+        console.log(`📊 Level Up: ${user.gameData.currentLevel} -> ${level + 1}`);
         user.gameData.currentLevel = level + 1;
+      } else {
+        console.log(`📊 No Level Up: stars=${stars}, currentLevel=${user.gameData.currentLevel}`);
       }
     }
 
@@ -267,54 +277,42 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     let levelRewardAwarded = false;
 
     if (isWin && stars >= 2) {
-      // Check if user already received reward for this level
-      const existingReward = await LevelReward.findOne({
+      // Check if user already received reward for this level (using RewardHistory now)
+      const existingReward = await RewardHistory.findOne({
         userId: req.userId,
-        level: level
+        level: level,
+        status: { $in: ['claimed', 'withdrawn'] } // Check any status
       });
 
       if (!existingReward) {
         // Calculate reward based on stars
-        levelRewardCoins = LevelReward.calculateReward(stars);
+        if (stars === 3) levelRewardCoins = 15;
+        else if (stars === 2) levelRewardCoins = 10;
+        else levelRewardCoins = 0;
 
-        // Fetch game config for score calculation
         const config = await GameConfig.getConfig();
         const scoreRange = config ? config.scoreRange || 100 : 100;
         const rewardPerRange = config ? parseFloat(config.reward.toString()) || 1 : 1;
-        const scoreEarning = (score / scoreRange) * rewardPerRange;
+        const rewardValue = (score / scoreRange) * rewardPerRange;
 
-        // Create level reward record (legacy)
-        const levelReward = new LevelReward({
-          userId: req.userId,
-          level: level,
-          stars: stars,
-          coinsAwarded: levelRewardCoins,
-          score: score
-        });
-
-        await levelReward.save();
-
-        // Create new RewardHistory record
         const rewardHistory = new RewardHistory({
           userId: req.userId,
           email: user.email,
           level: level,
-          scoreEarning: scoreEarning,
+          reward: rewardValue,
           coins: levelRewardCoins,
+          stars: stars,
+          score: score,
           status: 'claimed',
-          date: new Date(),
-          createdDate: new Date()
+          date: new Date()
         });
 
         await rewardHistory.save();
-
-        // Add reward coins to user
         user.gameData.totalCoins = (Number(user.gameData.totalCoins) || 0) + levelRewardCoins;
         levelRewardAwarded = true;
-
-        console.log(`🎁 Level ${level} reward: ${levelRewardCoins} coins for ${stars} stars. Score Earning: ${scoreEarning}`);
+        console.log(`🎁 Reward Saved: Level=${level}, Coins=${levelRewardCoins}, Bolt=${rewardValue}`);
       } else {
-        console.log(`ℹ️ Level ${level} reward already claimed`);
+        console.log(`ℹ️ Reward already claimed for Level ${level}`);
       }
     }
 

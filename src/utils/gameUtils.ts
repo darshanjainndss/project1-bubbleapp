@@ -87,10 +87,13 @@ export const updateCommonState = (
     setMoves((m: number) => Math.max(0, m - 1));
 
     const remaining = grid.filter(b => b.visible).length;
+    
     if (remaining === 0) {
+        console.log('🏆 Level completed! All bubbles cleared.');
         setGameState('won');
         SettingsService.vibrateSuccess(); // Victory vibration
     } else if (moves - 1 <= 0) {
+        console.log('💀 Game over! No moves remaining.');
         setGameState('lost');
         SettingsService.vibrateError(); // Defeat vibration
     }
