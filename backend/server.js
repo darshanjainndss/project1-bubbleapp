@@ -16,6 +16,7 @@ const adUnitRoutes = require('./routes/adunit');
 const abilityRoutes = require('./routes/ability');
 const shopRoutes = require('./routes/shop');
 const rewardsRoutes = require('./routes/rewards');
+const withdrawRoutes = require('./routes/withdraw');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -91,6 +92,7 @@ app.use('/api/adunit', adUnitRoutes);
 app.use('/api/ability', abilityRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/rewards', rewardsRoutes);
+app.use('/api/withdraw', withdrawRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

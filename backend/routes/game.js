@@ -3,6 +3,8 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const GameSession = require('../models/GameSession');
 const LevelReward = require('../models/LevelReward');
+const RewardHistory = require('../models/RewardHistory');
+const GameConfig = require('../models/GameConfig');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -275,7 +277,13 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
         // Calculate reward based on stars
         levelRewardCoins = LevelReward.calculateReward(stars);
 
-        // Create level reward record
+        // Fetch game config for score calculation
+        const config = await GameConfig.getConfig();
+        const scoreRange = config ? config.scoreRange || 100 : 100;
+        const rewardPerRange = config ? parseFloat(config.reward.toString()) || 1 : 1;
+        const scoreEarning = (score / scoreRange) * rewardPerRange;
+
+        // Create level reward record (legacy)
         const levelReward = new LevelReward({
           userId: req.userId,
           level: level,
@@ -286,11 +294,25 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
 
         await levelReward.save();
 
+        // Create new RewardHistory record
+        const rewardHistory = new RewardHistory({
+          userId: req.userId,
+          email: user.email,
+          level: level,
+          scoreEarning: scoreEarning,
+          coins: levelRewardCoins,
+          status: 'claimed',
+          date: new Date(),
+          createdDate: new Date()
+        });
+
+        await rewardHistory.save();
+
         // Add reward coins to user
         user.gameData.totalCoins = (Number(user.gameData.totalCoins) || 0) + levelRewardCoins;
         levelRewardAwarded = true;
 
-        console.log(`🎁 Level ${level} reward: ${levelRewardCoins} coins for ${stars} stars`);
+        console.log(`🎁 Level ${level} reward: ${levelRewardCoins} coins for ${stars} stars. Score Earning: ${scoreEarning}`);
       } else {
         console.log(`ℹ️ Level ${level} reward already claimed`);
       }

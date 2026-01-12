@@ -150,6 +150,27 @@ export interface LevelReward {
   score: number;
 }
 
+export interface RewardHistoryItem {
+  _id: string;
+  email: string;
+  level: number;
+  scoreEarning: number;
+  coins: number;
+  status: 'claimed' | 'withdrawn';
+  date: string;
+  createdDate: string;
+  withdrawnDate?: string;
+}
+
+export interface WithdrawHistoryItem {
+  _id: string;
+  email: string;
+  scoreEarning: number;
+  status: 'pending' | 'completed' | 'rejected';
+  date: string;
+  createdDate: string;
+}
+
 export interface AdConfig {
   platform: 'android' | 'ios';
   appId: string;
@@ -1616,6 +1637,90 @@ class BackendService {
     } catch (error) {
       console.error('Get reward stats error:', error);
       return { success: false, error: 'Network error fetching reward stats' };
+    }
+  }
+
+  async getRewardHistoryOnly(): Promise<{ success: boolean; history?: RewardHistoryItem[]; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/withdraw/reward-history`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, history: data.history };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch reward history' };
+      }
+    } catch (error) {
+      console.error('Get reward history only error:', error);
+      return { success: false, error: 'Network error fetching reward history' };
+    }
+  }
+
+  async getWithdrawHistoryOnly(): Promise<{ success: boolean; history?: WithdrawHistoryItem[]; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/withdraw/withdraw-history`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, history: data.history };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch withdraw history' };
+      }
+    } catch (error) {
+      console.error('Get withdraw history only error:', error);
+      return { success: false, error: 'Network error fetching withdraw history' };
+    }
+  }
+
+  async requestWithdrawal(): Promise<{ success: boolean; amount?: number; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/withdraw/request`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, amount: data.amount };
+      } else {
+        return { success: false, error: data.message || 'Withdrawal request failed' };
+      }
+    } catch (error) {
+      console.error('Request withdrawal error:', error);
+      return { success: false, error: 'Network error requesting withdrawal' };
     }
   }
 

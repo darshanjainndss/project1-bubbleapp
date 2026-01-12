@@ -11,6 +11,8 @@ import {
   Alert,
   TextInput,
   Modal,
+  ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import LottieView from 'lottie-react-native';
 import GameScreen from './GameScreen';
@@ -30,6 +32,7 @@ import ToastNotification, { ToastRef } from './ToastNotification';
 import SettingsService from '../services/SettingsService';
 import Shop from './Shop';
 import RewardHistory from './RewardHistory';
+import WithdrawHistory from './WithdrawHistory';
 import HelpSlider from './HelpSlider';
 import HelpButton from './HelpButton';
 
@@ -250,34 +253,61 @@ const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) =>
 );
 
 // Withdraw Modal Component
-const WithdrawModal = ({ visible, onClose, scoreEarnings }: any) => {
-  const [walletAddress, setWalletAddress] = useState('');
-  const [withdrawAmount, setWithdrawAmount] = useState('');
+const WithdrawModal = ({ visible, onClose }: any) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [claimedEarnings, setClaimedEarnings] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      loadData();
+    }
+  }, [visible]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [rewardRes, withdrawRes] = await Promise.all([
+        BackendService.getRewardHistoryOnly(),
+        BackendService.getWithdrawHistoryOnly()
+      ]);
+
+      if (rewardRes.success && rewardRes.history) {
+        const total = rewardRes.history
+          .filter(r => r.status === 'claimed')
+          .reduce((sum, r) => sum + r.scoreEarning, 0);
+        setClaimedEarnings(total);
+      }
+
+      if (withdrawRes.success && withdrawRes.history) {
+        setHistory(withdrawRes.history);
+      }
+    } catch (error) {
+      console.error('Failed to load withdrawal data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleWithdraw = async () => {
-    if (!walletAddress.trim()) {
-      Alert.alert("Error", "Please enter your wallet address");
-      return;
-    }
-    if (!withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0) {
-      Alert.alert("Error", "Please enter a valid amount");
-      return;
-    }
-    if (Number(withdrawAmount) > scoreEarnings) {
-      Alert.alert("Error", "Withdrawal amount exceeds your current earnings");
+    if (claimedEarnings <= 0) {
+      Alert.alert("Error", "No available earnings for withdrawal");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Simulate API call for now
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 1500));
-      Alert.alert(
-        "Success",
-        `Withdrawal request for ${withdrawAmount} submitted! It will be processed shortly.`,
-        [{ text: "OK", onPress: onClose }]
-      );
+      const result = await BackendService.requestWithdrawal();
+      if (result.success) {
+        Alert.alert(
+          "Success",
+          `Withdrawal request for $${result.amount?.toFixed(4)} submitted! It will be processed shortly.`,
+          [{ text: "OK", onPress: () => { loadData(); } }]
+        );
+      } else {
+        Alert.alert("Error", result.error || "Withdrawal failed");
+      }
     } catch (error) {
       Alert.alert("Error", "Withdrawal failed. Please try again later.");
     } finally {
@@ -288,40 +318,62 @@ const WithdrawModal = ({ visible, onClose, scoreEarnings }: any) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={localStyles.modalOverlay}>
-        <View style={localStyles.withdrawCard}>
-          <Text style={localStyles.withdrawTitle}>WITHDRAW</Text>
-          <Text style={localStyles.withdrawLabel}>AVAILABLE: {Number(scoreEarnings).toFixed(8)}</Text>
-
-          <TextInput
-            style={localStyles.withdrawInput}
-            placeholder="Wallet Address"
-            placeholderTextColor="#64748B"
-            value={walletAddress}
-            onChangeText={setWalletAddress}
-            autoCorrect={false}
-          />
-
-          <TextInput
-            style={localStyles.withdrawInput}
-            placeholder="Amount"
-            placeholderTextColor="#64748B"
-            value={withdrawAmount}
-            onChangeText={setWithdrawAmount}
-            keyboardType="numeric"
-          />
+        <View style={[localStyles.withdrawCard, { maxHeight: '80%', width: '90%' }]}>
+          <Text style={localStyles.withdrawTitle}>WITHDRAWAL</Text>
+          <Text style={localStyles.withdrawLabel}>AVAILABLE EARNINGS: ${claimedEarnings.toFixed(4)}</Text>
 
           <TouchableOpacity
-            style={[localStyles.withdrawBtn, isSubmitting && { opacity: 0.7 }]}
+            style={[localStyles.withdrawBtn, (isSubmitting || claimedEarnings <= 0) && { opacity: 0.5 }]}
             onPress={handleWithdraw}
-            disabled={isSubmitting}
+            disabled={isSubmitting || claimedEarnings <= 0}
           >
             <Text style={localStyles.withdrawBtnText}>
-              {isSubmitting ? "PROCESSING..." : "SUBMIT REQUEST"}
+              {isSubmitting ? "PROCESSING..." : "REQUEST WITHDRAWAL"}
             </Text>
           </TouchableOpacity>
 
+          <View style={{ width: '100%', marginTop: 20, flex: 1 }}>
+            <Text style={[localStyles.withdrawLabel, { marginBottom: 10 }]}>WITHDRAWAL HISTORY</Text>
+            {loading ? (
+              <ActivityIndicator color="#00E0FF" />
+            ) : history.length === 0 ? (
+              <Text style={{ color: '#64748B', textAlign: 'center', fontStyle: 'italic' }}>No history found</Text>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {history.map((item) => (
+                  <View key={item._id} style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    padding: 12,
+                    borderRadius: 12,
+                    marginBottom: 8,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <View>
+                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>${item.scoreEarning.toFixed(4)}</Text>
+                      <Text style={{ color: '#64748B', fontSize: 10 }}>{new Date(item.date).toLocaleDateString()}</Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: item.status === 'pending' ? 'rgba(255, 165, 0, 0.2)' : 'rgba(0, 255, 136, 0.2)',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 6
+                    }}>
+                      <Text style={{
+                        color: item.status === 'pending' ? '#FFA500' : '#00FF88',
+                        fontSize: 10,
+                        fontWeight: 'bold'
+                      }}>{item.status.toUpperCase()}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
           <TouchableOpacity style={localStyles.withdrawCancelBtn} onPress={onClose} disabled={isSubmitting}>
-            <Text style={localStyles.withdrawCancelText}>CANCEL</Text>
+            <Text style={localStyles.withdrawCancelText}>CLOSE</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -330,15 +382,32 @@ const WithdrawModal = ({ visible, onClose, scoreEarnings }: any) => {
 };
 
 // Profile Popup Component
-const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout, scoreRange, reward, onWithdrawPress, onRewardHistoryPress }: any) => {
+const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout, scoreRange, reward, onWithdrawPress, onRewardHistoryPress, onWithdrawHistoryPress }: any) => {
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [vibrationSupported, setVibrationSupported] = useState(true);
+  const [claimedEarnings, setClaimedEarnings] = useState(0);
 
-  const currentScoreEarnings = useMemo(() => {
-    return (Number(scoreRange) || 100) > 0 ?
-      (Number(userGameData?.totalScore || 0) / Number(scoreRange || 100) * Number(reward || 0)) :
-      0;
-  }, [userGameData?.totalScore, scoreRange, reward]);
+  useEffect(() => {
+    if (visible) {
+      loadEarnings();
+    }
+  }, [visible]);
+
+  const loadEarnings = async () => {
+    try {
+      const result = await BackendService.getRewardHistoryOnly();
+      if (result.success && result.history) {
+        const total = result.history
+          .filter(r => r.status === 'claimed')
+          .reduce((sum, r) => sum + r.scoreEarning, 0);
+        setClaimedEarnings(total);
+      }
+    } catch (error) {
+      console.error('Failed to load earnings for profile:', error);
+    }
+  };
+
+  const currentScoreEarnings = claimedEarnings;
 
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -516,6 +585,17 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                     </View>
                     <MaterialIcon name="chevron-right" family="material" size={24} color="#64748B" />
                   </TouchableOpacity>
+
+                  <TouchableOpacity style={[localStyles.nestedCard, { width: '100%' }]} onPress={onWithdrawHistoryPress}>
+                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 224, 255, 0.1)' }]}>
+                      <MaterialIcon name="receipt-long" family="material" size={22} color="#00E0FF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={localStyles.cardValue}>Withdraw History</Text>
+                      <Text style={localStyles.cardLabel}>VIEW TRANSACTIONS</Text>
+                    </View>
+                    <MaterialIcon name="chevron-right" family="material" size={24} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
 
                 <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
@@ -639,6 +719,7 @@ const Roadmap: React.FC = () => {
   const [showEarnCoinsPopup, setShowEarnCoinsPopup] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showRewardHistory, setShowRewardHistory] = useState(false);
+  const [showWithdrawHistory, setShowWithdrawHistory] = useState(false);
   const [userGameData, setUserGameData] = useState<any>({
     completedLevels: [],
     levelStars: {},
@@ -969,7 +1050,7 @@ const Roadmap: React.FC = () => {
     }, 100);
   };
 
-  const handleBackPress = () => {
+  const handleBackPress = (shouldReload = true) => {
     // Set direction to base and show loading
     setLoadingDirection('toBase');
     setIsLoading(true);
@@ -978,7 +1059,7 @@ const Roadmap: React.FC = () => {
     setTimeout(() => {
       setShowGameScreen(false);
       // Refresh data to ensure accuracy
-      if (typeof loadUserData === 'function') loadUserData(false);
+      if (shouldReload && typeof loadUserData === 'function') loadUserData(false);
 
       // Scroll to current level when returning
       setTimeout(() => {
@@ -1054,130 +1135,112 @@ const Roadmap: React.FC = () => {
 
       // 2. BACKEND SYNC: Submit game session to backend
       if (user) {
-        try {
-          const sessionDataToSubmit = sessionData || {
-            level: completedLevel,
-            score: finalScore,
-            moves: 0,
-            stars,
-            duration: 0,
-            abilitiesUsed: sessionData?.abilitiesUsed || {},
-            bubblesDestroyed: 0,
-            chainReactions: 0,
-            perfectShots: 0,
-            coinsEarned: coinsEarned || 0,
-            isWin: stars > 0
-          };
+        // Run backend sync in parallel/isolation to prevent it from blocking UI or crashing flow
+        (async () => {
+          try {
+            // Ensure we have a valid token before submitting
+            await BackendService.ensureAuthenticated(user);
 
-          console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
-          const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
+            const sessionDataToSubmit = sessionData || {
+              level: completedLevel,
+              score: finalScore,
+              moves: 0,
+              stars,
+              duration: 0,
+              abilitiesUsed: sessionData?.abilitiesUsed || {},
+              bubblesDestroyed: 0,
+              chainReactions: 0,
+              perfectShots: 0,
+              coinsEarned: coinsEarned || 0,
+              isWin: stars > 0
+            };
 
-          if (sessionResult.success && sessionResult.data) {
-            console.log('✅ Game session submitted successfully:', sessionResult.data.sessionId);
+            console.log('📤 Submitting game session to backend:', sessionDataToSubmit);
+            const sessionResult = await BackendService.submitGameSession(sessionDataToSubmit);
 
-            // CORRECT STATE WITH SERVER DATA
-            // The backend is the source of truth for rewards (DB-configured values)
-            const serverData = sessionResult.data;
+            if (sessionResult.success && sessionResult.data) {
+              console.log('✅ Game session submitted successfully:', sessionResult.data.sessionId);
 
-            if (serverData.updatedGameData) {
-              console.log('🔄 Syncing local state with server response...');
+              // CORRECT STATE WITH SERVER DATA
+              const serverData = sessionResult.data;
 
-              setUserGameData((prev: any) => ({
-                ...prev,
-                ...serverData.updatedGameData
-              }));
+              if (serverData.updatedGameData) {
+                console.log('🔄 Syncing local state with server response...');
 
-              // Update individual state atoms to match server truth
-              if (serverData.updatedGameData.totalCoins !== undefined) {
-                setCoins(serverData.updatedGameData.totalCoins);
-              }
-              if (serverData.updatedGameData.totalScore !== undefined) {
-                setScore(serverData.updatedGameData.totalScore);
-              }
+                setUserGameData((prev: any) => {
+                  const combinedData = {
+                    ...prev,
+                    ...serverData.updatedGameData,
+                    // SAFETY: Ensure we don't regress level if backend is lagging or logic differs
+                    currentLevel: Math.max(prev.currentLevel, serverData.updatedGameData.currentLevel || 1),
+                    // SAFETY: Ensure we don't lose the stars we just earned for this level
+                    levelStars: {
+                      ...(serverData.updatedGameData.levelStars || {}),
+                      [completedLevel]: Math.max(
+                        prev.levelStars?.[completedLevel] || 0,
+                        serverData.updatedGameData.levelStars?.[completedLevel] || 0
+                      )
+                    }
+                  };
+                  return combinedData;
+                });
 
-              // Check if our optimistic coin calculation was wrong and notify
-              if (coinsEarned !== serverData.coinsEarned) {
-                console.log(`💰 Coin correction: Optimistic ${coinsEarned} -> Real ${serverData.coinsEarned}`);
-                // Always update local coins to match the server's truth if they differ
-                if (serverData.updatedGameData?.totalCoins) {
+                // Update individual state atoms
+                if (serverData.updatedGameData.totalCoins !== undefined) {
                   setCoins(serverData.updatedGameData.totalCoins);
                 }
-                // Optional: Toast nice message if the reward was actually higher
-                if (serverData.coinsEarned > (coinsEarned || 0)) {
-                  // toastRef.current?.show(`Bonus! You earned ${serverData.coinsEarned} coins!`, 'success');
+                if (serverData.updatedGameData.totalScore !== undefined) {
+                  setScore(serverData.updatedGameData.totalScore);
                 }
               }
-            }
-          } else {
-            console.error('❌ Failed to submit game session:', sessionResult.error);
-            // Fallback: Try to explicit update if session failed but we want to persist optimistic
-            // (Existing logic handles this via catch block or subsequent calls)
-          }
-
-          // Skip the separate updateUserGameData call since submitGameSession handles it now
-          // But we assume the submitGameSession was successful.
-          if (!sessionResult.success) {
-            // Only try manual update if session submission messed up
-            try {
-              const updateResult = await BackendService.updateUserGameData(updatedGameData);
-              if (updateResult.success) {
-                console.log('✅ User game data updated in backend (fallback)');
-              } else {
-                console.error('❌ Failed to update user game data:', updateResult.error);
-                toastRef.current?.show('Progress saved locally. Backend sync will retry later.', 'warning');
+            } else {
+              console.error('❌ Failed to submit game session:', sessionResult.error);
+              // Fallback to manual update if session submission failed
+              try {
+                const updateResult = await BackendService.updateUserGameData(updatedGameData);
+                if (updateResult.success) {
+                  console.log('✅ User game data updated in backend (fallback)');
+                }
+              } catch (err) {
+                console.error('Fallback update failed:', err);
               }
-            } catch (error) {
-              console.error('❌ Backend update error:', error);
-              toastRef.current?.show('Progress saved locally. Backend sync will retry later.', 'warning');
             }
-          } else {
-            console.log('✅ Backend sync complete via session submission');
+          } catch (innerError) {
+            console.error('❌ Backend sync error (non-fatal):', innerError);
+            toastRef.current?.show('Progress saved locally. Syncing...', 'info');
           }
-
-        } catch (error) {
-          console.error('❌ Backend sync error:', error);
-        }
-
-        // Update purchased abilities in backend (abilityInventory contains ONLY purchased, not base)
-        try {
-          await BackendService.updateAbilities(abilityInventory);
-          console.log('✅ Synced purchased abilities to backend:', abilityInventory);
-        } catch (error) {
-          console.error('Failed to sync abilities to backend:', error);
-        }
-
-        // 3. Trigger Background Sync
-        loadUserData(false);
+        })();
       }
+
+      // Update purchased abilities
+      try {
+        await BackendService.updateAbilities(abilityInventory);
+      } catch (error) { console.error('Abilities sync error', error); }
+
+      // Trigger background sync only if we are STAYING (which we aren't if action is home)
+      // If action is home, we let handleBackPress logic decide, but we might skip it to avoid race
 
       // 4. Navigate UI based on Action and Stars
       if (action === 'next' && stars >= 2) {
-        // Progress to next level only if we got 2+ stars
         if (completedLevel < levels.length) {
-          // Prepare to move to next level
           setSelectedLevel(completedLevel + 1);
           setLoadingDirection('toFight');
           setIsLoading(true);
-
-          // Close current GameScreen and reopen with next level to reset modal state
           setShowGameScreen(false);
-
           setTimeout(() => {
-            // Reopen GameScreen with next level - this will reset the game state and close modal
             setShowGameScreen(true);
             setIsLoading(false);
           }, 1000);
         } else {
-          handleBackPress();
+          handleBackPress(false); // Skip reload, we just synced
         }
       } else {
-        // Action is 'home' or didn't get enough stars - user wants to quit to map directly
-        handleBackPress();
+        handleBackPress(false); // Skip reload, we just synced
       }
 
     } catch (error) {
       console.error('Error handling level completion:', error);
-      handleBackPress();
+      handleBackPress(true);
     }
   };
 
@@ -1578,6 +1641,10 @@ const Roadmap: React.FC = () => {
               setShowProfilePopup(false);
               setShowRewardHistory(true);
             }}
+            onWithdrawHistoryPress={() => {
+              setShowProfilePopup(false);
+              setShowWithdrawHistory(true);
+            }}
           />
 
           <WithdrawModal
@@ -1590,6 +1657,14 @@ const Roadmap: React.FC = () => {
             visible={showRewardHistory}
             onClose={() => {
               setShowRewardHistory(false);
+              setShowProfilePopup(true);
+            }}
+          />
+
+          <WithdrawHistory
+            visible={showWithdrawHistory}
+            onClose={() => {
+              setShowWithdrawHistory(false);
               setShowProfilePopup(true);
             }}
           />

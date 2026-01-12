@@ -145,6 +145,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
   const [fireActive, setFireActive] = useState(false);
   const [hasFirePower, setHasFirePower] = useState(false);
   const [nextLevelLoading, setNextLevelLoading] = useState(false);
+  const [homeLoading, setHomeLoading] = useState(false);
 
   const [abilitiesUsedCount, setAbilitiesUsedCount] = useState({
     lightning: 0,
@@ -204,7 +205,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
 
   // Submit game session when game ends (won or lost)
   useEffect(() => {
-    const submitGameSession = async () => {
+    const calculateSessionRewards = async () => {
       if (gameState === 'won' || gameState === 'lost') {
         console.log(`🎮 Game ${gameState}! Submitting session...`);
 
@@ -269,39 +270,20 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
 
           const coinsEarned = gameState === 'won' ? Math.floor(base + starBonusAmount + completionBonus + scoreReward) : 0;
 
+
           console.log(`💰 Coins Earned Calc: Base(${base}) + Star(${starBonusAmount}) + Complete(${completionBonus}) + Score(${scoreReward}) = ${coinsEarned}`);
 
           setSessionCoins(coinsEarned);
 
-          const sessionData = {
-            level,
-            score,
-            moves: moves,
-            stars,
-            duration: Math.floor((Date.now() - gameStartTime) / 1000),
-            abilitiesUsed: abilitiesUsedCount,
-            bubblesDestroyed: 0,
-            chainReactions: 0,
-            perfectShots: 0,
-            coinsEarned: coinsEarned,
-            isWin: gameState === 'won'
-          };
-
-          console.log('Submitting game session:', sessionData);
-          const sessionResult = await BackendService.submitGameSession(sessionData);
-
-          if (sessionResult.success) {
-            console.log('Game session submitted successfully:', sessionResult.data?.sessionId);
-          } else {
-            console.error('Failed to submit game session:', sessionResult.error);
-          }
+          // We DO NOT submit the session here anymore to avoid double counting.
+          // The session is submitted via onLevelComplete in Roadmap.tsx when the user clicks "Next" or "Home".
         } catch (error) {
-          console.error('Error submitting game session:', error);
+          console.error('Error calculating session rewards:', error);
         }
       }
     };
 
-    submitGameSession();
+    calculateSessionRewards();
   }, [gameState, level, score, moves, gameStartTime, abilitiesUsedCount, user]);
 
   // Combine base abilities (2 each per level) with purchased abilities
@@ -1133,34 +1115,53 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
               )}
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => {
-                  SettingsService.vibrateClick(); // Button feedback
-                  if (gameState === 'won' && onLevelComplete) {
-                    // Prepare session data with correct coin value
-                    const sessionData = {
-                      level,
-                      score,
-                      moves: moves,
-                      stars: earnedStars,
-                      duration: Math.floor((Date.now() - gameStartTime) / 1000),
-                      abilitiesUsed: abilitiesUsedCount,
-                      bubblesDestroyed: 0,
-                      chainReactions: 0,
-                      perfectShots: 0,
-                      coinsEarned: sessionCoins, // Use the calculated sessionCoins
-                      isWin: true
-                    };
-                    onLevelComplete(level, score, earnedStars, sessionCoins, 'home', sessionData);
-                  } else {
-                    onBackPress && onBackPress();
-                  }
-                }}>
-                  <MaterialIcon
-                    name={GAME_ICONS.HOME.name}
-                    family={GAME_ICONS.HOME.family}
-                    size={ICON_SIZES.LARGE}
-                    color={ICON_COLORS.WHITE}
-                  />
+                <TouchableOpacity
+                  style={[styles.modalBtnSecondary, homeLoading && { opacity: 0.5 }]}
+                  disabled={homeLoading}
+                  onPress={async () => {
+                    if (homeLoading) return;
+                    setHomeLoading(true);
+                    SettingsService.vibrateClick(); // Button feedback
+
+                    if (onLevelComplete) {
+                      try {
+                        const isWin = gameState === 'won';
+                        // Prepare session data for both win and loss
+                        const sessionData = {
+                          level,
+                          score,
+                          moves: moves,
+                          stars: earnedStars,
+                          duration: Math.floor((Date.now() - gameStartTime) / 1000),
+                          abilitiesUsed: abilitiesUsedCount,
+                          bubblesDestroyed: 0,
+                          chainReactions: 0,
+                          perfectShots: 0,
+                          coinsEarned: sessionCoins,
+                          isWin: isWin
+                        };
+                        await onLevelComplete(level, score, earnedStars, sessionCoins, 'home', sessionData);
+                      } catch (e) {
+                        console.error("Home nav error", e);
+                        onBackPress && onBackPress();
+                      } finally {
+                        setHomeLoading(false);
+                      }
+                    } else {
+                      onBackPress && onBackPress();
+                      setHomeLoading(false);
+                    }
+                  }}>
+                  {homeLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <MaterialIcon
+                      name={GAME_ICONS.HOME.name}
+                      family={GAME_ICONS.HOME.family}
+                      size={ICON_SIZES.LARGE}
+                      color={ICON_COLORS.WHITE}
+                    />
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {
                   SettingsService.vibrateClick(); // Button feedback
