@@ -14,6 +14,8 @@ const configRoutes = require('./routes/config');
 const adConfigRoutes = require('./routes/adconfig');
 const adUnitRoutes = require('./routes/adunit');
 const abilityRoutes = require('./routes/ability');
+const shopRoutes = require('./routes/shop');
+const rewardsRoutes = require('./routes/rewards');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,14 +57,14 @@ mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => {
-  console.log('✅ Connected to MongoDB successfully');
-  console.log(`📍 Database: ${process.env.MONGODB_URI}`);
-})
-.catch((error) => {
-  console.error('❌ MongoDB connection error:', error);
-  process.exit(1);
-});
+  .then(() => {
+    console.log('✅ Connected to MongoDB successfully');
+    console.log(`📍 Database: ${process.env.MONGODB_URI}`);
+  })
+  .catch((error) => {
+    console.error('❌ MongoDB connection error:', error);
+    process.exit(1);
+  });
 
 // ============================================================================
 // ROUTES
@@ -87,6 +89,8 @@ app.use('/api/config', configRoutes);
 app.use('/api/adconfig', adConfigRoutes);
 app.use('/api/adunit', adUnitRoutes);
 app.use('/api/ability', abilityRoutes);
+app.use('/api/shop', shopRoutes);
+app.use('/api/rewards', rewardsRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -99,7 +103,7 @@ app.use('*', (req, res) => {
 // Global error handler
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
-  
+
   res.status(error.status || 500).json({
     error: error.message || 'Internal server error',
     ...(process.env.NODE_ENV === 'development' && { stack: error.stack })

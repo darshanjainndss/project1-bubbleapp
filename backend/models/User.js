@@ -105,6 +105,17 @@ const userSchema = new mongoose.Schema({
     }
   },
 
+  // Subscription information
+  subscription: {
+    active: {
+      type: Boolean,
+      default: false
+    },
+    type: String,
+    expiresAt: Date,
+    features: [String]
+  },
+
   // Account timestamps
   createdAt: {
     type: Date,

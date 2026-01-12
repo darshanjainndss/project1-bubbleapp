@@ -70,6 +70,11 @@ const FALLBACK_ICONS: Record<string, string> = {
   'chevron-left': '←',
   'chevron-right': '→',
   'check': '✓',
+  'history': '🕒',
+  'analytics': '📊',
+  'bolt': '⚡',
+  'verified': '✓',
+  'visibility': '👁️',
 };
 
 const MaterialIcon: React.FC<MaterialIconProps> = ({

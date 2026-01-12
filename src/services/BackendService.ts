@@ -118,6 +118,38 @@ export interface AbilityConfig {
   sortOrder: number;
 }
 
+export interface ShopItem {
+  _id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  type: 'ability' | 'bundle' | 'subscription';
+  icon: string;
+  color: string;
+  priceCoins: number;
+  priceMoney: number;
+  currency: string;
+  items?: Array<{
+    abilityName: string;
+    quantity: number;
+  }>;
+  coinReward?: number;
+  subscriptionDays?: number;
+  features?: string[];
+  sortOrder: number;
+}
+
+export interface LevelReward {
+  _id: string;
+  userId: string;
+  level: number;
+  stars: number;
+  coinsAwarded: number;
+  rewardClaimed: boolean;
+  claimedAt: string;
+  score: number;
+}
+
 export interface AdConfig {
   platform: 'android' | 'ios';
   appId: string;
@@ -574,6 +606,7 @@ class BackendService {
       console.log('🎮 submitGameSession called');
       console.log('🔍 Auth token exists:', !!this.authToken);
       console.log('🔍 Session data:', session);
+      console.log('💰 Submitting coinsEarned:', session.coinsEarned);
 
       if (!this.authToken) {
         console.log('❌ No auth token available');
@@ -679,6 +712,74 @@ class BackendService {
     } catch (error) {
       console.error('Purchase abilities error:', error);
       return { success: false, error: 'Network error purchasing abilities' };
+    }
+  }
+
+  // ============================================================================
+  // NEW SHOP METHODS
+  // ============================================================================
+
+  async getShopItems(): Promise<{ success: boolean; items?: ShopItem[]; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/shop`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, items: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch shop items' };
+      }
+    } catch (error) {
+      console.error('Get shop items error:', error);
+      return { success: false, error: 'Network error fetching shop items' };
+    }
+  }
+
+  async purchaseShopItem(itemId: string, paymentMethod: 'coins' | 'money'): Promise<{
+    success: boolean;
+    newCoinBalance?: number;
+    abilities?: Record<string, number>;
+    subscription?: any;
+    error?: string;
+  }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/shop/purchase`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ itemId, paymentMethod }),
+      });
+
+      const data = await response.json();
+      console.log('🛒 Purchase response data:', data);
+
+      if (response.ok) {
+        return {
+          success: true,
+          newCoinBalance: data.newCoinBalance,
+          abilities: data.abilities,
+          subscription: data.subscription
+        };
+      } else {
+        return { success: false, error: data.message || 'Purchase failed' };
+      }
+    } catch (error) {
+      console.error('Purchase shop item error:', error);
+      return { success: false, error: 'Network error purchasing shop item' };
     }
   }
 
@@ -1419,6 +1520,102 @@ class BackendService {
     } catch (error) {
       console.error('Reset ad units error:', error);
       return { success: false, error: 'Network error resetting ad units' };
+    }
+  }
+
+  // ============================================================================
+  // REWARD METHODS
+  // ============================================================================
+
+  async getRewardHistory(limit: number = 50): Promise<{ success: boolean; rewards?: LevelReward[]; totalCoins?: number; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/rewards/history?limit=${limit}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return {
+          success: true,
+          rewards: data.rewards,
+          totalCoins: data.totalCoins
+        };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch reward history' };
+      }
+    } catch (error) {
+      console.error('Get reward history error:', error);
+      return { success: false, error: 'Network error fetching reward history' };
+    }
+  }
+
+  async checkLevelReward(level: number): Promise<{ success: boolean; claimed?: boolean; reward?: LevelReward; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/rewards/level/${level}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return {
+          success: true,
+          claimed: data.claimed,
+          reward: data.reward
+        };
+      } else {
+        return { success: false, error: data.message || 'Failed to check level reward' };
+      }
+    } catch (error) {
+      console.error('Check level reward error:', error);
+      return { success: false, error: 'Network error checking level reward' };
+    }
+  }
+
+  async getRewardStats(): Promise<{ success: boolean; stats?: any; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/rewards/stats`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, stats: data.stats };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch reward stats' };
+      }
+    } catch (error) {
+      console.error('Get reward stats error:', error);
+      return { success: false, error: 'Network error fetching reward stats' };
     }
   }
 

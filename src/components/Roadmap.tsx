@@ -29,6 +29,7 @@ import ConfirmationModal from './ConfirmationModal';
 import ToastNotification, { ToastRef } from './ToastNotification';
 import SettingsService from '../services/SettingsService';
 import Shop from './Shop';
+import RewardHistory from './RewardHistory';
 import HelpSlider from './HelpSlider';
 import HelpButton from './HelpButton';
 
@@ -329,7 +330,7 @@ const WithdrawModal = ({ visible, onClose, scoreEarnings }: any) => {
 };
 
 // Profile Popup Component
-const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout, scoreRange, reward, onWithdrawPress }: any) => {
+const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout, scoreRange, reward, onWithdrawPress, onRewardHistoryPress }: any) => {
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [vibrationSupported, setVibrationSupported] = useState(true);
 
@@ -504,6 +505,17 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                       <Text style={localStyles.withdrawInlineText}>WITHDRAW</Text>
                     </TouchableOpacity>
                   </View>
+
+                  <TouchableOpacity style={[localStyles.nestedCard, { width: '100%' }]} onPress={onRewardHistoryPress}>
+                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 215, 0, 0.1)' }]}>
+                      <MaterialIcon name="history" family="material" size={22} color="#FFD700" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={localStyles.cardValue}>Reward History</Text>
+                      <Text style={localStyles.cardLabel}>VIEW PAST EARNINGS</Text>
+                    </View>
+                    <MaterialIcon name="chevron-right" family="material" size={24} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
 
                 <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
@@ -626,6 +638,7 @@ const Roadmap: React.FC = () => {
   const [showInstructionModal, setShowInstructionModal] = useState(false);
   const [showEarnCoinsPopup, setShowEarnCoinsPopup] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showRewardHistory, setShowRewardHistory] = useState(false);
   const [userGameData, setUserGameData] = useState<any>({
     completedLevels: [],
     levelStars: {},
@@ -1085,6 +1098,10 @@ const Roadmap: React.FC = () => {
               // Check if our optimistic coin calculation was wrong and notify
               if (coinsEarned !== serverData.coinsEarned) {
                 console.log(`💰 Coin correction: Optimistic ${coinsEarned} -> Real ${serverData.coinsEarned}`);
+                // Always update local coins to match the server's truth if they differ
+                if (serverData.updatedGameData?.totalCoins) {
+                  setCoins(serverData.updatedGameData.totalCoins);
+                }
                 // Optional: Toast nice message if the reward was actually higher
                 if (serverData.coinsEarned > (coinsEarned || 0)) {
                   // toastRef.current?.show(`Bonus! You earned ${serverData.coinsEarned} coins!`, 'success');
@@ -1450,7 +1467,10 @@ const Roadmap: React.FC = () => {
               setUserGameData((prev: any) => ({ ...prev, totalCoins: newCoins }));
             }}
             abilityInventory={abilityInventory}
-            onInventoryUpdate={setAbilityInventory}
+            onInventoryUpdate={(newInventory) => {
+              console.log('🎯 Roadmap updating inventory:', newInventory);
+              setAbilityInventory(newInventory);
+            }}
             abilityStartingCounts={abilityStartingCounts}
             onWatchAd={(amount) => handleWatchAd(amount)}
             adRewardAmount={adRewardAmount}
@@ -1554,12 +1574,24 @@ const Roadmap: React.FC = () => {
               setShowProfilePopup(false);
               setShowWithdrawModal(true);
             }}
+            onRewardHistoryPress={() => {
+              setShowProfilePopup(false);
+              setShowRewardHistory(true);
+            }}
           />
 
           <WithdrawModal
             visible={showWithdrawModal}
             onClose={() => setShowWithdrawModal(false)}
             scoreEarnings={(Number(scoreRange) || 100) > 0 ? (Number(userGameData?.totalScore || 0) / Number(scoreRange) * Number(scoreReward)) : 0}
+          />
+
+          <RewardHistory
+            visible={showRewardHistory}
+            onClose={() => {
+              setShowRewardHistory(false);
+              setShowProfilePopup(true);
+            }}
           />
 
           {/* Earn Coins Popup */}

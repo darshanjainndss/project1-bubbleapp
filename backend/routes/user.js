@@ -457,4 +457,46 @@ router.get('/stats', auth, async (req, res) => {
   }
 });
 
+// @route   GET /api/user/debug-abilities
+// @desc    Debug endpoint to check user abilities
+// @access  Private
+router.get('/debug-abilities', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Convert Map to object for easier debugging
+    const abilitiesObj = {};
+    if (user.gameData.abilities) {
+      user.gameData.abilities.forEach((value, key) => {
+        abilitiesObj[key] = value;
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        userId: user._id,
+        email: user.email,
+        totalCoins: user.gameData.totalCoins,
+        abilities: abilitiesObj,
+        abilitiesMapSize: user.gameData.abilities ? user.gameData.abilities.size : 0,
+        currentLevel: user.gameData.currentLevel
+      }
+    });
+
+  } catch (error) {
+    console.error('Debug abilities error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error getting debug abilities'
+    });
+  }
+});
+
 module.exports = router;

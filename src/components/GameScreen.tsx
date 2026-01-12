@@ -236,30 +236,41 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
           const stars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
 
           // Calculate coins earned
-          let baseCoinsBase = 10;
-          let coinsPerLevelMultiplier = 2.5;
-          let starBonusBase = 5;
-          let starBonusLevelMultiplier = 0.5;
-          let completionBonusMultiplier = 1.2;
+          let baseCoinsBase = 50;
+          let coinsPerLevelMultiplier = 10;
+          let starBonusBase = 20;
+          let starBonusLevelMultiplier = 5;
+          let completionBonusMultiplier = 5;
+          let scoreRange = 100;
+          let rewardValue = 10;
 
           if (gameSettings) {
-            baseCoinsBase = gameSettings.baseCoins || 10;
-            coinsPerLevelMultiplier = gameSettings.coinsPerLevelMultiplier || 2.5;
-            starBonusBase = gameSettings.starBonusBase || 5;
-            starBonusLevelMultiplier = gameSettings.starBonusLevelMultiplier || 0.5;
-            completionBonusMultiplier = gameSettings.completionBonusMultiplier || 1.2;
+            // Use GameSettings from backend
+            baseCoinsBase = gameSettings.baseCoins || gameSettings.winningRewards?.baseCoins || 50;
+            coinsPerLevelMultiplier = gameSettings.coinsPerLevelMultiplier || gameSettings.winningRewards?.coinsPerLevelMultiplier || 10;
+            starBonusBase = gameSettings.starBonusBase || gameSettings.winningRewards?.starBonusBase || 20;
+            starBonusLevelMultiplier = gameSettings.starBonusLevelMultiplier || gameSettings.winningRewards?.starBonusLevelMultiplier || 5;
+            completionBonusMultiplier = gameSettings.completionBonusMultiplier || gameSettings.winningRewards?.completionBonusMultiplier || 5;
+            scoreRange = gameSettings.scoreRange || 100;
+            rewardValue = gameSettings.reward ? parseFloat(gameSettings.reward.toString()) : 10;
           }
+
+          console.log('💰 Using Reward Config:', { baseCoinsBase, coinsPerLevelMultiplier, starBonusBase, scoreRange, rewardValue });
 
           const levelBonus = Math.floor(level * coinsPerLevelMultiplier);
           const base = baseCoinsBase + levelBonus;
 
           const starLevelBonus = Math.floor(level * starBonusLevelMultiplier);
           const starTotalPerStar = starBonusBase + starLevelBonus;
-          const starBonus = stars * starTotalPerStar;
+          const starBonusAmount = stars * starTotalPerStar;
 
           const completionBonus = Math.floor(level * completionBonusMultiplier);
-          const scoreReward = (score / (gameSettings?.scoreRange || 100)) * (gameSettings?.reward || 0);
-          const coinsEarned = gameState === 'won' ? Math.floor(base + starBonus + completionBonus + scoreReward) : 0;
+          const scoreReward = (score / scoreRange) * rewardValue;
+
+          const coinsEarned = gameState === 'won' ? Math.floor(base + starBonusAmount + completionBonus + scoreReward) : 0;
+
+          console.log(`💰 Coins Earned Calc: Base(${base}) + Star(${starBonusAmount}) + Complete(${completionBonus}) + Score(${scoreReward}) = ${coinsEarned}`);
+
           setSessionCoins(coinsEarned);
 
           const sessionData = {
@@ -1106,7 +1117,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
               <Text style={styles.modalScore}>SCORE: {score}</Text>
 
               {/* Debug Info - Remove this after fixing */}
-         
+
               {gameState === 'won' && (
                 <View style={styles.modalCoins}>
                   <MaterialIcon
@@ -1125,13 +1136,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
                 <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => {
                   SettingsService.vibrateClick(); // Button feedback
                   if (gameState === 'won' && onLevelComplete) {
-                    // Calculate coins earned
-                    const baseCoins = Math.floor(10 + (level * 2.5));
-                    const starBonus = earnedStars * Math.floor(5 + (level * 0.5));
-                    const completionBonus = Math.floor(level * 1.2);
-                    const coinsEarned = baseCoins + starBonus + completionBonus;
-
-                    // Prepare session data
+                    // Prepare session data with correct coin value
                     const sessionData = {
                       level,
                       score,
@@ -1142,12 +1147,10 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
                       bubblesDestroyed: 0,
                       chainReactions: 0,
                       perfectShots: 0,
-                      coinsEarned: coinsEarned,
-                      isWin: gameState === 'won'
+                      coinsEarned: sessionCoins, // Use the calculated sessionCoins
+                      isWin: true
                     };
-
-                    // If won, report completion with 'home' action so parent updates data but goes back
-                    onLevelComplete(level, score, earnedStars, coinsEarned, 'home', sessionData);
+                    onLevelComplete(level, score, earnedStars, sessionCoins, 'home', sessionData);
                   } else {
                     onBackPress && onBackPress();
                   }
@@ -1173,36 +1176,38 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
                 {earnedStars >= 2 && (
                   <TouchableOpacity
                     style={[styles.modalBtnPrimary, nextLevelLoading && { opacity: 0.5 }]}
-                    onPress={() => {
+                    onPress={async () => {
                       if (nextLevelLoading) return; // Prevent multiple clicks
 
                       setNextLevelLoading(true);
                       SettingsService.vibrateClick(); // Button feedback
 
                       if (onLevelComplete) {
-                        // Calculate coins earned
-                        const baseCoins = Math.floor(10 + (level * 2.5));
-                        const starBonus = earnedStars * Math.floor(5 + (level * 0.5));
-                        const completionBonus = Math.floor(level * 1.2);
-                        const coinsEarned = baseCoins + starBonus + completionBonus;
+                        try {
+                          // Prepare session data with correct coin value
+                          const sessionData = {
+                            level,
+                            score,
+                            moves: moves,
+                            stars: earnedStars,
+                            duration: Math.floor((Date.now() - gameStartTime) / 1000),
+                            abilitiesUsed: abilitiesUsedCount,
+                            bubblesDestroyed: 0,
+                            chainReactions: 0,
+                            perfectShots: 0,
+                            coinsEarned: sessionCoins, // Use the calculated sessionCoins
+                            isWin: true
+                          };
 
-                        // Prepare session data
-                        const sessionData = {
-                          level,
-                          score,
-                          moves: moves,
-                          stars: earnedStars,
-                          duration: Math.floor((Date.now() - gameStartTime) / 1000),
-                          abilitiesUsed: abilitiesUsedCount,
-                          bubblesDestroyed: 0,
-                          chainReactions: 0,
-                          perfectShots: 0,
-                          coinsEarned: coinsEarned,
-                          isWin: gameState === 'won'
-                        };
-
-                        // Pass reliable calculated data including coins and 'next' action
-                        onLevelComplete(level, score, earnedStars, coinsEarned, 'next', sessionData);
+                          // Pass reliable calculated data including coins and 'next' action
+                          await onLevelComplete(level, score, earnedStars, sessionCoins, 'next', sessionData);
+                        } catch (error) {
+                          console.error("Error progressing to next level:", error);
+                          // Emergency fallback if something crashes
+                          onBackPress && onBackPress();
+                        } finally {
+                          setNextLevelLoading(false);
+                        }
                       }
                     }}
                     disabled={nextLevelLoading}

@@ -1,0 +1,74 @@
+[
+    {
+        "name": "lightning",
+        "displayName": "Lightning",
+        "description": "Destroys an entire row of bubbles",
+        "icon": "flash",
+        "effect": "destroyRow",
+        "pointsPerBubble": 10,
+        "price": 58,
+        "startingCount": 2,
+        "sortOrder": 1,
+        "isActive": true,
+        "createdAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        }
+    },
+    {
+        "name": "bomb",
+        "displayName": "Bomb",
+        "description": "Destroys 6 neighboring bubbles",
+        "icon": "bomb",
+        "effect": "destroyNeighbors",
+        "pointsPerBubble": 15,
+        "price": 75,
+        "startingCount": 2,
+        "sortOrder": 2,
+        "isActive": true,
+        "createdAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        }
+    },
+    {
+        "name": "freeze",
+        "displayName": "Freeze",
+        "description": "Freezes a column for easier targeting",
+        "icon": "snowflake",
+        "effect": "freezeColumn",
+        "pointsPerBubble": 5,
+        "price": 30,
+        "startingCount": 2,
+        "sortOrder": 3,
+        "isActive": true,
+        "createdAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        }
+    },
+    {
+        "name": "fire",
+        "displayName": "Fire",
+        "description": "Burns through obstacles and metal bubbles",
+        "icon": "fire",
+        "effect": "burnObstacles",
+        "pointsPerBubble": 20,
+        "price": 40,
+        "startingCount": 2,
+        "sortOrder": 4,
+        "isActive": true,
+        "createdAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-12T04:45:00.000Z"
+        }
+    }
+]
