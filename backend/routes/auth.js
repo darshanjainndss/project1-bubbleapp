@@ -52,8 +52,8 @@ const validateGoogleLogin = [
 // HELPER FUNCTIONS
 // ============================================================================
 
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+const generateToken = (email) => {
+  return jwt.sign({ email }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
 };
@@ -102,7 +102,7 @@ router.post('/register', validateRegistration, handleValidationErrors, async (re
     await user.save();
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -157,7 +157,7 @@ router.post('/login', validateLogin, handleValidationErrors, async (req, res) =>
     }
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -210,7 +210,7 @@ router.post('/google-login', validateGoogleLogin, handleValidationErrors, async 
     if (!user) {
       // Check if user exists by email (might be switching from email/password to Google)
       user = await User.findOne({ email, isActive: true });
-      
+
       if (user && !user.isGoogleLogin) {
         // Update existing email/password user to Google login
         user.firebaseId = firebaseId;
@@ -238,7 +238,7 @@ router.post('/google-login', validateGoogleLogin, handleValidationErrors, async 
     }
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -294,7 +294,7 @@ router.post('/anonymous-login', async (req, res) => {
     }
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -333,7 +333,7 @@ router.post('/logout', async (req, res) => {
 router.post('/verify-token', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -342,9 +342,9 @@ router.post('/verify-token', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-password');
+    const user = await User.findOne({ email: decoded.email, isActive: true }).select('-password');
 
-    if (!user || !user.isActive) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Invalid token'

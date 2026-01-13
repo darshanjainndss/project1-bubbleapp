@@ -7,10 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed": "node seeders/seedAll.js",
-    "seed:config": "node seeders/seedAll.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "seed:config": "node seeders/seedAll.js"
   },
   "keywords": [
     "bubble-shooter",
@@ -36,9 +33,7 @@
     "mongoose": "^7.5.0"
   },
   "devDependencies": {
-    "jest": "^29.6.2",
-    "nodemon": "^3.0.1",
-    "supertest": "^6.3.3"
+    "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=16.0.0"

@@ -650,7 +650,7 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                     </View>
                   </View>
 
-                  <RewardsCard 
+                  <RewardsCard
                     onWithdrawPress={onWithdrawPress}
                     onRewardHistoryPress={onRewardHistoryPress}
                     onWithdrawHistoryPress={onWithdrawHistoryPress}
@@ -871,10 +871,10 @@ const Roadmap: React.FC = () => {
 
           // Update game settings (base coins and star bonus from DB)
           if (gameConfigData && gameConfigData.gameSettings) {
-            setBaseRewardAmount(gameConfigData.gameSettings.baseCoins ?? 10);
+            setBaseRewardAmount((gameConfigData.gameSettings as any).coinsPerLevel ?? 10);
             setStarBonusAmount(gameConfigData.gameSettings.starBonusBase ?? 5);
             setScoreRange(gameConfigData.gameSettings.scoreRange ?? 100);
-            setScoreReward(gameConfigData.gameSettings.reward ?? 0);
+            setScoreReward(gameConfigData.gameSettings.rewardPerRange ?? 0);
             console.log('💰 Using Game Rewards from DB:', gameConfigData.gameSettings);
           }
         } catch (configErr) {
@@ -1019,12 +1019,9 @@ const Roadmap: React.FC = () => {
 
   // Progressive coin calculation based on level
   const calculateLevelCoins = (level: number, stars: number): number => {
-    // Base coins increase progressively with level
-    const baseCoins = Math.floor(10 + (level * 2.5)); // Level 1: 12, Level 50: 135, Level 100: 260
-    const starBonus = stars * Math.floor(5 + (level * 0.5)); // Star bonus also increases with level
-    const completionBonus = Math.floor(level * 1.2); // Completion bonus
-
-    return baseCoins + starBonus + completionBonus;
+    // Strictly return the DB-configured coins per level
+    // "Only coins perlevel should be fetch from mdb and that much only be give"
+    return baseRewardAmount || 10;
   };
 
   // Auto-scroll to current level on mount and when data loads

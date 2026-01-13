@@ -19,125 +19,71 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Initialize shop items (Seeding)
-router.post('/initialize', async (req, res) => {
+// Create new shop item
+router.post('/', async (req, res) => {
     try {
-        const defaultItems = [
-            // 10x Ability Packs
-            {
-                name: 'combo_lightning_10',
-                displayName: 'Lightning Pack (10x)',
-                description: 'Strike down your obstacles with 10 Lightning strikes!',
-                type: 'bundle',
-                icon: 'flash',
-                color: '#FFD700',
-                priceCoins: 500,
-                priceMoney: 99,
-                currency: 'INR',
-                items: [{ abilityName: 'lightning', quantity: 10 }],
-                sortOrder: 1
-            },
-            {
-                name: 'combo_bomb_10',
-                displayName: 'Bomb Pack (10x)',
-                description: 'Explosive power! Set off 10 massive blasts!',
-                type: 'bundle',
-                icon: 'bomb',
-                color: '#FF4444',
-                priceCoins: 650,
-                priceMoney: 129,
-                currency: 'INR',
-                items: [{ abilityName: 'bomb', quantity: 10 }],
-                sortOrder: 2
-            },
-            {
-                name: 'combo_freeze_10',
-                displayName: 'Freeze Pack (10x)',
-                description: 'Cool things down with 10 Freeze abilities!',
-                type: 'bundle',
-                icon: 'snowflake',
-                color: '#00BFFF',
-                priceCoins: 250,
-                priceMoney: 49,
-                currency: 'INR',
-                items: [{ abilityName: 'freeze', quantity: 10 }],
-                sortOrder: 3
-            },
-            {
-                name: 'combo_fire_10',
-                displayName: 'Fire Pack (10x)',
-                description: 'Burn it all! Get 10 intense Fire abilities!',
-                type: 'bundle',
-                icon: 'fire',
-                color: '#FF6600',
-                priceCoins: 350,
-                priceMoney: 79,
-                currency: 'INR',
-                items: [{ abilityName: 'fire', quantity: 10 }],
-                sortOrder: 4
-            },
-            // All-In-One Pack
-            {
-                name: 'combo_all_abilities_10',
-                displayName: 'Mega All-Ability Pack',
-                description: 'The Ultimate Choice! 10 of EVERYTHING!',
-                type: 'bundle',
-                icon: 'diamond',
-                color: '#FF00FF',
-                priceCoins: 1500,
-                priceMoney: 299,
-                currency: 'INR',
-                items: [
-                    { abilityName: 'lightning', quantity: 10 },
-                    { abilityName: 'bomb', quantity: 10 },
-                    { abilityName: 'freeze', quantity: 10 },
-                    { abilityName: 'fire', quantity: 10 }
-                ],
-                sortOrder: 5
-            },
-            // Ad-Free Subscriptions
-            {
-                name: 'sub_1_week',
-                displayName: 'Weekly Ad-Free',
-                description: 'Gaming without interruptions! 1 week of NO ADS.',
-                type: 'subscription',
-                icon: 'calendar-outline',
-                color: '#00FF88',
-                priceCoins: 0,
-                priceMoney: 99,
-                currency: 'INR',
-                subscriptionDays: 7,
-                features: ['No Ads'],
-                sortOrder: 10
-            },
-            {
-                name: 'sub_1_month',
-                displayName: 'Monthly Ad-Free',
-                description: 'The Best Value! A full month of NO ADS gaming.',
-                type: 'subscription',
-                icon: 'crown',
-                color: '#FFD700',
-                priceCoins: 0,
-                priceMoney: 299,
-                currency: 'INR',
-                subscriptionDays: 30,
-                features: ['No Ads', 'Daily Bonus'],
-                sortOrder: 11
-            }
-        ];
+        const itemData = req.body;
 
-        for (const itemData of defaultItems) {
-            await ShopItem.findOneAndUpdate(
-                { name: itemData.name },
-                itemData,
-                { upsert: true, new: true }
-            );
+        // Basic validation
+        if (!itemData.name || !itemData.type) {
+            return res.status(400).json({ success: false, message: 'Name and type are required' });
         }
 
-        res.json({ success: true, message: 'Shop items initialized' });
+        const newItem = new ShopItem(itemData);
+        await newItem.save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Shop item created',
+            data: newItem
+        });
     } catch (error) {
-        console.error('Error initializing shop items:', error);
-        res.status(500).json({ success: false, message: 'Initialization failed' });
+        console.error('Error creating shop item:', error);
+        res.status(500).json({ success: false, message: 'Failed to create shop item', error: error.message });
+    }
+});
+
+// Update shop item
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        const item = await ShopItem.findByIdAndUpdate(id, updates, { new: true });
+
+        if (!item) {
+            return res.status(404).json({ success: false, message: 'Shop item not found' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Shop item updated',
+            data: item
+        });
+    } catch (error) {
+        console.error('Error updating shop item:', error);
+        res.status(500).json({ success: false, message: 'Failed to update shop item', error: error.message });
+    }
+});
+
+// Delete shop item
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const item = await ShopItem.findByIdAndDelete(id);
+
+        if (!item) {
+            return res.status(404).json({ success: false, message: 'Shop item not found' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Shop item deleted',
+            data: item
+        });
+    } catch (error) {
+        console.error('Error deleting shop item:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete shop item', error: error.message });
     }
 });
 
@@ -151,7 +97,7 @@ router.post('/purchase', auth, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Item not found' });
         }
 
-        const user = await User.findById(req.userId);
+        const user = req.user;
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }

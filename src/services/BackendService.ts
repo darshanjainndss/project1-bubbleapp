@@ -200,7 +200,7 @@ export interface GameConfig {
     starBonusLevelMultiplier: number;
     completionBonusMultiplier: number;
     scoreRange?: number;
-    reward?: number;
+    rewardPerRange?: number;
   };
   platform: 'android' | 'ios';
   rewardAmount: number;
@@ -1110,51 +1110,7 @@ class BackendService {
     }
   }
 
-  async initializeAbilities(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/ability/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, results: data.results };
-      } else {
-        return { success: false, error: data.message || 'Failed to initialize abilities' };
-      }
-    } catch (error) {
-      console.error('Initialize abilities error:', error);
-      return { success: false, error: 'Network error initializing abilities' };
-    }
-  }
-
-  async resetAbilities(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/ability/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, data: data.data, count: data.count };
-      } else {
-        return { success: false, error: data.message || 'Failed to reset abilities' };
-      }
-    } catch (error) {
-      console.error('Reset abilities error:', error);
-      return { success: false, error: 'Network error resetting abilities' };
-    }
-  }
 
   // ============================================================================
   // AD CONFIG MANAGEMENT METHODS
@@ -1290,51 +1246,7 @@ class BackendService {
     }
   }
 
-  async initializeAdConfigs(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/adconfig/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, results: data.results };
-      } else {
-        return { success: false, error: data.message || 'Failed to initialize ad configurations' };
-      }
-    } catch (error) {
-      console.error('Initialize ad configs error:', error);
-      return { success: false, error: 'Network error initializing ad configurations' };
-    }
-  }
-
-  async resetAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/adconfig/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, data: data.data, count: data.count };
-      } else {
-        return { success: false, error: data.message || 'Failed to reset ad configurations' };
-      }
-    } catch (error) {
-      console.error('Reset ad configs error:', error);
-      return { success: false, error: 'Network error resetting ad configurations' };
-    }
-  }
 
   // ============================================================================
   // AD UNIT MANAGEMENT METHODS
@@ -1528,28 +1440,7 @@ class BackendService {
     }
   }
 
-  async resetAdUnits(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/adunit/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, data: data.data, count: data.count };
-      } else {
-        return { success: false, error: data.message || 'Failed to reset ad units' };
-      }
-    } catch (error) {
-      console.error('Reset ad units error:', error);
-      return { success: false, error: 'Network error resetting ad units' };
-    }
-  }
 
   // ============================================================================
   // REWARD METHODS

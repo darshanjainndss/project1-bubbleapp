@@ -13,7 +13,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const configs = await AdConfig.find({}).sort({ platform: 1 });
-    
+
     res.json({
       success: true,
       data: configs,
@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
 router.get('/:platform', async (req, res) => {
   try {
     const { platform } = req.params;
-    
+
     // Validate platform
     if (!['android', 'ios'].includes(platform)) {
       return res.status(400).json({
@@ -45,7 +45,7 @@ router.get('/:platform', async (req, res) => {
     }
 
     const config = await AdConfig.findOne({ platform });
-    
+
     if (!config) {
       return res.status(404).json({
         success: false,
@@ -154,7 +154,7 @@ router.put('/:platform', async (req, res) => {
     }
 
     const config = await AdConfig.findOne({ platform });
-    
+
     if (!config) {
       return res.status(404).json({
         success: false,
@@ -202,7 +202,7 @@ router.delete('/:platform', async (req, res) => {
     }
 
     const config = await AdConfig.findOneAndDelete({ platform });
-    
+
     if (!config) {
       return res.status(404).json({
         success: false,
@@ -225,111 +225,6 @@ router.delete('/:platform', async (req, res) => {
   }
 });
 
-// @route   POST /api/adconfig/initialize
-// @desc    Initialize ad configurations with default data (replaces seeding)
-// @access  Public
-router.post('/initialize', async (req, res) => {
-  try {
-    const defaultConfigs = [
-      {
-        platform: 'android',
-        appId: 'ca-app-pub-3940256099942544~3347511713', // Test App ID
-        maxAdContentRating: 'G',
-        tagForUnderAgeOfConsent: false,
-        tagForChildDirectedTreatment: false,
-        isActive: true
-      },
-      {
-        platform: 'ios',
-        appId: 'ca-app-pub-3940256099942544~1458002511', // Test App ID
-        maxAdContentRating: 'G',
-        tagForUnderAgeOfConsent: false,
-        tagForChildDirectedTreatment: false,
-        isActive: true
-      }
-    ];
 
-    const results = [];
-    
-    for (const configData of defaultConfigs) {
-      // Check if config already exists
-      const existingConfig = await AdConfig.findOne({ platform: configData.platform });
-      
-      if (existingConfig) {
-        results.push({
-          platform: configData.platform,
-          action: 'skipped',
-          message: 'Configuration already exists'
-        });
-      } else {
-        const newConfig = new AdConfig(configData);
-        const savedConfig = await newConfig.save();
-        results.push({
-          platform: configData.platform,
-          action: 'created',
-          data: savedConfig
-        });
-      }
-    }
-
-    res.json({
-      success: true,
-      message: 'Ad configurations initialization completed',
-      results
-    });
-  } catch (error) {
-    console.error('Error initializing ad configs:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to initialize ad configurations',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
-
-// @route   POST /api/adconfig/reset
-// @desc    Reset all ad configurations to default values
-// @access  Public
-router.post('/reset', async (req, res) => {
-  try {
-    // Clear existing configs
-    await AdConfig.deleteMany({});
-
-    const defaultConfigs = [
-      {
-        platform: 'android',
-        appId: 'ca-app-pub-3940256099942544~3347511713', // Test App ID
-        maxAdContentRating: 'G',
-        tagForUnderAgeOfConsent: false,
-        tagForChildDirectedTreatment: false,
-        isActive: true
-      },
-      {
-        platform: 'ios',
-        appId: 'ca-app-pub-3940256099942544~1458002511', // Test App ID
-        maxAdContentRating: 'G',
-        tagForUnderAgeOfConsent: false,
-        tagForChildDirectedTreatment: false,
-        isActive: true
-      }
-    ];
-
-    const createdConfigs = await AdConfig.insertMany(defaultConfigs);
-
-    res.json({
-      success: true,
-      message: 'Ad configurations reset successfully',
-      data: createdConfigs,
-      count: createdConfigs.length
-    });
-  } catch (error) {
-    console.error('Error resetting ad configs:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reset ad configurations',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
 
 module.exports = router;

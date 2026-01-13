@@ -11,7 +11,7 @@ const User = require('../models/User');
 // @access  Private
 router.post('/request', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = req.user;
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -61,7 +61,6 @@ router.post('/request', auth, async (req, res) => {
         // 4. Create WithdrawHistory entry (LINKING BY EMAIL)
         const withdrawRequest = new WithdrawHistory({
             email: user.email,
-            userId: user._id, // Optional ref
             reward: totalScoreEarning,
             status: 'pending',
             walletAddress,
@@ -102,7 +101,7 @@ router.post('/request', auth, async (req, res) => {
 // @access  Private
 router.get('/reward-history', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = req.user;
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
@@ -125,7 +124,7 @@ router.get('/reward-history', auth, async (req, res) => {
 // @access  Private
 router.get('/withdraw-history', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = req.user;
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }

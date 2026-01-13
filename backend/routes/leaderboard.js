@@ -161,7 +161,7 @@ router.get('/weekly', async (req, res) => {
       },
       {
         $group: {
-          _id: '$userId',
+          _id: '$email',
           totalScore: { $sum: '$score' },
           highScore: { $max: '$score' },
           gamesWon: { $sum: 1 },
@@ -172,7 +172,7 @@ router.get('/weekly', async (req, res) => {
         $lookup: {
           from: 'users',
           localField: '_id',
-          foreignField: '_id',
+          foreignField: 'email',
           as: 'user'
         }
       },
@@ -282,7 +282,7 @@ router.get('/monthly', async (req, res) => {
       },
       {
         $group: {
-          _id: '$userId',
+          _id: '$email',
           totalScore: { $sum: '$score' },
           highScore: { $max: '$score' },
           gamesWon: { $sum: 1 },
@@ -293,7 +293,7 @@ router.get('/monthly', async (req, res) => {
         $lookup: {
           from: 'users',
           localField: '_id',
-          foreignField: '_id',
+          foreignField: 'email',
           as: 'user'
         }
       },

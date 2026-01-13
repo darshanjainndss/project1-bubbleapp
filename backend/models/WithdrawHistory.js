@@ -6,10 +6,6 @@ const withdrawHistorySchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    userId: { // Kept for reference but not primary link
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
     reward: { // Renamed from scoreEarning
         type: Number,
         required: true

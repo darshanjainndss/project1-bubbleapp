@@ -66,7 +66,7 @@ const handleValidationErrors = (req, res, next) => {
 // @access  Private
 router.get('/profile', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
+    const user = req.user;
 
     if (!user) {
       return res.status(404).json({
@@ -106,7 +106,7 @@ router.put('/profile', auth, [
   try {
     const { displayName, profilePicture } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -156,7 +156,7 @@ router.get('/game-data', auth, async (req, res) => {
     }
 
     // Get user's rank
-    const rank = await User.getUserRank(req.userId);
+    const rank = await User.getUserRank(user.email);
 
     const gameData = user.getGameData();
     gameData.rank = rank;
@@ -186,7 +186,7 @@ router.get('/game-data', auth, async (req, res) => {
 // @access  Private
 router.put('/game-data', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = req.user;
 
     if (!user) {
       return res.status(404).json({
@@ -228,7 +228,7 @@ router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (r
   try {
     const { amount, operation, isAdReward } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -298,7 +298,7 @@ router.put('/abilities', auth, validateAbilitiesUpdate, handleValidationErrors, 
   try {
     const { abilities } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -307,8 +307,8 @@ router.put('/abilities', auth, validateAbilitiesUpdate, handleValidationErrors, 
     }
 
     // Update abilities
-    const Ability = require('../models/Ability');
-    const activeAbilities = await Ability.find({ isActive: true }).select('name');
+    const ShopItem = require('../models/ShopItem');
+    const activeAbilities = await ShopItem.find({ type: 'ability', isActive: true }).select('name');
     const activeAbilityNames = activeAbilities.map(a => a.name);
 
     Object.keys(abilities).forEach(ability => {
@@ -348,7 +348,7 @@ router.post('/purchase-abilities', auth, [
   try {
     const { ability, quantity } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -361,8 +361,8 @@ router.post('/purchase-abilities', auth, [
       await user.initializeUserAbilities();
     }
 
-    const Ability = require('../models/Ability');
-    const abilityDoc = await Ability.findOne({ name: ability, isActive: true });
+    const ShopItem = require('../models/ShopItem');
+    const abilityDoc = await ShopItem.findOne({ name: ability, type: 'ability', isActive: true });
 
     if (!abilityDoc) {
       return res.status(404).json({
@@ -371,7 +371,7 @@ router.post('/purchase-abilities', auth, [
       });
     }
 
-    const totalCost = abilityDoc.price * quantity;
+    const totalCost = abilityDoc.priceCoins * quantity;
 
     // Check if user has enough coins
     if (user.gameData.totalCoins < totalCost) {
@@ -413,7 +413,7 @@ router.post('/purchase-abilities', auth, [
 // @access  Private
 router.get('/rank', auth, async (req, res) => {
   try {
-    const rank = await User.getUserRank(req.userId);
+    const rank = await User.getUserRank(req.userEmail);
 
     if (rank === null) {
       return res.status(404).json({
@@ -441,7 +441,7 @@ router.get('/rank', auth, async (req, res) => {
 // @access  Private
 router.get('/stats', auth, async (req, res) => {
   try {
-    const stats = await GameSession.getUserStats(req.userId);
+    const stats = await GameSession.getUserStats(req.userEmail);
 
     res.json({
       success: true,
@@ -462,7 +462,7 @@ router.get('/stats', auth, async (req, res) => {
 // @access  Private
 router.get('/debug-abilities', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,

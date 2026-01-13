@@ -88,7 +88,7 @@ router.post('/progress', auth, async (req, res) => {
     } = req.body;
 
     // Get user
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -105,10 +105,13 @@ router.post('/progress', auth, async (req, res) => {
     const isActuallyComplete = isPartial === false || isPartial === 'false';
 
     if (isActuallyComplete) {
-      // Use consistent star threshold: 1=100, 2=400, 3=800
-      const calculatedStars = score >= 800 ? 3 : score >= 400 ? 2 : score >= 100 ? 1 : 0;
+      const config = await GameConfig.getConfig();
+      const thresholds = config?.starThresholds || { one: 100, two: 400, three: 800 };
 
-      console.log(`📊 Permanent Progress Update: level=${level}, score=${score}, stars_body=${stars}, stars_calc=${calculatedStars}`);
+      // Use star threshold from DB
+      const calculatedStars = score >= thresholds.three ? 3 : score >= thresholds.two ? 2 : score >= thresholds.one ? 1 : 0;
+
+      console.log(`📊 Permanent Progress Update: email=${user.email}, score=${score}, stars_body=${stars}, stars_calc=${calculatedStars}`);
 
       // Update level stars if this is better than previous attempt
       const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
@@ -119,12 +122,6 @@ router.post('/progress', auth, async (req, res) => {
         if (!user.gameData.completedLevels.includes(level)) {
           user.gameData.completedLevels.push(level);
         }
-      }
-
-      // Update high score if this is better
-      const currentHighScore = Number(user.gameData.highScore) || 0;
-      if (score > currentHighScore) {
-        user.gameData.highScore = score;
       }
 
       // Check if next level should be unlocked (2+ stars required)
@@ -141,7 +138,6 @@ router.post('/progress', auth, async (req, res) => {
       message: 'Progress updated successfully',
       updatedGameData: {
         totalScore: Number(user.gameData.totalScore) || 0,
-        highScore: Number(user.gameData.highScore) || 0,
         totalCoins: Number(user.gameData.totalCoins) || 0,
         currentLevel: Number(user.gameData.currentLevel) || 1,
         completedLevels: user.gameData.completedLevels,
@@ -178,7 +174,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     } = req.body;
 
     // Get user
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -190,7 +186,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
 
     // Create game session
     const gameSession = new GameSession({
-      userId: req.userId,
+      email: user.email,
       level,
       score,
       moves,
@@ -272,35 +268,30 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       user.gameData.achievements.push(...newAchievements);
     }
 
-    // Handle level rewards (one-time per level)
-    let levelRewardCoins = 0;
+    // Handle level rewards (one-time per level) - Only for withdrawal tracking
     let levelRewardAwarded = false;
 
     if (isWin && stars >= 2) {
-      // Check if user already received reward for this level (using RewardHistory linked by email)
+      const config = await GameConfig.getConfig();
+
+      // Check if user already received reward for this level
       const existingReward = await RewardHistory.findOne({
         email: user.email,
         level: level,
-        status: { $in: ['claimed', 'withdrawn'] } // Check any status
+        status: { $in: ['claimed', 'withdrawn'] }
       });
 
       if (!existingReward) {
-        // Calculate reward based on stars
-        if (stars === 3) levelRewardCoins = 15;
-        else if (stars === 2) levelRewardCoins = 10;
-        else levelRewardCoins = 0;
-
-        const config = await GameConfig.getConfig();
-        const scoreRange = config ? config.scoreRange || 100 : 100;
-        const rewardPerRange = config ? parseFloat(config.reward.toString()) || 1 : 1;
+        // Calculate withdrawal reward based on score
+        const scoreRange = config?.scoreRange || 100;
+        const rewardPerRange = config?.rewardPerRange ? parseFloat(config.rewardPerRange.toString()) : 1;
         const rewardValue = (score / scoreRange) * rewardPerRange;
 
         const rewardHistory = new RewardHistory({
-          userId: req.userId,
           email: user.email,
           level: level,
           reward: rewardValue,
-          coins: levelRewardCoins,
+          coins: config.coinsPerLevel || 10,
           stars: stars,
           score: score,
           status: 'claimed',
@@ -308,9 +299,8 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
         });
 
         await rewardHistory.save();
-        user.gameData.totalCoins = (Number(user.gameData.totalCoins) || 0) + levelRewardCoins;
         levelRewardAwarded = true;
-        console.log(`🎁 Reward Saved: Level=${level}, Coins=${levelRewardCoins}, Bolt=${rewardValue}`);
+        console.log(`🎁 Reward Saved: Level=${level}, WithdrawalReward=${rewardValue}, Coins=${config.coinsPerLevel}`);
       } else {
         console.log(`ℹ️ Reward already claimed for Level ${level}`);
       }
@@ -325,7 +315,6 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       coinsEarned,
       levelReward: levelRewardAwarded ? {
         awarded: true,
-        coins: levelRewardCoins,
         stars: stars,
         level: level
       } : null,
@@ -358,7 +347,7 @@ router.get('/sessions', auth, async (req, res) => {
   try {
     const { page = 1, limit = 20, level } = req.query;
 
-    const query = { userId: req.userId };
+    const query = { email: req.user.email };
     if (level) {
       query.level = parseInt(level);
     }
@@ -427,7 +416,7 @@ router.get('/level/:level/best-score', auth, async (req, res) => {
     const { level } = req.params;
 
     const bestScore = await GameSession.getUserBestScore(
-      req.userId,
+      req.user.email,
       parseInt(level)
     );
 

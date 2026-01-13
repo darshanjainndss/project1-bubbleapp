@@ -233,7 +233,7 @@ class ConfigService {
             starBonusLevelMultiplier: 0.5,
             completionBonusMultiplier: 1.2,
             scoreRange: 100,
-            reward: 1
+            rewardPerRange: 1
           },
           platform: platform,
           rewardAmount: 50
@@ -252,7 +252,7 @@ class ConfigService {
           starBonusLevelMultiplier: 0.5,
           completionBonusMultiplier: 1.2,
           scoreRange: 100,
-          reward: 1
+          rewardPerRange: 1
         },
         platform: Platform.OS as 'android' | 'ios',
         rewardAmount: 50
@@ -501,33 +501,7 @@ class ConfigService {
     }
   }
 
-  async initializeAbilities(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const result = await BackendService.initializeAbilities();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error initializing abilities:', error);
-      return { success: false, error: 'Failed to initialize abilities' };
-    }
-  }
 
-  async resetAbilities(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const result = await BackendService.resetAbilities();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error resetting abilities:', error);
-      return { success: false, error: 'Failed to reset abilities' };
-    }
-  }
 
   // ============================================================================
   // AD CONFIG MANAGEMENT METHODS
@@ -608,33 +582,7 @@ class ConfigService {
     }
   }
 
-  async initializeAdConfigs(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const result = await BackendService.initializeAdConfigs();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error initializing ad configs:', error);
-      return { success: false, error: 'Failed to initialize ad configurations' };
-    }
-  }
 
-  async resetAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const result = await BackendService.resetAdConfigs();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error resetting ad configs:', error);
-      return { success: false, error: 'Failed to reset ad configurations' };
-    }
-  }
 
   // ============================================================================
   // AD UNIT MANAGEMENT METHODS
@@ -742,19 +690,7 @@ class ConfigService {
     }
   }
 
-  async resetAdUnits(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const result = await BackendService.resetAdUnits();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error resetting ad units:', error);
-      return { success: false, error: 'Failed to reset ad units' };
-    }
-  }
+
 }
 
 export default new ConfigService();

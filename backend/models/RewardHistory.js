@@ -6,10 +6,6 @@ const rewardHistorySchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    userId: { // Kept for reference but not primary link
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
     level: {
         type: Number,
         required: true

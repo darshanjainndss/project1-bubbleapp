@@ -1,5 +1,5 @@
 const express = require('express');
-const Ability = require('../models/Ability');
+const ShopItem = require('../models/ShopItem');
 const AdConfig = require('../models/AdConfig');
 const AdUnit = require('../models/AdUnit');
 const GameConfig = require('../models/GameConfig');
@@ -15,9 +15,20 @@ const router = express.Router();
 // @access  Public
 router.get('/abilities', async (req, res) => {
   try {
-    const abilities = await Ability.getActiveAbilities();
+    const abilities = await ShopItem.getActiveAbilities();
 
-    const abilitiesData = abilities.map(ability => ability.toPublic());
+    const abilitiesData = abilities.map(ability => ({
+      id: ability._id,
+      name: ability.name,
+      displayName: ability.displayName,
+      description: ability.description,
+      icon: ability.icon,
+      effect: ability.abilityMetadata?.effect,
+      pointsPerBubble: ability.abilityMetadata?.pointsPerBubble,
+      price: ability.priceCoins,
+      startingCount: ability.abilityMetadata?.startingCount || 2,
+      sortOrder: ability.sortOrder
+    }));
 
     res.json({
       success: true,
@@ -40,7 +51,7 @@ router.get('/abilities/:name', async (req, res) => {
   try {
     const { name } = req.params;
 
-    const ability = await Ability.getAbilityByName(name);
+    const ability = await ShopItem.getAbilityByName(name);
 
     if (!ability) {
       return res.status(404).json({
@@ -51,7 +62,18 @@ router.get('/abilities/:name', async (req, res) => {
 
     res.json({
       success: true,
-      ability: ability.toPublic()
+      ability: {
+        id: ability._id,
+        name: ability.name,
+        displayName: ability.displayName,
+        description: ability.description,
+        icon: ability.icon,
+        effect: ability.abilityMetadata?.effect,
+        pointsPerBubble: ability.abilityMetadata?.pointsPerBubble,
+        price: ability.priceCoins,
+        startingCount: ability.abilityMetadata?.startingCount || 2,
+        sortOrder: ability.sortOrder
+      }
     });
   } catch (error) {
     console.error('Error fetching ability config:', error);
@@ -118,13 +140,24 @@ router.get('/game', async (req, res) => {
 
     // Fetch abilities and ad config in parallel
     const [abilities, adConfig, rewardedAds, gameSettings] = await Promise.all([
-      Ability.getActiveAbilities(),
+      ShopItem.getActiveAbilities(),
       AdConfig.getConfigForPlatform(platform),
       AdUnit.find({ platform, adType: 'rewarded', isActive: true }).sort({ priority: 1 }),
       GameConfig.getConfig()
     ]);
 
-    const abilitiesData = abilities.map(ability => ability.toPublic());
+    const abilitiesData = abilities.map(ability => ({
+      id: ability._id,
+      name: ability.name,
+      displayName: ability.displayName,
+      description: ability.description,
+      icon: ability.icon,
+      effect: ability.abilityMetadata?.effect,
+      pointsPerBubble: ability.abilityMetadata?.pointsPerBubble,
+      price: ability.priceCoins,
+      startingCount: ability.abilityMetadata?.startingCount || 2,
+      sortOrder: ability.sortOrder
+    }));
 
     // Get reward amount from first active rewarded ad unit, fallback to 50
     const rewardAmount = rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50;
@@ -135,20 +168,16 @@ router.get('/game', async (req, res) => {
         abilities: abilitiesData,
         ads: adConfig,
         gameSettings: gameSettings ? {
-          ...(gameSettings.winningRewards?.toObject ? gameSettings.winningRewards.toObject() : gameSettings.winningRewards),
-          scoreRange: (gameSettings.scoreRange !== undefined && gameSettings.scoreRange !== null) ? (Number(gameSettings.scoreRange) || 100) : 100,
-          reward: (gameSettings.reward !== undefined && gameSettings.reward !== null)
-            ? (parseFloat(gameSettings.reward.toString() === '[object Object]' ? gameSettings.reward.$numberDecimal : gameSettings.reward.toString()) || 0)
-            : 0
+          coinsPerLevel: gameSettings.coinsPerLevel || 10,
+          starThresholds: gameSettings.starThresholds || { one: 100, two: 400, three: 800 },
+          scoreRange: gameSettings.scoreRange || 100,
+          rewardPerRange: gameSettings.rewardPerRange ? parseFloat(gameSettings.rewardPerRange.toString()) : 1
         } : {
-          // Default fallbacks if no config in DB (but not seeding it)
-          baseCoins: 10,
-          coinsPerLevelMultiplier: 2.5,
-          starBonusBase: 5,
-          starBonusLevelMultiplier: 0.5,
-          completionBonusMultiplier: 1.2,
+          // Default fallbacks if no config in DB
+          coinsPerLevel: 10,
+          starThresholds: { one: 100, two: 400, three: 800 },
           scoreRange: 100,
-          reward: 1
+          rewardPerRange: 1
         },
         platform,
         rewardAmount
@@ -169,7 +198,7 @@ router.get('/game', async (req, res) => {
 // @access  Public (In production this should be protected)
 router.post('/game', async (req, res) => {
   try {
-    const { scoreRange, reward, winningRewards } = req.body;
+    const { coinsPerLevel, scoreRange, rewardPerRange, starThresholds } = req.body;
 
     let config = await GameConfig.findOne({ key: 'default' });
 
@@ -177,15 +206,10 @@ router.post('/game', async (req, res) => {
       config = new GameConfig({ key: 'default' });
     }
 
+    if (coinsPerLevel !== undefined) config.coinsPerLevel = coinsPerLevel;
     if (scoreRange !== undefined) config.scoreRange = scoreRange;
-    if (reward !== undefined) config.reward = reward;
-
-    if (winningRewards) {
-      config.winningRewards = {
-        ...config.winningRewards,
-        ...winningRewards
-      };
-    }
+    if (rewardPerRange !== undefined) config.rewardPerRange = rewardPerRange;
+    if (starThresholds !== undefined) config.starThresholds = starThresholds;
 
     await config.save();
 
@@ -193,11 +217,10 @@ router.post('/game', async (req, res) => {
       success: true,
       message: 'Game configuration updated successfully',
       config: {
-        ...config.winningRewards,
-        scoreRange: (config.scoreRange !== undefined && config.scoreRange !== null) ? (Number(config.scoreRange) || 100) : 100,
-        reward: (config.reward !== undefined && config.reward !== null)
-          ? (parseFloat(config.reward.toString() === '[object Object]' ? config.reward.$numberDecimal : config.reward.toString()) || 0)
-          : 0
+        coinsPerLevel: config.coinsPerLevel,
+        starThresholds: config.starThresholds,
+        scoreRange: config.scoreRange,
+        rewardPerRange: config.rewardPerRange ? parseFloat(config.rewardPerRange.toString()) : 1
       }
     });
   } catch (error) {

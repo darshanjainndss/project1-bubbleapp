@@ -11,7 +11,7 @@ const router = express.Router();
 router.get('/history', auth, async (req, res) => {
     try {
         const { limit = 50 } = req.query;
-        const user = await User.findById(req.userId);
+        const user = req.user;
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
@@ -50,7 +50,7 @@ router.get('/history', auth, async (req, res) => {
 router.get('/level/:level', auth, async (req, res) => {
     try {
         const { level } = req.params;
-        const user = await User.findById(req.userId);
+        const user = req.user;
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
@@ -82,7 +82,7 @@ router.get('/level/:level', auth, async (req, res) => {
 // @access  Private
 router.get('/stats', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = req.user;
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }

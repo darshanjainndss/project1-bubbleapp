@@ -59,6 +59,23 @@ const shopItemSchema = new mongoose.Schema({
         }
     ],
 
+    // Ability-specific metadata (for type='ability')
+    abilityMetadata: {
+        effect: {
+            type: String,
+            enum: ['destroyRow', 'destroyNeighbors', 'freezeColumn', 'burnObstacles']
+        },
+        pointsPerBubble: {
+            type: Number,
+            min: 1
+        },
+        startingCount: {
+            type: Number,
+            default: 2,
+            min: 0
+        }
+    },
+
     // Coin rewards (for coin packs)
     coinReward: {
         type: Number,
@@ -95,5 +112,19 @@ shopItemSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
     next();
 });
+
+// Static methods for ability queries
+shopItemSchema.statics.getActiveAbilities = function () {
+    return this.find({ type: 'ability', isActive: true }).sort({ sortOrder: 1, name: 1 });
+};
+
+shopItemSchema.statics.getAbilityByName = function (name) {
+    return this.findOne({ name, type: 'ability', isActive: true });
+};
+
+shopItemSchema.statics.getAbilityPrice = async function (abilityName) {
+    const ability = await this.findOne({ name: abilityName, type: 'ability', isActive: true });
+    return ability ? ability.priceCoins : 0;
+};
 
 module.exports = mongoose.model('ShopItem', shopItemSchema);

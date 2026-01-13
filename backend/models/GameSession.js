@@ -12,10 +12,10 @@ const gameSessionSchema = new mongoose.Schema({
   },
 
   // User reference
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+  email: {
+    type: String,
+    required: true,
+    index: true
   },
 
   // Game details
@@ -110,15 +110,15 @@ const gameSessionSchema = new mongoose.Schema({
 });
 
 // Indexes for better performance
-gameSessionSchema.index({ userId: 1, completedAt: -1 });
+gameSessionSchema.index({ email: 1, completedAt: -1 });
 gameSessionSchema.index({ level: 1, score: -1 });
 gameSessionSchema.index({ completedAt: -1 });
 gameSessionSchema.index({ sessionId: 1 });
 
 // Static method to get user's best score for a level
-gameSessionSchema.statics.getUserBestScore = async function (userId, level) {
+gameSessionSchema.statics.getUserBestScore = async function (email, level) {
   const result = await this.findOne({
-    userId: userId,
+    email: email,
     level: level,
     isWin: true
   }).sort({ score: -1 });
@@ -127,14 +127,14 @@ gameSessionSchema.statics.getUserBestScore = async function (userId, level) {
 };
 
 // Static method to get user's game statistics
-gameSessionSchema.statics.getUserStats = async function (userId) {
+gameSessionSchema.statics.getUserStats = async function (email) {
   const stats = await this.aggregate([
     {
-      $match: { userId: new mongoose.Types.ObjectId(userId) }
+      $match: { email: email }
     },
     {
       $group: {
-        _id: '$userId',
+        _id: '$email',
         totalGames: { $sum: 1 },
         totalWins: { $sum: { $cond: ['$isWin', 1, 0] } },
         totalScore: { $sum: '$score' },
@@ -217,7 +217,7 @@ gameSessionSchema.statics.getLevelLeaderboard = async function (level, limit = 5
       $lookup: {
         from: 'users',
         localField: '_id',
-        foreignField: '_id',
+        foreignField: 'email',
         as: 'user'
       }
     },
@@ -226,7 +226,7 @@ gameSessionSchema.statics.getLevelLeaderboard = async function (level, limit = 5
     },
     {
       $project: {
-        userId: '$_id',
+        email: '$_id',
         displayName: '$user.displayName',
         profilePicture: '$user.profilePicture',
         score: '$bestScore',
@@ -243,50 +243,17 @@ gameSessionSchema.statics.getLevelLeaderboard = async function (level, limit = 5
   ]);
 };
 
-// Instance method to calculate coins earned
+// Instance method to calculate coins earned - Simple fixed amount per level
 gameSessionSchema.methods.calculateCoinsEarned = async function () {
   const GameConfig = require('./GameConfig');
   const config = await GameConfig.getConfig();
-  const rewards = config.winningRewards;
 
   let coins = 0;
 
-  // Base coins for completing the level
+  // Simple: Fixed coins per level completion (default 10)
   if (this.isWin) {
-    // Formula: Base + (Level * Multiplier)
-    const levelBonus = Math.floor(this.level * (rewards.coinsPerLevelMultiplier || 0));
-    coins += (rewards.baseCoins || 0) + levelBonus;
-
-    // Bonus coins based on stars
-    // Formula: Stars * (Base + (Level * Multiplier))
-    const starLevelBonus = Math.floor(this.level * (rewards.starBonusLevelMultiplier || 0));
-    const starTotalPerStar = (rewards.starBonusBase || 0) + starLevelBonus;
-    coins += this.stars * starTotalPerStar;
-
-    // Completion Bonus
-    // Formula: Level * Multiplier
-    const completionBonus = Math.floor(this.level * (rewards.completionBonusMultiplier || 0));
-    coins += completionBonus;
-
-    // Bonus for perfect game (no abilities used)
-    const totalAbilities = Object.values(this.abilitiesUsed).reduce((sum, count) => sum + count, 0);
-    if (totalAbilities === 0) {
-      coins += 15; // Still keeping a small fixed bonus for perfect game or should add to config?
-      // For now keeping it fixed or we can add it to config, but user didn't specify.
-    }
-
-    // Score-based bonus reward
-    // Formula: (Score / scoreRange) * reward
-    // The user example: if score is 100 and scoreRange is 100, then (100/100) * reward
-    if ((config.scoreRange || 100) > 0) {
-      const rewardValue = config.reward ? parseFloat(config.reward.toString()) : 0;
-      const scoreReward = (this.score / (config.scoreRange || 100)) * rewardValue;
-      coins += scoreReward;
-    }
+    coins = config?.coinsPerLevel || 10;
   }
-
-  // Ensure integer
-  coins = Math.floor(coins);
 
   this.coinsEarned = coins;
   return coins;

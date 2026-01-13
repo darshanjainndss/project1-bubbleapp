@@ -881,28 +881,21 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
 
   // Calculate game results outside modal for accessibility
   const earnedStars = score >= 800 ? 3 : score >= 400 ? 2 : score >= 100 ? 1 : 0;
-  
-  // Coin calculation - Give rewards based on stars earned, not just win/loss
-  const baseCoinsBase = gameSettings?.baseCoins || 50;
-  const coinsPerLevelMultiplier = gameSettings?.coinsPerLevelMultiplier || 10;
-  const starBonusBase = gameSettings?.starBonusBase || 20;
-  const starBonusLevelMultiplier = gameSettings?.starBonusLevelMultiplier || 5;
-  const completionBonusMultiplier = gameSettings?.completionBonusMultiplier || 5;
-  const scoreRangeValue = gameSettings?.scoreRange || 100;
-  const rewardValuePerRange = gameSettings?.reward ? parseFloat(gameSettings.reward.toString()) : 10;
 
-  const levelBonus = Math.floor(level * coinsPerLevelMultiplier);
-  const base = baseCoinsBase + levelBonus;
-  const starLevelBonus = Math.floor(level * starBonusLevelMultiplier);
-  const starTotalPerStar = starBonusBase + starLevelBonus;
-  const starBonusAmount = earnedStars * starTotalPerStar;
-  const completionBonusAward = Math.floor(level * completionBonusMultiplier);
+  // Coin calculation - Strictly use DB values as requested
+  const coinsPerLevel = gameSettings?.coinsPerLevel || 10;
+  const scoreRangeValue = gameSettings?.scoreRange || 100;
+  const rewardValuePerRange = gameSettings?.rewardPerRange ? parseFloat(gameSettings.rewardPerRange.toString()) : 1;
+
+  // Withdrawal Reward (SHIB) calculation
   const earnedRewardValue = (score / scoreRangeValue) * rewardValuePerRange;
-  
-  // Give coins based on stars earned, not just win/loss
-  const shouldGiveRewards = earnedStars > 0; // Give rewards if any stars earned
-  const totalCoinsEarned = shouldGiveRewards ? Math.floor(base + starBonusAmount + completionBonusAward + earnedRewardValue) : 0;
-  const levelBonusCoins = shouldGiveRewards && earnedStars >= 2 ? (earnedStars === 3 ? 15 : 10) : 0;
+
+  // In-Game Coins Reward - "Only coins perlevel should be fetch from mdb and that much only be give"
+  const shouldGiveRewards = earnedStars > 0;
+  const totalCoinsEarned = shouldGiveRewards ? coinsPerLevel : 0;
+
+  // Bonus coins for UI display purposes (if needed, but strictly part of totalCoinsEarned now)
+  const levelBonusCoins = 0;
 
   // Debug coin calculation
   if (gameState !== 'playing') {
@@ -910,11 +903,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
       score,
       earnedStars,
       gameState,
-      baseCoinsBase,
-      levelBonus,
-      base,
-      starBonusAmount,
-      completionBonusAward,
+      coinsPerLevel,
       earnedRewardValue,
       totalCoinsEarned,
       levelBonusCoins
@@ -1096,17 +1085,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
                             +{earnedRewardValue.toFixed(2)} REWARD
                           </Text>
                         </View>
-                        <View style={styles.modalCoins}>
-                          <MaterialIcon
-                            name="monetization-on"
-                            family="material"
-                            size={24}
-                            color="#FFD700"
-                          />
-                          <Text style={[styles.modalCoinsText, { color: '#FFD700' }]}>
-                            +{levelBonusCoins} BONUS
-                          </Text>
-                        </View>
+
                       </>
                     )}
                   </View>
@@ -1139,7 +1118,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
                         // Always submit session data if stars were earned, regardless of win/loss
                         const shouldSubmitSession = earnedStars > 0 || gameState === 'won';
                         const isWin = gameState === 'won' || earnedStars >= 2; // Consider 2+ stars as a win for progression
-                        
+
                         console.log('🔍 Home button - session submission check:', {
                           gameState,
                           earnedStars,

@@ -9,38 +9,30 @@ const gameConfigSchema = new mongoose.Schema({
         unique: true
     },
 
-    // Winning Rewards Configuration
-    winningRewards: {
-        baseCoins: {
-            type: Number,
-            default: 10
-        },
-        coinsPerLevelMultiplier: {
-            type: Number,
-            default: 2.5
-        },
-        starBonusBase: {
-            type: Number,
-            default: 5
-        },
-        starBonusLevelMultiplier: {
-            type: Number,
-            default: 0.5
-        },
-        completionBonusMultiplier: {
-            type: Number,
-            default: 1.2
-        }
+    // Simple coin reward per level completion
+    coinsPerLevel: {
+        type: Number,
+        default: 10,
+        required: true
     },
 
-    // Score-based rewards
+    // Star thresholds for scoring
+    starThresholds: {
+        one: { type: Number, default: 100, required: true },
+        two: { type: Number, default: 400, required: true },
+        three: { type: Number, default: 800, required: true }
+    },
+
+    // Withdrawal reward calculation
     scoreRange: {
         type: Number,
-        default: 100
+        default: 100,
+        required: true
     },
-    reward: {
+    rewardPerRange: {
         type: mongoose.Schema.Types.Decimal128,
-        default: 1
+        default: 1,
+        required: true
     },
 
     // Metadata
