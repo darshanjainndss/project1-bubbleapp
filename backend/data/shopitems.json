@@ -4,8 +4,8 @@
         "displayName": "Lightning Pack (10x)",
         "description": "Get 10 Lightning abilities to blast through levels!",
         "type": "bundle",
-        "icon": "flash",
-        "color": "#FFD600",
+        "icon": "flash-on",
+        "color": "#FFD700",
         "priceCoins": 200,
         "priceMoney": 100,
         "currency": "INR",
@@ -164,12 +164,112 @@
         }
     },
     {
+        "name": "coin_pack_100",
+        "displayName": "Starter Coins",
+        "description": "Get 100 coins to start your adventure!",
+        "type": "coin_pack",
+        "icon": "monetization-on",
+        "color": "#FFD700",
+        "priceCoins": 0,
+        "priceMoney": 29,
+        "currency": "INR",
+        "coinReward": 100,
+        "isActive": true,
+        "sortOrder": 30,
+        "createdAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        }
+    },
+    {
+        "name": "coin_pack_500",
+        "displayName": "Power Coins",
+        "description": "Get 500 coins for serious gaming!",
+        "type": "coin_pack",
+        "icon": "monetization-on",
+        "color": "#FFD700",
+        "priceCoins": 0,
+        "priceMoney": 99,
+        "currency": "INR",
+        "coinReward": 500,
+        "isActive": true,
+        "sortOrder": 31,
+        "createdAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        }
+    },
+    {
+        "name": "coin_pack_1200_popular",
+        "displayName": "Mega Coins",
+        "description": "Get 1200 coins - Best Value!",
+        "type": "coin_pack",
+        "icon": "monetization-on",
+        "color": "#FFD700",
+        "priceCoins": 0,
+        "priceMoney": 199,
+        "currency": "INR",
+        "coinReward": 1200,
+        "isActive": true,
+        "sortOrder": 32,
+        "createdAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        }
+    },
+    {
+        "name": "coin_pack_3000",
+        "displayName": "Ultimate Coins",
+        "description": "Get 3000 coins for unlimited power!",
+        "type": "coin_pack",
+        "icon": "monetization-on",
+        "color": "#FFD700",
+        "priceCoins": 0,
+        "priceMoney": 399,
+        "currency": "INR",
+        "coinReward": 3000,
+        "isActive": true,
+        "sortOrder": 33,
+        "createdAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        }
+    },
+    {
+        "name": "coin_pack_7500",
+        "displayName": "Champion Coins",
+        "description": "Get 7500 coins - For true champions!",
+        "type": "coin_pack",
+        "icon": "monetization-on",
+        "color": "#FFD700",
+        "priceCoins": 0,
+        "priceMoney": 799,
+        "currency": "INR",
+        "coinReward": 7500,
+        "isActive": true,
+        "sortOrder": 34,
+        "createdAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        },
+        "updatedAt": {
+            "$date": "2026-01-13T04:45:00.000Z"
+        }
+    },
+    {
         "name": "ability_lightning",
         "displayName": "Lightning",
         "description": "Destroys an entire row of bubbles",
         "type": "ability",
-        "icon": "flash",
-        "color": "#00E0FF",
+        "icon": "flash-on",
+        "color": "#FFD700",
         "priceCoins": 58,
         "priceMoney": 0,
         "currency": "INR",
@@ -218,8 +318,8 @@
         "displayName": "Freeze",
         "description": "Freezes a column for easier targeting",
         "type": "ability",
-        "icon": "snowflake",
-        "color": "#00FFFF",
+        "icon": "ac-unit",
+        "color": "#00BFFF",
         "priceCoins": 30,
         "priceMoney": 0,
         "currency": "INR",
@@ -243,7 +343,7 @@
         "displayName": "Fire",
         "description": "Burns through obstacles and metal bubbles",
         "type": "ability",
-        "icon": "fire",
+        "icon": "whatshot",
         "color": "#FF6600",
         "priceCoins": 40,
         "priceMoney": 0,

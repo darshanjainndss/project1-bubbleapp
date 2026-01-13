@@ -23,16 +23,16 @@ router.get('/', async (req, res) => {
 router.post('/initialize', async (req, res) => {
     try {
         const defaultItems = [
-            // Combos
+            // 10x Ability Packs
             {
                 name: 'combo_lightning_10',
                 displayName: 'Lightning Pack (10x)',
-                description: 'Get 10 Lightning abilities to blast through levels!',
+                description: 'Strike down your obstacles with 10 Lightning strikes!',
                 type: 'bundle',
-                icon: 'flash-on',
-                color: '#FFD600',
-                priceCoins: 200,
-                priceMoney: 100,
+                icon: 'flash',
+                color: '#FFD700',
+                priceCoins: 500,
+                priceMoney: 99,
                 currency: 'INR',
                 items: [{ abilityName: 'lightning', quantity: 10 }],
                 sortOrder: 1
@@ -40,60 +40,71 @@ router.post('/initialize', async (req, res) => {
             {
                 name: 'combo_bomb_10',
                 displayName: 'Bomb Pack (10x)',
-                description: 'Get 10 Bomb abilities for massive destruction!',
+                description: 'Explosive power! Set off 10 massive blasts!',
                 type: 'bundle',
-                icon: 'dangerous',
+                icon: 'bomb',
                 color: '#FF4444',
-                priceCoins: 300,
-                priceMoney: 150,
+                priceCoins: 650,
+                priceMoney: 129,
                 currency: 'INR',
                 items: [{ abilityName: 'bomb', quantity: 10 }],
                 sortOrder: 2
             },
             {
-                name: 'combo_all_abilities',
-                displayName: 'Ultimate Combo',
-                description: '5 of each ability: Lightning, Bomb, Freeze, and Fire!',
+                name: 'combo_freeze_10',
+                displayName: 'Freeze Pack (10x)',
+                description: 'Cool things down with 10 Freeze abilities!',
                 type: 'bundle',
-                icon: 'layers',
-                color: '#FF00FF',
-                priceCoins: 500,
-                priceMoney: 250,
+                icon: 'snowflake',
+                color: '#00BFFF',
+                priceCoins: 250,
+                priceMoney: 49,
                 currency: 'INR',
-                items: [
-                    { abilityName: 'lightning', quantity: 5 },
-                    { abilityName: 'bomb', quantity: 5 },
-                    { abilityName: 'freeze', quantity: 5 },
-                    { abilityName: 'fire', quantity: 5 }
-                ],
+                items: [{ abilityName: 'freeze', quantity: 10 }],
                 sortOrder: 3
             },
             {
-                name: 'combo_starter_pack',
-                displayName: 'Starter Pack',
-                description: '3 Lightning + 3 Freeze abilities for beginners!',
+                name: 'combo_fire_10',
+                displayName: 'Fire Pack (10x)',
+                description: 'Burn it all! Get 10 intense Fire abilities!',
                 type: 'bundle',
-                icon: 'card-giftcard',
-                color: '#00FFFF',
-                priceCoins: 150,
-                priceMoney: 75,
+                icon: 'fire',
+                color: '#FF6600',
+                priceCoins: 350,
+                priceMoney: 79,
                 currency: 'INR',
-                items: [
-                    { abilityName: 'lightning', quantity: 3 },
-                    { abilityName: 'freeze', quantity: 3 }
-                ],
+                items: [{ abilityName: 'fire', quantity: 10 }],
                 sortOrder: 4
             },
-            // Subscriptions
+            // All-In-One Pack
+            {
+                name: 'combo_all_abilities_10',
+                displayName: 'Mega All-Ability Pack',
+                description: 'The Ultimate Choice! 10 of EVERYTHING!',
+                type: 'bundle',
+                icon: 'diamond',
+                color: '#FF00FF',
+                priceCoins: 1500,
+                priceMoney: 299,
+                currency: 'INR',
+                items: [
+                    { abilityName: 'lightning', quantity: 10 },
+                    { abilityName: 'bomb', quantity: 10 },
+                    { abilityName: 'freeze', quantity: 10 },
+                    { abilityName: 'fire', quantity: 10 }
+                ],
+                sortOrder: 5
+            },
+            // Ad-Free Subscriptions
             {
                 name: 'sub_1_week',
-                displayName: 'Pro Week',
-                description: 'Enjoy 1 week of maintenance-free gaming with NO ADS!',
+                displayName: 'Weekly Ad-Free',
+                description: 'Gaming without interruptions! 1 week of NO ADS.',
                 type: 'subscription',
-                icon: 'calendar-today',
+                icon: 'calendar-outline',
                 color: '#00FF88',
                 priceCoins: 0,
-                priceMoney: 150,
+                priceMoney: 99,
                 currency: 'INR',
                 subscriptionDays: 7,
                 features: ['No Ads'],
@@ -101,70 +112,17 @@ router.post('/initialize', async (req, res) => {
             },
             {
                 name: 'sub_1_month',
-                displayName: 'Elite Month',
-                description: 'Ultimate 1 month subscription with NO ADS and daily bonus!',
+                displayName: 'Monthly Ad-Free',
+                description: 'The Best Value! A full month of NO ADS gaming.',
                 type: 'subscription',
-                icon: 'stars',
+                icon: 'crown',
                 color: '#FFD700',
                 priceCoins: 0,
-                priceMoney: 499,
+                priceMoney: 299,
                 currency: 'INR',
                 subscriptionDays: 30,
-                features: ['No Ads', 'Daily Bonus', '2x Coin Rewards'],
+                features: ['No Ads', 'Daily Bonus'],
                 sortOrder: 11
-            },
-            // Individual Abilities
-            {
-                name: 'ability_lightning',
-                displayName: 'Lightning',
-                description: 'Destroys an entire row',
-                type: 'ability',
-                icon: 'flash-on',
-                color: '#00E0FF',
-                priceCoins: 58,
-                priceMoney: 0,
-                currency: 'INR',
-                items: [{ abilityName: 'lightning', quantity: 1 }],
-                sortOrder: 20
-            },
-            {
-                name: 'ability_bomb',
-                displayName: 'Bomb',
-                description: 'Destroys neighboring bubbles',
-                type: 'ability',
-                icon: 'dangerous',
-                color: '#FF4444',
-                priceCoins: 75,
-                priceMoney: 0,
-                currency: 'INR',
-                items: [{ abilityName: 'bomb', quantity: 1 }],
-                sortOrder: 21
-            },
-            {
-                name: 'ability_freeze',
-                displayName: 'Freeze',
-                description: 'Freezes a column for easier targeting',
-                type: 'ability',
-                icon: 'ac-unit',
-                color: '#00FFFF',
-                priceCoins: 30,
-                priceMoney: 0,
-                currency: 'INR',
-                items: [{ abilityName: 'freeze', quantity: 1 }],
-                sortOrder: 22
-            },
-            {
-                name: 'ability_fire',
-                displayName: 'Fire',
-                description: 'Burns through obstacles and metal bubbles',
-                type: 'ability',
-                icon: 'local-fire-department',
-                color: '#FF6600',
-                priceCoins: 40,
-                priceMoney: 0,
-                currency: 'INR',
-                items: [{ abilityName: 'fire', quantity: 1 }],
-                sortOrder: 23
             }
         ];
 
@@ -221,7 +179,7 @@ router.post('/purchase', auth, async (req, res) => {
             // Handle ability rewards
             if (item.items && item.items.length > 0) {
                 console.log('🛒 Adding abilities from purchase:', item.items);
-                
+
                 // Initialize abilities if they don't exist
                 if (!user.gameData.abilities || user.gameData.abilities.size === 0) {
                     console.log('🛒 Initializing user abilities');
@@ -232,7 +190,7 @@ router.post('/purchase', auth, async (req, res) => {
                         user.gameData.abilities.set(ability, 2); // Default starting count
                     });
                 }
-                
+
                 item.items.forEach(bundleItem => {
                     const currentCount = user.gameData.abilities.get(bundleItem.abilityName) || 2;
                     const newCount = currentCount + bundleItem.quantity;
@@ -240,8 +198,8 @@ router.post('/purchase', auth, async (req, res) => {
                     console.log(`🛒 ${bundleItem.abilityName}: ${currentCount} + ${bundleItem.quantity} = ${newCount}`);
                 });
             }
-            
-            // Handle coin rewards (for coin packs)
+        } else if (item.type === 'coin_pack') {
+            // Handle coin pack rewards
             if (item.coinReward && item.coinReward > 0) {
                 user.gameData.totalCoins += item.coinReward;
                 console.log('🛒 Added coin reward:', item.coinReward);

@@ -20,7 +20,7 @@ const shopItemSchema = new mongoose.Schema({
     type: {
         type: String,
         required: true,
-        enum: ['ability', 'bundle', 'subscription']
+        enum: ['ability', 'bundle', 'subscription', 'coin_pack']
     },
     icon: {
         type: String,

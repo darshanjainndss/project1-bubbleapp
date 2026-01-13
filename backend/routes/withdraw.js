@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { ethers } = require('ethers');
 const auth = require('../middleware/auth');
 const RewardHistory = require('../models/RewardHistory');
 const WithdrawHistory = require('../models/WithdrawHistory');
@@ -12,12 +13,15 @@ router.post('/request', auth, async (req, res) => {
     try {
         const user = await User.findById(req.userId);
         if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
         }
 
-        // 1. Find all claimed rewards for this user
+        // 1. Find all claimed rewards for this user email (LINKING BY EMAIL)
         const claimedRewards = await RewardHistory.find({
-            userId: req.userId,
+            email: user.email,
             status: 'claimed'
         });
 
@@ -28,22 +32,47 @@ router.post('/request', auth, async (req, res) => {
             });
         }
 
-        // 2. Calculate total score earnings from these rewards
-        const totalScoreEarning = claimedRewards.reduce((sum, r) => sum + (r.reward || r.scoreEarning || 0), 0);
+        // 2. Calculate total score earnings
+        const totalScoreEarning = claimedRewards.reduce(
+            (sum, r) => sum + (r.reward || r.scoreEarning || 0),
+            0
+        );
 
-        // 3. Create WithdrawHistory entry
+        // 3. Wallet address validation
+        const { walletAddress } = req.body;
+
+        if (!walletAddress) {
+            return res.status(400).json({
+                success: false,
+                message: 'Wallet address is required'
+            });
+        }
+
+        // Using ethers.isAddress as requested
+        const isValidWallet = ethers.isAddress(walletAddress);
+
+        if (!isValidWallet) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Ethereum wallet address'
+            });
+        }
+
+        // 4. Create WithdrawHistory entry (LINKING BY EMAIL)
         const withdrawRequest = new WithdrawHistory({
-            userId: req.userId,
             email: user.email,
-            reward: totalScoreEarning, // Renamed from scoreEarning
+            userId: user._id, // Optional ref
+            reward: totalScoreEarning,
             status: 'pending',
+            walletAddress,
+            token: 'SHIB',
             date: new Date(),
             createdDate: new Date()
         });
 
         await withdrawRequest.save();
 
-        // 4. Update status of relevant RewardHistory entries
+        // 5. Update RewardHistory status using IDs found earlier
         await RewardHistory.updateMany(
             { _id: { $in: claimedRewards.map(r => r._id) } },
             {
@@ -61,16 +90,24 @@ router.post('/request', auth, async (req, res) => {
 
     } catch (error) {
         console.error('Withdraw request error:', error);
-        res.status(500).json({ success: false, message: 'Server error during withdrawal' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error during withdrawal'
+        });
     }
 });
 
 // @route   GET /api/withdraw/reward-history
-// @desc    Get user's reward history from RewardHistory collection only
+// @desc    Get user's reward history using email
 // @access  Private
 router.get('/reward-history', auth, async (req, res) => {
     try {
-        const history = await RewardHistory.find({ userId: req.userId })
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const history = await RewardHistory.find({ email: user.email })
             .sort({ date: -1 });
 
         res.json({
@@ -84,11 +121,16 @@ router.get('/reward-history', auth, async (req, res) => {
 });
 
 // @route   GET /api/withdraw/withdraw-history
-// @desc    Get user's withdrawal history from WithdrawHistory collection only
+// @desc    Get user's withdrawal history using email
 // @access  Private
 router.get('/withdraw-history', auth, async (req, res) => {
     try {
-        const history = await WithdrawHistory.find({ userId: req.userId })
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const history = await WithdrawHistory.find({ email: user.email })
             .sort({ date: -1 });
 
         res.json({

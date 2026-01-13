@@ -1,5 +1,6 @@
 const express = require('express');
 const RewardHistory = require('../models/RewardHistory');
+const User = require('../models/User');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -10,15 +11,19 @@ const router = express.Router();
 router.get('/history', auth, async (req, res) => {
     try {
         const { limit = 50 } = req.query;
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
 
-        const rewards = await RewardHistory.find({ userId: req.userId })
+        const rewards = await RewardHistory.find({ email: user.email })
             .sort({ level: -1, date: -1 })
             .limit(parseInt(limit))
             .lean();
 
         // Calculate total coins from rewards
         const totalCoinsResult = await RewardHistory.aggregate([
-            { $match: { userId: new require('mongoose').Types.ObjectId(req.userId) } },
+            { $match: { email: user.email } },
             { $group: { _id: null, total: { $sum: '$coins' } } }
         ]);
         const totalCoins = totalCoinsResult.length > 0 ? totalCoinsResult[0].total : 0;
@@ -45,9 +50,13 @@ router.get('/history', auth, async (req, res) => {
 router.get('/level/:level', auth, async (req, res) => {
     try {
         const { level } = req.params;
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
 
         const reward = await RewardHistory.findOne({
-            userId: req.userId,
+            email: user.email,
             level: parseInt(level),
             status: { $in: ['claimed', 'withdrawn'] }
         });
@@ -73,7 +82,11 @@ router.get('/level/:level', auth, async (req, res) => {
 // @access  Private
 router.get('/stats', auth, async (req, res) => {
     try {
-        const rewards = await RewardHistory.find({ userId: req.userId });
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        const rewards = await RewardHistory.find({ email: user.email });
 
         const stats = {
             totalRewards: rewards.length,

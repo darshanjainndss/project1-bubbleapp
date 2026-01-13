@@ -10,7 +10,6 @@ import {
   Dimensions,
 } from 'react-native';
 import MaterialIcon from './MaterialIcon';
-import RewardedAdButton from './RewardedAdButton';
 import ToastNotification, { ToastRef } from './ToastNotification';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import BackendService, { ShopItem } from '../services/BackendService';
@@ -25,31 +24,32 @@ interface ShopProps {
   abilityInventory: Record<string, number>;
   onInventoryUpdate: (newInventory: Record<string, number>) => void;
   abilityStartingCounts: Record<string, number>;
-  onWatchAd: (amount: number) => void;
-  adRewardAmount: number;
 }
 
 const ABILITY_ICON_MAP: Record<string, { name: string; family: string; color: string }> = {
-  lightning: { name: 'flash', family: 'material', color: '#FFD700' },
-  bomb: { name: 'bomb', family: 'material-community', color: '#FF4444' },
-  freeze: { name: 'snowflake', family: 'material-community', color: '#00BFFF' },
-  fire: { name: 'fire', family: 'material-community', color: '#FF6600' },
+  lightning: { name: GAME_ICONS.LIGHTNING.name, family: GAME_ICONS.LIGHTNING.family, color: '#FFD700' },
+  bomb: { name: GAME_ICONS.BOMB.name, family: GAME_ICONS.BOMB.family, color: '#FF4444' },
+  freeze: { name: GAME_ICONS.FREEZE.name, family: GAME_ICONS.FREEZE.family, color: '#00BFFF' },
+  fire: { name: GAME_ICONS.FIRE.name, family: GAME_ICONS.FIRE.family, color: '#FF6600' },
 };
 
 const SHOP_ICON_MAP: Record<string, { name: string; family: string }> = {
-  'flash': { name: 'flash', family: 'material' },
-  'bomb': { name: 'bomb', family: 'material-community' },
-  'snowflake': { name: 'snowflake', family: 'material-community' },
-  'fire': { name: 'fire', family: 'material-community' },
-  'star': { name: 'star', family: 'material' },
-  'gift': { name: 'gift', family: 'material-community' },
-  'diamond': { name: 'diamond', family: 'material-community' },
+  'flash-on': { name: GAME_ICONS.LIGHTNING.name, family: GAME_ICONS.LIGHTNING.family },
+  'flash': { name: GAME_ICONS.LIGHTNING.name, family: GAME_ICONS.LIGHTNING.family },
+  'bomb': { name: GAME_ICONS.BOMB.name, family: GAME_ICONS.BOMB.family },
+  'ac-unit': { name: GAME_ICONS.FREEZE.name, family: GAME_ICONS.FREEZE.family },
+  'whatshot': { name: GAME_ICONS.FIRE.name, family: GAME_ICONS.FIRE.family },
+  'star': { name: GAME_ICONS.STAR.name, family: GAME_ICONS.STAR.family },
+  'gift': { name: GAME_ICONS.GIFT.name, family: GAME_ICONS.GIFT.family },
+  'diamond': { name: GAME_ICONS.DIAMOND.name, family: GAME_ICONS.DIAMOND.family },
   'calendar-outline': { name: 'calendar-today', family: 'material' },
-  'crown': { name: 'crown', family: 'material-community' },
-  'trophy': { name: 'trophy', family: 'material' },
-  'monetization-on': { name: 'monetization-on', family: 'material' },
-  'account-balance-wallet': { name: 'account-balance-wallet', family: 'material' },
+  'crown': { name: GAME_ICONS.CROWN.name, family: GAME_ICONS.CROWN.family },
+  'trophy': { name: GAME_ICONS.TROPHY.name, family: GAME_ICONS.TROPHY.family },
+  'monetization-on': { name: GAME_ICONS.COIN.name, family: GAME_ICONS.COIN.family },
+  'account-balance-wallet': { name: GAME_ICONS.WALLET.name, family: GAME_ICONS.WALLET.family },
   'savings': { name: 'savings', family: 'material' },
+  'layers': { name: 'layers', family: 'material' },
+  'card-giftcard': { name: GAME_ICONS.GIFT.name, family: GAME_ICONS.GIFT.family },
 };
 
 const Shop: React.FC<ShopProps> = ({
@@ -60,8 +60,6 @@ const Shop: React.FC<ShopProps> = ({
   abilityInventory,
   onInventoryUpdate,
   abilityStartingCounts,
-  onWatchAd,
-  adRewardAmount,
 }) => {
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +68,6 @@ const Shop: React.FC<ShopProps> = ({
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const [successItem, setSuccessItem] = useState<ShopItem | null>(null);
-  const [showAddCoins, setShowAddCoins] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -135,11 +132,11 @@ const Shop: React.FC<ShopProps> = ({
         if (result.abilities) {
           console.log('🛒 Purchase result abilities:', result.abilities);
           console.log('🛒 Current starting counts:', abilityStartingCounts);
-          
+
           // Convert Map to object if needed
-          const abilitiesObj = result.abilities instanceof Map ? 
+          const abilitiesObj = result.abilities instanceof Map ?
             Object.fromEntries(result.abilities) : result.abilities;
-          
+
           // Calculate purchased abilities (total - base counts)
           const newInventory: Record<string, number> = {};
           Object.entries(abilitiesObj).forEach(([abilityName, totalCount]) => {
@@ -148,10 +145,10 @@ const Shop: React.FC<ShopProps> = ({
             newInventory[abilityName] = purchasedCount;
             console.log(`🛒 ${abilityName}: total=${totalCount}, base=${baseCount}, purchased=${purchasedCount}`);
           });
-          
+
           console.log('🛒 New inventory:', newInventory);
           onInventoryUpdate(newInventory);
-          
+
           // Also save to backend to ensure persistence
           try {
             await BackendService.updateAbilities(abilitiesObj);
@@ -190,13 +187,29 @@ const Shop: React.FC<ShopProps> = ({
     const hasCoinPrice = item.priceCoins > 0;
     const hasMoneyPrice = item.priceMoney > 0;
     const canAffordCoins = coins >= item.priceCoins;
+    const isMegaPack = item.name === 'mega_all_ability_pack';
+    const isVIP = item.type === 'subscription';
+    const isPack = item.type === 'bundle';
 
     return (
-      <View key={item._id} style={styles.itemCard}>
+      <View
+        key={item._id}
+        style={[
+          styles.itemCard,
+          (isMegaPack || isVIP) && { borderColor: '#FFD700', borderWidth: 2, backgroundColor: 'rgba(255, 215, 0, 0.05)' }
+        ]}
+      >
         {/* Type Badge */}
         <View style={[styles.typeBadge, { backgroundColor: getTypeBadgeColor(item.type) }]}>
           <Text style={styles.typeBadgeText}>{getTypeBadgeText(item.type)}</Text>
         </View>
+
+        {/* Special Badge for Premium Items */}
+        {(isMegaPack || isVIP) && (
+          <View style={styles.specialBadge}>
+            <Text style={styles.specialBadgeText}>SPECIAL</Text>
+          </View>
+        )}
 
         {/* Icon Container with Glow Effect */}
         <View style={[styles.itemIconContainer, { shadowColor: item.color }]}>
@@ -204,7 +217,7 @@ const Shop: React.FC<ShopProps> = ({
             <MaterialIcon
               name={iconData.name}
               family={iconData.family as any}
-              size={ICON_SIZES.XLARGE}
+              size={isPack ? 40 : ICON_SIZES.XLARGE}
               color={item.color || ICON_COLORS.PRIMARY}
             />
           </View>
@@ -212,14 +225,42 @@ const Shop: React.FC<ShopProps> = ({
 
         {/* Item Info */}
         <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={1}>{item.displayName}</Text>
-          <Text style={styles.itemDescription} numberOfLines={2}>
+          <Text
+            style={[styles.itemName, (isMegaPack || isVIP) && { color: '#FFD700' }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {item.displayName}
+          </Text>
+
+          {/* Pack Contents */}
+          {item.items && item.items.length > 0 && (
+            <View style={styles.bundleItemsSmall}>
+              {item.items.map((entry, idx) => {
+                const abilityIcon = ABILITY_ICON_MAP[entry.abilityName];
+                return (
+                  <View key={idx} style={styles.bundleRowSmall}>
+                    <MaterialIcon
+                      name={abilityIcon?.name || 'circle'}
+                      family={abilityIcon?.family as any || 'material'}
+                      size={10}
+                      color={abilityIcon?.color || '#FFF'}
+                    />
+                    <Text style={styles.bundleTextSmall}>{entry.quantity}x</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          <Text style={styles.itemDescription} numberOfLines={isPack ? 2 : 3} ellipsizeMode="tail">
             {item.description}
           </Text>
         </View>
 
         {/* Price Display */}
-        <View style={styles.priceContainer}>
+        <View style={[styles.priceContainer, { marginTop: isPack ? 4 : 8 }]}>
           {hasCoinPrice && (
             <View style={[styles.priceRow, !canAffordCoins && styles.priceRowDisabled]}>
               <MaterialIcon name={GAME_ICONS.COIN.name} family={GAME_ICONS.COIN.family} size={16} color={ICON_COLORS.GOLD} />
@@ -242,15 +283,16 @@ const Shop: React.FC<ShopProps> = ({
         <TouchableOpacity
           style={[
             styles.buyButton,
-            { 
-              backgroundColor: item.color || ICON_COLORS.PRIMARY,
-              shadowColor: item.color || ICON_COLORS.PRIMARY,
+            {
+              backgroundColor: '#22C55E', // Green for all "GET NOW" buttons
+              shadowColor: '#22C55E',
+              height: 40, // Slightly smaller to fit text
             }
           ]}
           onPress={() => onPurchasePress(item)}
           activeOpacity={0.8}
         >
-          <MaterialIcon name="shopping-cart" family="material" size={18} color="#FFFFFF" />
+          <MaterialIcon name="shopping-cart" family="material" size={16} color="#FFFFFF" />
           <Text style={styles.buyButtonText}>GET NOW</Text>
         </TouchableOpacity>
       </View>
@@ -361,15 +403,35 @@ const Shop: React.FC<ShopProps> = ({
     // First check if it's an ability item
     if (item.type === 'ability' && item.items && item.items[0]) {
       const abilityName = item.items[0].abilityName;
-      return ABILITY_ICON_MAP[abilityName] || { name: 'star', family: 'material', color: item.color };
+      const abilityIcon = ABILITY_ICON_MAP[abilityName];
+      if (abilityIcon) {
+        return { 
+          name: abilityIcon.name, 
+          family: abilityIcon.family, 
+          color: abilityIcon.color // Use consistent ability colors
+        };
+      }
     }
-    
+
+    // For bundles with abilities, use the first ability's icon if it's a single ability bundle
+    if (item.type === 'bundle' && item.items && item.items.length === 1) {
+      const abilityName = item.items[0].abilityName;
+      const abilityIcon = ABILITY_ICON_MAP[abilityName];
+      if (abilityIcon) {
+        return { 
+          name: abilityIcon.name, 
+          family: abilityIcon.family, 
+          color: abilityIcon.color // Use consistent ability colors
+        };
+      }
+    }
+
     // Then check shop icon mapping
     const shopIcon = SHOP_ICON_MAP[item.icon];
     if (shopIcon) {
       return { ...shopIcon, color: item.color };
     }
-    
+
     // Fallback to item icon or default
     return { name: item.icon || 'star', family: 'material', color: item.color };
   };
@@ -385,12 +447,12 @@ const Shop: React.FC<ShopProps> = ({
           <Text style={styles.sectionTitle}>YOUR INVENTORY</Text>
           <View style={styles.sectionLine} />
         </View>
-        
+
         <View style={styles.inventoryGrid}>
           {Object.entries(abilityInventory).map(([abilityName, count]) => {
             const iconData = ABILITY_ICON_MAP[abilityName];
             if (!iconData || count <= 0) return null;
-            
+
             return (
               <View key={abilityName} style={styles.inventoryItem}>
                 <View style={[styles.inventoryIcon, { borderColor: iconData.color, backgroundColor: `${iconData.color}15` }]}>
@@ -409,81 +471,8 @@ const Shop: React.FC<ShopProps> = ({
             );
           })}
         </View>
-        
+
         <Text style={styles.inventoryHint}>💡 These abilities are ready for your next level!</Text>
-      </View>
-    );
-  };
-
-  const renderAddCoinsModal = () => {
-    if (!showAddCoins) return null;
-
-    const coinPacks = [
-      { amount: 100, price: 29, popular: false },
-      { amount: 500, price: 99, popular: false },
-      { amount: 1200, price: 199, popular: true },
-      { amount: 3000, price: 399, popular: false },
-      { amount: 7500, price: 799, popular: false },
-    ];
-
-    return (
-      <View style={styles.modalOverlay}>
-        <View style={styles.addCoinsModal}>
-          <View style={styles.addCoinsHeader}>
-            <MaterialIcon name="monetization-on" family="material" size={32} color="#FFD700" />
-            <Text style={styles.addCoinsTitle}>Get More Coins</Text>
-            <TouchableOpacity 
-              style={styles.addCoinsClose} 
-              onPress={() => setShowAddCoins(false)}
-            >
-              <MaterialIcon name="close" family="material" size={20} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.addCoinsSubtitle}>Choose your coin package</Text>
-
-          <View style={styles.coinPacksGrid}>
-            {coinPacks.map((pack, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.coinPackCard,
-                  pack.popular && styles.coinPackPopular
-                ]}
-                onPress={() => {
-                  // Handle coin pack purchase
-                  setShowAddCoins(false);
-                  toastRef.current?.show('Real money purchases coming soon!', 'info');
-                }}
-                activeOpacity={0.8}
-              >
-                {pack.popular && (
-                  <View style={styles.popularBadge}>
-                    <Text style={styles.popularText}>POPULAR</Text>
-                  </View>
-                )}
-                
-                <View style={styles.coinPackIcon}>
-                  <MaterialIcon name="monetization-on" family="material" size={28} color="#FFD700" />
-                </View>
-                
-                <Text style={styles.coinPackAmount}>{pack.amount.toLocaleString()}</Text>
-                <Text style={styles.coinPackCoins}>Coins</Text>
-                
-                <View style={styles.coinPackPrice}>
-                  <Text style={styles.coinPackPriceText}>₹{pack.price}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity 
-            style={styles.addCoinsCancelBtn} 
-            onPress={() => setShowAddCoins(false)}
-          >
-            <Text style={styles.addCoinsCancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     );
   };
@@ -533,13 +522,6 @@ const Shop: React.FC<ShopProps> = ({
               <Text style={styles.coinsText}>{coins.toLocaleString()}</Text>
             </View>
           </View>
-          <TouchableOpacity 
-            style={styles.addCoinsBtn} 
-            onPress={() => setShowAddCoins(true)}
-            activeOpacity={0.8}
-          >
-            <MaterialIcon name="add" family="material" size={20} color="#000" />
-          </TouchableOpacity>
         </View>
 
         {/* Content */}
@@ -553,21 +535,6 @@ const Shop: React.FC<ShopProps> = ({
             <View style={styles.scrollPadding}>
               {/* Inventory Section */}
               {renderInventorySection()}
-
-              {/* Earn Coins Section - Moved Top */}
-              <View style={styles.earnSection}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.earnTitle}>NEED MORE COINS?</Text>
-                  <Text style={styles.earnDescription}>
-                    Watch a video to earn {adRewardAmount} coins instantly!
-                  </Text>
-                </View>
-                <RewardedAdButton
-                  onReward={onWatchAd}
-                  rewardAmount={adRewardAmount}
-                  style={styles.adButton}
-                />
-              </View>
 
               {/* Shop Items Grid */}
               <View style={styles.sectionHeader}>
@@ -610,9 +577,6 @@ const Shop: React.FC<ShopProps> = ({
 
         {/* Payment Modal */}
         {renderPaymentModal()}
-
-        {/* Add Coins Modal */}
-        {renderAddCoinsModal()}
 
       </Animated.View>
       <ToastNotification ref={toastRef} />
@@ -703,18 +667,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 10,
     fontFamily: 'monospace',
   },
-  addCoinsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFD60A',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#FFD60A',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-  },
   content: {
     flex: 1,
   },
@@ -784,19 +736,19 @@ const styles = StyleSheet.create({
   },
   itemName: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 14, // Slightly smaller for better fitting
     fontWeight: 'bold',
-    marginBottom: 6,
+    marginBottom: 4,
     textAlign: 'center',
     fontFamily: 'monospace',
     letterSpacing: 0.5,
   },
   itemDescription: {
     color: '#94A3B8',
-    fontSize: 12,
+    fontSize: 11, // Slightly smaller
     textAlign: 'center',
-    lineHeight: 16,
-    paddingHorizontal: 4,
+    lineHeight: 14,
+    paddingHorizontal: 2,
   },
   priceContainer: {
     alignItems: 'center',
@@ -825,25 +777,24 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   buyButton: {
-    backgroundColor: '#00FF88',
-    width: '100%',
-    height: 44,
-    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    height: 48,
+    borderRadius: 12,
+    width: '100%',
     gap: 8,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 5,
   },
   buyButtonText: {
-    color: '#FFFFFF',
+    color: '#FFF',
     fontSize: 14,
     fontWeight: '900',
-    fontFamily: 'monospace',
     letterSpacing: 1,
+    fontFamily: 'monospace',
   },
   typeBadge: {
     position: 'absolute',
@@ -860,6 +811,29 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontFamily: 'monospace',
     letterSpacing: 0.5,
+  },
+  specialBadge: {
+    position: 'absolute',
+    top: 5,
+    left: -8,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 15,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 5,
+    transform: [{ rotate: '-15deg' }],
+  },
+  specialBadgeText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    letterSpacing: 1,
   },
   bundleItems: {
     width: '100%',
@@ -899,36 +873,27 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 'auto',
   },
-  earnSection: {
-    marginBottom: 24,
-    padding: 16,
-    backgroundColor: 'rgba(0, 224, 255, 0.05)',
-    borderRadius: 20,
+  bundleItemsSmall: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 4,
+    justifyContent: 'center',
+  },
+  bundleRowSmall: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.2)',
-    gap: 12
+    gap: 2,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  earnTitle: {
-    color: '#00FF88',
-    fontSize: 14,
-    fontWeight: '900',
-    marginBottom: 4,
-    letterSpacing: 1,
-    fontFamily: 'monospace',
-  },
-  earnDescription: {
+  bundleTextSmall: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: 'monospace',
-    lineHeight: 14,
-  },
-  adButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    fontWeight: 'bold',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1032,6 +997,7 @@ const styles = StyleSheet.create({
   },
 
   // Payment Modal Styles
+  // Payment Modal Styles
   modalOverlay: {
     position: 'absolute',
     top: 0,
@@ -1057,21 +1023,46 @@ const styles = StyleSheet.create({
     shadowRadius: 30,
     elevation: 20,
   },
+  paymentItemPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    gap: 12,
+    width: '100%',
+  },
+  paymentItemIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentItemInfo: {
+    flex: 1,
+  },
   paymentTitle: {
     color: '#FFF',
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 4,
     fontFamily: 'monospace',
-    textAlign: 'center',
   },
   paymentSubtitle: {
     color: '#94A3B8',
     fontSize: 12,
-    marginBottom: 8,
     fontFamily: 'monospace',
-    textAlign: 'center',
     lineHeight: 16,
+  },
+  paymentMethodTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: 'monospace',
   },
   paymentOptions: {
     width: '100%',
@@ -1085,76 +1076,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  disabledOption: {
-    opacity: 0.4,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+  coinPaymentBtn: {
+    backgroundColor: 'rgba(255, 214, 10, 0.1)',
+    borderColor: '#FFD60A',
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  paymentText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'monospace',
-  },
-  disabledText: {
-    color: '#888',
-  },
-  errorTextSmall: {
-    position: 'absolute',
-    bottom: 2,
-    right: 12,
-    color: '#FF4444',
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-  cancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-  },
-  cancelText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontFamily: 'monospace',
-  },
-  buyButtonText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
-
-  // Enhanced Payment Modal Styles
-  paymentItemPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    gap: 12,
-  },
-  paymentItemIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentItemInfo: {
-    flex: 1,
-  },
-  paymentMethodTitle: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
-    fontFamily: 'monospace',
+  moneyPaymentBtn: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderColor: '#4CAF50',
   },
   paymentOptionContent: {
     flexDirection: 'row',
@@ -1164,17 +1092,37 @@ const styles = StyleSheet.create({
   paymentOptionText: {
     flex: 1,
   },
-  coinPaymentBtn: {
-    backgroundColor: 'rgba(255, 214, 10, 0.1)',
-    borderColor: '#FFD60A',
-  },
-  moneyPaymentBtn: {
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderColor: '#4CAF50',
+  paymentText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'monospace',
   },
   paymentMethodSubtext: {
     color: '#888',
     fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  disabledOption: {
+    opacity: 0.4,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  disabledText: {
+    color: '#888',
+  },
+  errorTextSmall: {
+    color: '#FF4444',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
+  cancelText: {
+    color: '#94A3B8',
+    fontSize: 14,
     fontFamily: 'monospace',
   },
 
@@ -1237,124 +1185,6 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
 
-  // Add Coins Modal Styles
-  addCoinsModal: {
-    width: '90%',
-    backgroundColor: '#0A0A15',
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: '#FFD700',
-    alignItems: 'center',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 30,
-    elevation: 20,
-  },
-  addCoinsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 8,
-  },
-  addCoinsTitle: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    flex: 1,
-    textAlign: 'center',
-  },
-  addCoinsClose: {
-    padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-  },
-  addCoinsSubtitle: {
-    color: '#94A3B8',
-    fontSize: 14,
-    marginBottom: 20,
-    fontFamily: 'monospace',
-    textAlign: 'center',
-  },
-  coinPacksGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 20,
-  },
-  coinPackCard: {
-    width: '48%',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-    position: 'relative',
-  },
-  coinPackPopular: {
-    borderColor: '#FFD700',
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    transform: [{ scale: 1.05 }],
-  },
-  popularBadge: {
-    position: 'absolute',
-    top: -8,
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    zIndex: 10,
-  },
-  popularText: {
-    color: '#FFF',
-    fontSize: 8,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
-  coinPackIcon: {
-    marginBottom: 8,
-  },
-  coinPackAmount: {
-    color: '#FFD700',
-    fontSize: 18,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
-  coinPackCoins: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    marginBottom: 8,
-  },
-  coinPackPrice: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  coinPackPriceText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-  },
-  addCoinsCancelBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-  },
-  addCoinsCancelText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontFamily: 'monospace',
-  },
 });
 
 export default Shop;

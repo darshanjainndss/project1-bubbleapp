@@ -1,15 +1,14 @@
 const mongoose = require('mongoose');
 
 const withdrawHistorySchema = new mongoose.Schema({
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+    email: {
+        type: String,
         required: true,
         index: true
     },
-    email: {
-        type: String,
-        required: true
+    userId: { // Kept for reference but not primary link
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     },
     reward: { // Renamed from scoreEarning
         type: Number,
@@ -27,6 +26,14 @@ const withdrawHistorySchema = new mongoose.Schema({
     createdDate: {
         type: Date,
         default: Date.now
+    },
+    token: {
+        type: String,
+        default: 'SHIB'
+    },
+    walletAddress: {
+        type: String,
+        required: true
     }
 });
 

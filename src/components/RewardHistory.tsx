@@ -113,7 +113,7 @@ const RewardHistory: React.FC<RewardHistoryProps> = ({ visible, onClose }) => {
                             size={ICON_SIZES.SMALL}
                             color="#00FF88"
                         />
-                        <Text style={styles.rewardText}>${displayReward.toFixed(4)}</Text>
+                        <Text style={styles.rewardText}>{displayReward.toFixed(8)} {reward.token || 'SHIB'}</Text>
                     </View>
                 </View>
                 {reward.withdrawnDate && (

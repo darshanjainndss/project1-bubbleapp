@@ -62,6 +62,7 @@ async function importData() {
         const bundles = shopItemsData.filter(item => item.type === 'bundle');
         const subscriptions = shopItemsData.filter(item => item.type === 'subscription');
         const abilities = shopItemsData.filter(item => item.type === 'ability');
+        const coinPacks = shopItemsData.filter(item => item.type === 'coin_pack');
 
         console.log(`\n   📦 Bundles (${bundles.length}):`);
         bundles.forEach(item => {
@@ -71,6 +72,11 @@ async function importData() {
         console.log(`\n   🔒 Subscriptions (${subscriptions.length}):`);
         subscriptions.forEach(item => {
             console.log(`      - ${item.displayName} | Money: ₹${item.priceMoney} | Days: ${item.subscriptionDays}`);
+        });
+
+        console.log(`\n   💰 Coin Packs (${coinPacks.length}):`);
+        coinPacks.forEach(item => {
+            console.log(`      - ${item.displayName} | Coins: ${item.coinReward} | Money: ₹${item.priceMoney}`);
         });
 
         console.log(`\n   ⚡ Abilities (${abilities.length}):`);
@@ -84,6 +90,7 @@ async function importData() {
         console.log(`   - ShopItems Collection: ${shopItemsResult.insertedCount} documents`);
         console.log(`     • Bundles: ${bundles.length}`);
         console.log(`     • Subscriptions: ${subscriptions.length}`);
+        console.log(`     • Coin Packs: ${coinPacks.length}`);
         console.log(`     • Individual Abilities: ${abilities.length}`);
 
     } catch (error) {

@@ -25,6 +25,7 @@ interface WithdrawHistoryProps {
 const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) => {
     const [history, setHistory] = useState<WithdrawHistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
     const toastRef = useRef<ToastRef>(null);
     const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -66,7 +67,8 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'completed': return '#00FF88';
+            case 'completed':
+            case 'paid': return '#00FF88';
             case 'pending': return '#FFA500';
             case 'rejected': return '#FF3B30';
             default: return '#AAA';
@@ -75,7 +77,8 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
 
     const getStatusBg = (status: string) => {
         switch (status) {
-            case 'completed': return 'rgba(0, 255, 136, 0.2)';
+            case 'completed':
+            case 'paid': return 'rgba(0, 255, 136, 0.2)';
             case 'pending': return 'rgba(255, 165, 0, 0.2)';
             case 'rejected': return 'rgba(255, 59, 48, 0.2)';
             default: return 'rgba(255, 255, 255, 0.1)';
@@ -97,7 +100,7 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
                 <View style={styles.cardHeader}>
                     <View style={styles.amountContainer}>
                         <MaterialIcon name="payments" family="material" size={20} color="#00E0FF" />
-                        <Text style={styles.amountText}>${displayAmount.toFixed(4)}</Text>
+                        <Text style={styles.amountText}>{displayAmount.toFixed(8)} {item.token || 'SHIB'}</Text>
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusBg(item.status) }]}>
                         <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
@@ -146,6 +149,22 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
                     </TouchableOpacity>
                 </View>
 
+                {/* Tabs */}
+                <View style={styles.tabsContainer}>
+                    <TouchableOpacity
+                        style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
+                        onPress={() => setActiveTab('pending')}
+                    >
+                        <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>PENDING</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+                        onPress={() => setActiveTab('completed')}
+                    >
+                        <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>PAID</Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Content */}
                 <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                     {loading ? (
@@ -153,7 +172,7 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
                             <ActivityIndicator size="large" color="#00E0FF" />
                             <Text style={styles.loadingText}>Loading history...</Text>
                         </View>
-                    ) : history.length === 0 ? (
+                    ) : history.filter(item => activeTab === 'pending' ? item.status === 'pending' : item.status !== 'pending').length === 0 ? (
                         <View style={styles.emptyContainer}>
                             <MaterialIcon
                                 name="history-edu"
@@ -161,11 +180,13 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
                                 size={80}
                                 color="rgba(255, 255, 255, 0.1)"
                             />
-                            <Text style={styles.emptyText}>No withdrawals yet</Text>
+                            <Text style={styles.emptyText}>No {activeTab === 'pending' ? 'pending' : 'completed'} withdrawals</Text>
                         </View>
                     ) : (
                         <View style={styles.list}>
-                            {history.map((item) => renderItem(item))}
+                            {history
+                                .filter(item => activeTab === 'pending' ? item.status === 'pending' : item.status !== 'pending')
+                                .map((item) => renderItem(item))}
                         </View>
                     )}
                 </ScrollView>
@@ -260,6 +281,32 @@ const styles = StyleSheet.create({
     },
     list: {
         padding: 16,
+    },
+    tabsContainer: {
+        flexDirection: 'row',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(0, 224, 255, 0.1)',
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+    },
+    activeTab: {
+        borderBottomColor: '#00E0FF',
+    },
+    tabText: {
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+        fontFamily: 'monospace',
+    },
+    activeTabText: {
+        color: '#00E0FF',
     },
     card: {
         backgroundColor: 'rgba(255, 255, 255, 0.03)',

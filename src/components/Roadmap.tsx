@@ -30,11 +30,14 @@ import ConfigService from '../services/ConfigService';
 import ConfirmationModal from './ConfirmationModal';
 import ToastNotification, { ToastRef } from './ToastNotification';
 import SettingsService from '../services/SettingsService';
+// Removed ethers due to Metro bundling issues in React Native. Using regex for validation instead.
 import Shop from './Shop';
 import RewardHistory from './RewardHistory';
 import WithdrawHistory from './WithdrawHistory';
+import RewardsCard from './RewardsCard';
 import HelpSlider from './HelpSlider';
 import HelpButton from './HelpButton';
+import MessageModal from './MessageModal';
 
 // Helper function to safely call vibration
 const safeVibrate = () => {
@@ -258,6 +261,13 @@ const WithdrawModal = ({ visible, onClose }: any) => {
   const [history, setHistory] = useState<any[]>([]);
   const [claimedEarnings, setClaimedEarnings] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [msgModal, setMsgModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info' as 'success' | 'error' | 'info'
+  });
 
   useEffect(() => {
     if (visible) {
@@ -292,24 +302,64 @@ const WithdrawModal = ({ visible, onClose }: any) => {
 
   const handleWithdraw = async () => {
     if (claimedEarnings <= 0) {
-      Alert.alert("Error", "No available earnings for withdrawal");
+      setMsgModal({
+        visible: true,
+        title: 'INSUFFICIENT FUNDS',
+        message: 'You do not have any available earnings for withdrawal at this time.',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (!walletAddress.trim()) {
+      setMsgModal({
+        visible: true,
+        title: 'WALLET REQUIRED',
+        message: 'Please enter a valid SHIB wallet address to receive your rewards.',
+        type: 'error'
+      });
+      return;
+    }
+
+    // Wallet Address Validation using local regex
+    // This is more performant than importing the entire ethers library in React Native
+    const isValidWallet = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
+    if (!isValidWallet) {
+      setMsgModal({
+        visible: true,
+        title: 'INVALID WALLET',
+        message: 'The wallet address provided is not a valid Ethereum-compatible address. Please check and try again.',
+        type: 'error'
+      });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const result = await BackendService.requestWithdrawal();
+      const result = await BackendService.requestWithdrawal(walletAddress);
       if (result.success) {
-        Alert.alert(
-          "Success",
-          `Withdrawal request for $${result.amount?.toFixed(4)} submitted! It will be processed shortly.`,
-          [{ text: "OK", onPress: () => { loadData(); } }]
-        );
+        setMsgModal({
+          visible: true,
+          title: 'REQUEST SENT',
+          message: `Your withdrawal request for ${result.amount?.toFixed(8)} SHIB has been submitted successfully! It will be processed shortly.`,
+          type: 'success'
+        });
+        // We will close the main modal after the user clicks "Continue" on the success modal
       } else {
-        Alert.alert("Error", result.error || "Withdrawal failed");
+        setMsgModal({
+          visible: true,
+          title: 'WITHDRAWAL FAILED',
+          message: result.error || 'The system could not process your withdrawal request. Please try again later.',
+          type: 'error'
+        });
       }
     } catch (error) {
-      Alert.alert("Error", "Withdrawal failed. Please try again later.");
+      setMsgModal({
+        visible: true,
+        title: 'SYSTEM ERROR',
+        message: 'A connection error occurred. Please verify your internet and try again.',
+        type: 'error'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -320,7 +370,33 @@ const WithdrawModal = ({ visible, onClose }: any) => {
       <View style={localStyles.modalOverlay}>
         <View style={[localStyles.withdrawCard, { maxHeight: '80%', width: '90%' }]}>
           <Text style={localStyles.withdrawTitle}>WITHDRAWAL</Text>
-          <Text style={localStyles.withdrawLabel}>AVAILABLE REWARDS: ${claimedEarnings.toFixed(4)}</Text>
+          <View style={{ alignItems: 'center', marginVertical: 15, padding: 15, backgroundColor: 'rgba(0, 224, 255, 0.05)', borderRadius: 15, width: '100%' }}>
+            <Text style={[localStyles.withdrawLabel, { fontSize: 13, marginBottom: 5 }]}>AVAILABLE REWARDS</Text>
+            <Text style={{ color: '#00E0FF', fontSize: 28, fontWeight: '900', letterSpacing: 1 }}>{claimedEarnings.toFixed(8)}</Text>
+            <Text style={{ color: '#00E0FF', fontSize: 14, fontWeight: '700', marginTop: 2 }}>SHIB</Text>
+          </View>
+
+          <View style={{ width: '100%', marginBottom: 15 }}>
+            <Text style={[localStyles.withdrawLabel, { marginBottom: 8 }]}>WALLET ADDRESS</Text>
+            <TextInput
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: 12,
+                padding: 12,
+                color: '#FFF',
+                borderWidth: 1,
+                borderColor: 'rgba(0, 224, 255, 0.2)',
+                fontFamily: 'monospace',
+                fontSize: 12
+              }}
+              placeholder="Enter your SHIB wallet address"
+              placeholderTextColor="#64748B"
+              value={walletAddress}
+              onChangeText={setWalletAddress}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
 
           <TouchableOpacity
             style={[localStyles.withdrawBtn, (isSubmitting || claimedEarnings <= 0) && { opacity: 0.5 }]}
@@ -351,7 +427,7 @@ const WithdrawModal = ({ visible, onClose }: any) => {
                     alignItems: 'center'
                   }}>
                     <View>
-                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>${(item.reward || item.scoreEarning || 0).toFixed(4)}</Text>
+                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{(item.reward || item.scoreEarning || 0).toFixed(8)} SHIB</Text>
                       <Text style={{ color: '#64748B', fontSize: 10 }}>{new Date(item.date).toLocaleDateString()}</Text>
                     </View>
                     <View style={{
@@ -376,6 +452,20 @@ const WithdrawModal = ({ visible, onClose }: any) => {
             <Text style={localStyles.withdrawCancelText}>CLOSE</Text>
           </TouchableOpacity>
         </View>
+
+        <MessageModal
+          visible={msgModal.visible}
+          title={msgModal.title}
+          message={msgModal.message}
+          type={msgModal.type}
+          onClose={() => {
+            setMsgModal(prev => ({ ...prev, visible: false }));
+            if (msgModal.type === 'success') {
+              onClose(); // Close withdrawal modal on success
+              loadData();
+            }
+          }}
+        />
       </View>
     </Modal>
   );
@@ -560,42 +650,12 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                     </View>
                   </View>
 
-                  <View style={[localStyles.nestedCard, { width: '100%' }]}>
-                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 255, 136, 0.1)' }]}>
-                      <MaterialIcon name="bolt" family="material" size={22} color="#ff9900ff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={localStyles.cardValue}>
-                        {currentScoreEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 20 })}
-                      </Text>
-                      <Text style={localStyles.cardLabel}>REWARDS</Text>
-                    </View>
-                    <TouchableOpacity style={localStyles.withdrawInlineBtn} onPress={onWithdrawPress}>
-                      <Text style={localStyles.withdrawInlineText}>WITHDRAW</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <TouchableOpacity style={[localStyles.nestedCard, { width: '100%' }]} onPress={onRewardHistoryPress}>
-                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 215, 0, 0.1)' }]}>
-                      <MaterialIcon name="history" family="material" size={22} color="#FFD700" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={localStyles.cardValue}>Reward History</Text>
-                      <Text style={localStyles.cardLabel}>VIEW PAST REWARDS</Text>
-                    </View>
-                    <MaterialIcon name="chevron-right" family="material" size={24} color="#64748B" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={[localStyles.nestedCard, { width: '100%' }]} onPress={onWithdrawHistoryPress}>
-                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 224, 255, 0.1)' }]}>
-                      <MaterialIcon name="receipt-long" family="material" size={22} color="#00E0FF" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={localStyles.cardValue}>Withdraw History</Text>
-                      <Text style={localStyles.cardLabel}>VIEW TRANSACTIONS</Text>
-                    </View>
-                    <MaterialIcon name="chevron-right" family="material" size={24} color="#64748B" />
-                  </TouchableOpacity>
+                  <RewardsCard 
+                    onWithdrawPress={onWithdrawPress}
+                    onRewardHistoryPress={onRewardHistoryPress}
+                    onWithdrawHistoryPress={onWithdrawHistoryPress}
+                    style={{ marginBottom: 16 }}
+                  />
                 </View>
 
                 <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
@@ -1160,7 +1220,7 @@ const Roadmap: React.FC = () => {
       // 2. BACKEND SYNC: Submit game session to backend
       console.log('🔍 User object:', user ? 'exists' : 'missing');
       console.log('🔍 User UID:', user?.uid);
-      
+
       if (user) {
         try {
           console.log('🔐 Ensuring authentication...');
@@ -1563,8 +1623,6 @@ const Roadmap: React.FC = () => {
               setAbilityInventory(newInventory);
             }}
             abilityStartingCounts={abilityStartingCounts}
-            onWatchAd={(amount) => handleWatchAd(amount)}
-            adRewardAmount={adRewardAmount}
           />
 
           {/* Top HUD */}

@@ -123,7 +123,7 @@ export interface ShopItem {
   name: string;
   displayName: string;
   description: string;
-  type: 'ability' | 'bundle' | 'subscription';
+  type: 'ability' | 'bundle' | 'subscription' | 'coin_pack';
   icon: string;
   color: string;
   priceCoins: number;
@@ -163,6 +163,7 @@ export interface RewardHistoryItem {
   date: string;
   createdDate: string;
   withdrawnDate?: string;
+  token?: string;
 }
 
 export interface WithdrawHistoryItem {
@@ -170,9 +171,11 @@ export interface WithdrawHistoryItem {
   email: string;
   reward: number; // Renamed from scoreEarning
   scoreEarning?: number; // Legacy support
-  status: 'pending' | 'completed' | 'rejected';
+  status: 'pending' | 'completed' | 'rejected' | 'paid';
   date: string;
   createdDate: string;
+  walletAddress?: string;
+  token?: string;
 }
 
 export interface AdConfig {
@@ -1700,7 +1703,7 @@ class BackendService {
     }
   }
 
-  async requestWithdrawal(): Promise<{ success: boolean; amount?: number; error?: string }> {
+  async requestWithdrawal(walletAddress: string): Promise<{ success: boolean; amount?: number; error?: string }> {
     try {
       if (!this.authToken) {
         return { success: false, error: 'Not authenticated' };
@@ -1713,6 +1716,7 @@ class BackendService {
           'Authorization': `Bearer ${this.authToken}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ walletAddress }),
       });
 
       const data = await response.json();

@@ -1,15 +1,14 @@
 const mongoose = require('mongoose');
 
 const rewardHistorySchema = new mongoose.Schema({
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+    email: {
+        type: String,
         required: true,
         index: true
     },
-    email: {
-        type: String,
-        required: true
+    userId: { // Kept for reference but not primary link
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     },
     level: {
         type: Number,
@@ -48,10 +47,14 @@ const rewardHistorySchema = new mongoose.Schema({
     },
     withdrawnDate: {
         type: Date
+    },
+    token: {
+        type: String,
+        default: 'SHIB'
     }
 });
 
-// Index for faster queries
-rewardHistorySchema.index({ userId: 1, status: 1 });
+// Index for faster queries using email
+rewardHistorySchema.index({ email: 1, status: 1 });
 
 module.exports = mongoose.model('RewardHistory', rewardHistorySchema);

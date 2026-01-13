@@ -277,9 +277,9 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     let levelRewardAwarded = false;
 
     if (isWin && stars >= 2) {
-      // Check if user already received reward for this level (using RewardHistory now)
+      // Check if user already received reward for this level (using RewardHistory linked by email)
       const existingReward = await RewardHistory.findOne({
-        userId: req.userId,
+        email: user.email,
         level: level,
         status: { $in: ['claimed', 'withdrawn'] } // Check any status
       });
