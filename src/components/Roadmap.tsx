@@ -654,7 +654,7 @@ const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLeve
                     onWithdrawPress={onWithdrawPress}
                     onRewardHistoryPress={onRewardHistoryPress}
                     onWithdrawHistoryPress={onWithdrawHistoryPress}
-                    style={{ marginBottom: 16 }}
+                    style={{ marginBottom: 12 }}
                   />
                 </View>
 
@@ -884,7 +884,7 @@ const Roadmap: React.FC = () => {
         // Initialize new users with 0 purchased abilities
         if (result.data.currentLevel <= 1 && result.data.totalScore === 0 && (!backendAbilities || Object.keys(backendAbilities).length === 0)) {
           const initialAbilities: Record<string, number> = {};
-          abilitiesConfig.forEach(a => { initialAbilities[a.name] = 0; });
+          abilitiesConfig.forEach(a => { initialAbilities[a.name] = 2; });
 
           if (Object.keys(initialAbilities).length > 0) {
             await BackendService.updateAbilities(initialAbilities);
@@ -899,12 +899,19 @@ const Roadmap: React.FC = () => {
             setAbilityStartingCounts(startingCounts);
           }
 
-          // Calculate purchased abilities dynamically using dynamic starting counts
-          const purchasedAbilities: Record<string, number> = {};
-          Object.keys(backendAbilities).forEach(key => {
-            purchasedAbilities[key] = Math.max(0, backendAbilities[key] - (startingCounts[key] ?? 2));
+          // Calculate total available abilities from DB
+          // The user wants to see EXACTLY what is in the DB.
+          const allAbilityTypes = ['lightning', 'bomb', 'freeze', 'fire'];
+          const totalInventory: Record<string, number> = {};
+
+          allAbilityTypes.forEach(key => {
+            const dbVal = backendAbilities[key] || 0;
+            // Ensure minimum base count of 2 is reflected
+            totalInventory[key] = Math.max(2, dbVal);
+            console.log(`Inventory Calc: ${key} DB=${dbVal} -> Final=${totalInventory[key]}`);
           });
-          setAbilityInventory(purchasedAbilities);
+
+          setAbilityInventory(totalInventory);
         }
 
         setDataLoaded(true);
@@ -1197,7 +1204,6 @@ const Roadmap: React.FC = () => {
         totalScore: newTotalScore,
         highScore: Math.max(userGameData?.highScore || 0, finalScore),
         totalCoins: newTotalCoins,
-        abilities: abilityInventory,
         levelStars: {
           ...userGameData.levelStars,
           [completedLevel]: Math.max(userGameData.levelStars?.[completedLevel] || 0, stars)
@@ -1271,9 +1277,18 @@ const Roadmap: React.FC = () => {
               console.log('🏆 Updating level from', currentLevel, 'to', serverData.updatedGameData.currentLevel);
               setCurrentLevel(serverData.updatedGameData.currentLevel);
             }
-            if (serverData.updatedGameData.totalScore !== undefined) {
-              console.log('🎯 Updating score from', score, 'to', serverData.updatedGameData.totalScore);
-              setScore(serverData.updatedGameData.totalScore);
+            if (serverData.updatedGameData.abilities) {
+              const serverAbilities = serverData.updatedGameData.abilities;
+              const allAbilityTypes = ['lightning', 'bomb', 'freeze', 'fire'];
+              const newDisplayInventory: Record<string, number> = {};
+
+              allAbilityTypes.forEach(key => {
+                const dbVal = serverAbilities[key] || 0;
+                newDisplayInventory[key] = Math.max(2, dbVal);
+              });
+
+              console.log('🎒 Updating ability inventory from server:', newDisplayInventory);
+              setAbilityInventory(newDisplayInventory);
             }
           } else {
             console.warn('⚠️ Session sync failed or incomplete response:', sessionResult);
@@ -1294,12 +1309,7 @@ const Roadmap: React.FC = () => {
         toastRef.current?.show('Please log in to save progress.', 'error');
       }
 
-      // 3. ABILITIES SYNC
-      try {
-        await BackendService.updateAbilities(abilityInventory);
-      } catch (e) {
-        console.error('Abilities sync error', e);
-      }
+
 
       // 4. NAVIGATION
       if (action === 'home') {
@@ -1601,7 +1611,7 @@ const Roadmap: React.FC = () => {
             isVisible={showLeaderboard}
             onClose={() => setShowLeaderboard(false)}
             currentUserScore={score}
-            userId={user?.uid}
+            userEmail={user?.email ?? undefined}
           />
 
           {/* Shop Modal */}

@@ -133,7 +133,7 @@ router.post('/purchase', auth, async (req, res) => {
                     // Set default starting counts for all abilities
                     const defaultAbilities = ['lightning', 'bomb', 'freeze', 'fire'];
                     defaultAbilities.forEach(ability => {
-                        user.gameData.abilities.set(ability, 2); // Default starting count
+                        user.gameData.abilities.set(ability, 2); // Default base count
                     });
                 }
 

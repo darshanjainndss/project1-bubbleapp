@@ -62,7 +62,7 @@ export interface UserProfile {
 }
 
 export interface UserGameData {
-  userId: string;
+  email: string;
   totalScore: number;
   highScore: number;
   totalCoins: number;
@@ -78,7 +78,7 @@ export interface UserGameData {
 }
 
 export interface LeaderboardEntry {
-  userId: string;
+  email: string;
   displayName: string;
   profilePicture?: string;
   highScore: number;
@@ -89,7 +89,7 @@ export interface LeaderboardEntry {
 
 export interface GameSession {
   sessionId: string;
-  userId: string;
+  email: string;
   level: number;
   score: number;
   moves: number;
@@ -141,7 +141,7 @@ export interface ShopItem {
 
 export interface LevelReward {
   _id: string;
-  userId: string;
+  email: string;
   level: number;
   stars: number;
   coinsAwarded: number;
@@ -553,13 +553,13 @@ class BackendService {
   // LEADERBOARD METHODS
   // ============================================================================
 
-  async getLeaderboard(limit: number = 100): Promise<{ success: boolean; leaderboard?: LeaderboardEntry[]; error?: string }> {
+  async getLeaderboard(limit: number = 100, type: string = 'totalScore'): Promise<{ success: boolean; leaderboard?: LeaderboardEntry[]; error?: string }> {
     try {
       console.log('🌐 Fetching leaderboard...');
 
       // Use the working URL directly, or test if needed
       const baseUrl = await this.ensureWorkingUrl();
-      const url = `${baseUrl}/leaderboard?limit=${limit}`;
+      const url = `${baseUrl}/leaderboard?limit=${limit}&type=${type}`;
       console.log('📡 Fetching leaderboard from:', url);
 
       const response = await fetch(url, {
@@ -629,7 +629,7 @@ class BackendService {
   // GAME SESSION METHODS
   // ============================================================================
 
-  async submitGameSession(session: Omit<GameSession, 'sessionId' | 'userId' | 'completedAt'>): Promise<{ success: boolean; data?: any; error?: string }> {
+  async submitGameSession(session: Omit<GameSession, 'sessionId' | 'email' | 'completedAt'>): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       console.log('🎮 submitGameSession called');
       console.log('🔍 Auth token exists:', !!this.authToken);

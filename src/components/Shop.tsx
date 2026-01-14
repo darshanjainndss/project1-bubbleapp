@@ -67,8 +67,6 @@ const Shop: React.FC<ShopProps> = ({
   const toastRef = useRef<ToastRef>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const [successItem, setSuccessItem] = useState<ShopItem | null>(null);
-
   useEffect(() => {
     if (visible) {
       loadShopItems();
@@ -137,13 +135,12 @@ const Shop: React.FC<ShopProps> = ({
           const abilitiesObj = result.abilities instanceof Map ?
             Object.fromEntries(result.abilities) : result.abilities;
 
-          // Calculate purchased abilities (total - base counts)
+          // Calculate purchased abilities - Show exactly what is in DB
           const newInventory: Record<string, number> = {};
           Object.entries(abilitiesObj).forEach(([abilityName, totalCount]) => {
-            const baseCount = abilityStartingCounts[abilityName] || 2;
-            const purchasedCount = Math.max(0, (totalCount as number) - baseCount);
-            newInventory[abilityName] = purchasedCount;
-            console.log(`🛒 ${abilityName}: total=${totalCount}, base=${baseCount}, purchased=${purchasedCount}`);
+            // DB returns full count including any base or reward
+            newInventory[abilityName] = totalCount as number;
+            console.log(`🛒 ${abilityName}: db=${totalCount}`);
           });
 
           console.log('🛒 New inventory:', newInventory);
@@ -158,8 +155,8 @@ const Shop: React.FC<ShopProps> = ({
           }
         }
 
-        // Show Success Modal
-        setSuccessItem(item);
+        // Show toast notification instead of modal
+        toastRef.current?.show(`${item.displayName} purchased successfully!`, 'success');
       } else {
         toastRef.current?.show(result.error || 'Purchase failed', 'error');
       }
@@ -405,9 +402,9 @@ const Shop: React.FC<ShopProps> = ({
       const abilityName = item.items[0].abilityName;
       const abilityIcon = ABILITY_ICON_MAP[abilityName];
       if (abilityIcon) {
-        return { 
-          name: abilityIcon.name, 
-          family: abilityIcon.family, 
+        return {
+          name: abilityIcon.name,
+          family: abilityIcon.family,
           color: abilityIcon.color // Use consistent ability colors
         };
       }
@@ -418,9 +415,9 @@ const Shop: React.FC<ShopProps> = ({
       const abilityName = item.items[0].abilityName;
       const abilityIcon = ABILITY_ICON_MAP[abilityName];
       if (abilityIcon) {
-        return { 
-          name: abilityIcon.name, 
-          family: abilityIcon.family, 
+        return {
+          name: abilityIcon.name,
+          family: abilityIcon.family,
           color: abilityIcon.color // Use consistent ability colors
         };
       }
@@ -451,7 +448,7 @@ const Shop: React.FC<ShopProps> = ({
         <View style={styles.inventoryGrid}>
           {Object.entries(abilityInventory).map(([abilityName, count]) => {
             const iconData = ABILITY_ICON_MAP[abilityName];
-            if (!iconData || count <= 0) return null;
+            if (!iconData) return null;
 
             return (
               <View key={abilityName} style={styles.inventoryItem}>
@@ -548,32 +545,6 @@ const Shop: React.FC<ShopProps> = ({
             </View>
           )}
         </ScrollView>
-
-        {/* Success Modal */}
-        {successItem && (
-          <View style={styles.successOverlay}>
-            <View style={styles.successCard}>
-              <View style={[styles.successIconBubble, { borderColor: successItem.color || ICON_COLORS.GOLD }]}>
-                <MaterialIcon
-                  name={successItem.icon || 'check'}
-                  family="material"
-                  size={50}
-                  color={successItem.color || ICON_COLORS.GOLD}
-                />
-              </View>
-              <Text style={styles.successTitle}>PURCHASE SUCCESSFUL!</Text>
-              <Text style={styles.successName}>{successItem.displayName}</Text>
-              <Text style={styles.successDesc}>Your items have been added to your inventory.</Text>
-
-              <TouchableOpacity
-                style={styles.okButton}
-                onPress={() => setSuccessItem(null)}
-              >
-                <Text style={styles.okButtonText}>OK</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Payment Modal */}
         {renderPaymentModal()}

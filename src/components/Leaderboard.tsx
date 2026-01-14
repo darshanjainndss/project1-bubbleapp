@@ -5,23 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  ScrollView,
   SafeAreaView,
   Animated,
-  Dimensions,
   StatusBar,
   RefreshControl,
 } from 'react-native';
 import MaterialIcon from './MaterialIcon';
-import SpaceBackground from './SpaceBackground';
-import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
+import { ICON_COLORS } from '../config/icons';
 import BackendService from '../services/BackendService';
 import { useAuth } from '../context/AuthContext';
 
-const { width } = Dimensions.get('window');
-
 interface LeaderboardEntry {
-  userId: string;
+  email: string;
   displayName: string;
   profilePicture?: string;
   highScore: number;
@@ -32,19 +27,14 @@ interface LeaderboardEntry {
 }
 
 interface UserGameData {
-  userId: string;
+  email: string;
   totalScore: number;
   highScore: number;
   totalCoins: number;
   currentLevel: number;
   gamesPlayed: number;
   gamesWon: number;
-  abilities: {
-    lightning: number;
-    bomb: number;
-    freeze: number;
-    fire: number;
-  };
+  abilities: Record<string, number>;
   achievements: string[];
   completedLevels: number[];
   levelStars: Record<number, number>;
@@ -56,14 +46,14 @@ interface LeaderboardProps {
   isVisible: boolean;
   onClose: () => void;
   currentUserScore?: number;
-  userId?: string;
+  userEmail?: string;
 }
 
 const Leaderboard: React.FC<LeaderboardProps> = ({
   isVisible,
   onClose,
   currentUserScore = 0,
-  userId
+  userEmail
 }) => {
   const { user } = useAuth();
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
@@ -74,10 +64,10 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [fadeAnim] = useState(new Animated.Value(0));
 
-  // Get current user ID from backend service (MongoDB ObjectId)
-  const getCurrentUserId = () => {
+  // Get current user email from backend service
+  const getCurrentUserEmail = () => {
     const backendUser = BackendService.getCurrentUser();
-    return backendUser?.id || userId;
+    return backendUser?.email || userEmail;
   };
 
   const loadData = useCallback(async (isRefresh = false) => {
@@ -94,39 +84,13 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
       }
 
       const limit = 1000;
-      const leaderboardResult = await BackendService.getLeaderboard(limit);
+      // Request leaderboard sorted by totalScore
+      const leaderboardResult = await BackendService.getLeaderboard(limit, 'totalScore');
 
       if (leaderboardResult.success && leaderboardResult.leaderboard) {
-        let data = [...leaderboardResult.leaderboard];
-        const currentUserId = getCurrentUserId();
-
-        if (currentUserId && currentUserScore > 0) {
-          const userIndex = data.findIndex(entry => entry.userId === currentUserId);
-          if (userIndex !== -1) {
-            if (currentUserScore > data[userIndex].totalScore) {
-              data[userIndex] = { ...data[userIndex], totalScore: currentUserScore };
-            }
-          } else {
-            // Get user email for display name
-            const userEmail = user?.email || 'User';
-            const displayName = userEmail.split('@')[0];
-
-            data.push({
-              userId: currentUserId,
-              displayName: displayName,
-              totalScore: currentUserScore,
-              highScore: currentUserScore,
-              gamesWon: 0,
-              rank: 999
-            });
-          }
-          data.sort((a, b) => b.totalScore - a.totalScore);
-          data = data.map((entry, index) => ({
-            ...entry,
-            rank: index + 1
-          }));
-        }
-
+        // Trust the backend's sorting and ranking - don't re-sort on client
+        const data = leaderboardResult.leaderboard;
+        
         setLeaderboardData(data);
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } else {
@@ -140,12 +104,13 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
         }
       }
     } catch (error) {
+      console.error('Leaderboard load error:', error);
       setError('Communication link failure');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isVisible, user, userId, currentUserScore]);
+  }, [isVisible, user, userEmail, currentUserScore]);
 
   useEffect(() => {
     if (isVisible) {
@@ -158,7 +123,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
     } else {
       fadeAnim.setValue(0);
     }
-  }, [isVisible, loadData]);
+  }, [isVisible, loadData, fadeAnim]);
 
   const onRefresh = () => loadData(true);
 
@@ -170,9 +135,9 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
   };
 
   const renderLeaderboardItem = ({ item }: { item: LeaderboardEntry }) => {
-    const { color, icon } = getRankStyle(item.rank);
-    const currentUserId = getCurrentUserId();
-    const isCurrentUser = item.userId === currentUserId;
+    const { color } = getRankStyle(item.rank);
+    const currentUserEmail = getCurrentUserEmail();
+    const isCurrentUser = item.email === currentUserEmail;
 
     return (
       <View style={[
@@ -281,7 +246,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             <FlatList
               data={leaderboardData}
               renderItem={renderLeaderboardItem}
-              keyExtractor={(item) => item.userId}
+              keyExtractor={(item) => item.email}
               contentContainerStyle={styles.listContent}
               refreshControl={
                 <RefreshControl

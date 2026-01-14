@@ -202,22 +202,6 @@ const RewardHistory: React.FC<RewardHistoryProps> = ({ visible, onClose }) => {
                         </View>
                     )}
                 </ScrollView>
-
-                {/* Reward Info Footer */}
-                <View style={styles.footer}>
-                    <View style={styles.infoRow}>
-                        <View style={styles.infoItem}>
-                            <Text style={styles.infoStars}>⭐⭐</Text>
-                            <Text style={styles.infoText}>10 coins</Text>
-                        </View>
-                        <View style={styles.separator} />
-                        <View style={styles.infoItem}>
-                            <Text style={styles.infoStars}>⭐⭐⭐</Text>
-                            <Text style={styles.infoText}>15 coins</Text>
-                        </View>
-                    </View>
-                    <Text style={styles.footerNote}>One-time reward per level</Text>
-                </View>
             </Animated.View>
             <ToastNotification ref={toastRef} />
         </View>

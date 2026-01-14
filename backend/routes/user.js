@@ -140,7 +140,7 @@ router.put('/profile', auth, [
 // @access  Private
 router.get('/game-data', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findOne({ email: req.userEmail, isActive: true });
 
     if (!user) {
       return res.status(404).json({
@@ -249,7 +249,7 @@ router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (r
       const allowedReward = rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50;
 
       if (amount !== allowedReward) {
-        console.warn(`⚠️ User ${req.userId} attempted to claim ${amount} coins for an ad, but allowed is ${allowedReward}. Enforcing allowed.`);
+        console.warn(`⚠️ User ${req.userEmail} attempted to claim ${amount} coins for an ad, but allowed is ${allowedReward}. Enforcing allowed.`);
         actualAmount = allowedReward;
       }
     }
@@ -481,7 +481,6 @@ router.get('/debug-abilities', auth, async (req, res) => {
     res.json({
       success: true,
       data: {
-        userId: user._id,
         email: user.email,
         totalCoins: user.gameData.totalCoins,
         abilities: abilitiesObj,

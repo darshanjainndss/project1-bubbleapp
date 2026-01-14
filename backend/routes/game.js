@@ -254,13 +254,45 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     // Add coins earned (which should be 0 on loss anyway based on model logic)
     user.gameData.totalCoins = (Number(user.gameData.totalCoins) || 0) + coinsEarned;
 
-    // Deduct abilities used
-    Object.keys(abilitiesUsed).forEach(ability => {
-      if (['lightning', 'bomb', 'freeze', 'fire'].includes(ability)) {
-        const used = abilitiesUsed[ability] || 0;
-        user.gameData.abilities[ability] = Math.max(0, user.gameData.abilities[ability] - used);
+    // --- ABILITY CALCULATIONS (Deduction & Rewards) ---
+    const allAbilityTypes = ['lightning', 'bomb', 'freeze', 'fire'];
+    const finalAbilities = {};
+
+    // Get current counts from DB
+    allAbilityTypes.forEach(ability => {
+      if (user.gameData.abilities instanceof Map) {
+        finalAbilities[ability] = user.gameData.abilities.get(ability) || 0;
+      } else {
+        finalAbilities[ability] = user.gameData.abilities[ability] || 0;
       }
     });
+
+    // Step 1: Deduct Usage
+    Object.keys(abilitiesUsed).forEach(ability => {
+      if (allAbilityTypes.includes(ability)) {
+        const used = parseInt(abilitiesUsed[ability]) || 0;
+        finalAbilities[ability] = Math.max(0, finalAbilities[ability] - used);
+      }
+    });
+
+    // Step 2: Add Level Clear Reward (+2)
+    if (isWin && stars >= 2) {
+      console.log('🎁 Level Clear Reward: Giving 2 of each ability');
+      allAbilityTypes.forEach(ability => {
+        finalAbilities[ability] += 2;
+      });
+    }
+
+    // Step 3: Apply back to User model
+    allAbilityTypes.forEach(ability => {
+      if (user.gameData.abilities instanceof Map) {
+        user.gameData.abilities.set(ability, finalAbilities[ability]);
+      } else {
+        user.gameData.abilities[ability] = finalAbilities[ability];
+      }
+    });
+
+    console.log('📈 Final Ability Update:', finalAbilities);
 
     // Check for achievements
     const newAchievements = checkAchievements(user, gameSession);
@@ -327,7 +359,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
         gamesPlayed: Number(user.gameData.gamesPlayed) || 0,
         completedLevels: user.gameData.completedLevels,
         levelStars: Object.fromEntries(user.gameData.levelStars),
-        abilities: user.gameData.abilities
+        abilities: Object.fromEntries(user.gameData.abilities)
       }
     });
 

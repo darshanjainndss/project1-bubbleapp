@@ -180,7 +180,14 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
                                 size={80}
                                 color="rgba(255, 255, 255, 0.1)"
                             />
-                            <Text style={styles.emptyText}>No {activeTab === 'pending' ? 'pending' : 'completed'} withdrawals</Text>
+                            <Text style={styles.emptyText}>
+                                No {activeTab === 'pending' ? 'pending' : 'completed'} withdrawals yet
+                            </Text>
+                            <Text style={styles.emptySubText}>
+                                {activeTab === 'pending' 
+                                    ? 'Your pending withdrawals will appear here' 
+                                    : 'Your completed withdrawals will appear here'}
+                            </Text>
                         </View>
                     ) : (
                         <View style={styles.list}>
@@ -254,11 +261,15 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
     },
     loadingContainer: {
-        padding: 60,
+        flex: 1,
+        paddingVertical: 80,
+        paddingHorizontal: 20,
         alignItems: 'center',
         justifyContent: 'center',
+        minHeight: 200,
     },
     loadingText: {
         color: '#00E0FF',
@@ -266,18 +277,35 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: 'monospace',
         letterSpacing: 1,
+        textAlign: 'center',
     },
     emptyContainer: {
-        padding: 60,
+        flex: 1,
+        paddingVertical: 80,
+        paddingHorizontal: 20,
         alignItems: 'center',
         justifyContent: 'center',
+        minHeight: 200,
     },
     emptyText: {
-        color: '#FFF',
-        fontSize: 18,
-        fontWeight: 'bold',
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: 16,
+        fontWeight: '600',
         marginTop: 20,
         fontFamily: 'monospace',
+        textAlign: 'center',
+        lineHeight: 24,
+        letterSpacing: 0.5,
+    },
+    emptySubText: {
+        color: 'rgba(255, 255, 255, 0.4)',
+        fontSize: 12,
+        fontWeight: '400',
+        marginTop: 8,
+        fontFamily: 'monospace',
+        textAlign: 'center',
+        lineHeight: 18,
+        letterSpacing: 0.3,
     },
     list: {
         padding: 16,

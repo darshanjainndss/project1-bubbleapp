@@ -87,24 +87,16 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [gameStartTime, setGameStartTime] = useState(Date.now());
   // Base abilities per level (2 of each) + any purchased abilities
-  const getBaseAbilitiesPerLevel = () => ({
-    lightning: initialStartingCounts?.lightning ?? 2,
-    bomb: initialStartingCounts?.bomb ?? 2,
-    freeze: initialStartingCounts?.freeze ?? 2,
-    fire: initialStartingCounts?.fire ?? 2,
-  });
   const [abilityInventory, setAbilityInventory] = useState(() => {
     if (initialAbilities) {
-      // Add base abilities to purchased abilities
-      const base = getBaseAbilitiesPerLevel();
-      return {
-        lightning: base.lightning + (initialAbilities.lightning || 0),
-        bomb: base.bomb + (initialAbilities.bomb || 0),
-        freeze: base.freeze + (initialAbilities.freeze || 0),
-        fire: base.fire + (initialAbilities.fire || 0),
-      };
+      return initialAbilities;
     }
-    return getBaseAbilitiesPerLevel();
+    return {
+      lightning: 0,
+      bomb: 0,
+      freeze: 0,
+      fire: 0,
+    };
   });
   const toastRef = useRef<ToastRef>(null);
 
@@ -177,7 +169,9 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
     const now = Date.now();
     if (now - lastProgressUpdate.current < PROGRESS_UPDATE_INTERVAL) return;
 
-    const stars = currentScore > 1000 ? 3 : currentScore > 500 ? 2 : currentScore > 100 ? 1 : 0;
+    // Use star thresholds from DB config
+    const thresholds = gameSettings?.starThresholds || { one: 100, two: 400, three: 800 };
+    const stars = currentScore >= thresholds.three ? 3 : currentScore >= thresholds.two ? 2 : currentScore >= thresholds.one ? 1 : 0;
 
     try {
       const result = await BackendService.updateGameProgress({
@@ -212,27 +206,13 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
     }
   }, [gameState]);
 
-  // Combine base abilities (2 each per level) with purchased abilities
+  // Sync abilities when level changes or purchases update from parent
   useEffect(() => {
-    if (!initialAbilities) {
-      // Always start each level with base 2 of each ability
-      const baseAbilities = getBaseAbilitiesPerLevel();
-      console.log('🎮 GameScreen: No purchased abilities, using base only:', baseAbilities);
-      setAbilityInventory(baseAbilities);
-    } else {
-      // Add base abilities to purchased abilities when level changes OR when purchases are made
-      const base = getBaseAbilitiesPerLevel();
-      const combinedAbilities = {
-        lightning: base.lightning + (initialAbilities.lightning || 0),
-        bomb: base.bomb + (initialAbilities.bomb || 0),
-        freeze: base.freeze + (initialAbilities.freeze || 0),
-        fire: base.fire + (initialAbilities.fire || 0),
-      };
-      console.log('🎮 GameScreen: Purchased abilities:', initialAbilities);
-      console.log('🎮 GameScreen: Combined abilities (base + purchased):', combinedAbilities);
-      setAbilityInventory(combinedAbilities);
+    if (initialAbilities) {
+      console.log('🎮 GameScreen: Syncing total abilities from Roadmap:', initialAbilities);
+      setAbilityInventory(initialAbilities);
     }
-  }, [initialAbilities, level]); // Removed user dependency, added initialAbilities as primary trigger
+  }, [initialAbilities, level]);
 
   const isProcessing = useRef(false);
   const isAiming = useRef(false);
@@ -355,22 +335,12 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
   const initGame = useCallback(() => {
     setGameStartTime(Date.now());
 
-    // Reset abilities to base (2 each) + purchased abilities for every level
-    if (!initialAbilities) {
-      const baseAbilities = getBaseAbilitiesPerLevel();
-      console.log('🎮 initGame: No purchased abilities, using base only:', baseAbilities);
-      setAbilityInventory(baseAbilities);
+    // Reset abilities
+    if (initialAbilities) {
+      console.log('🎮 initGame: Using passed total abilities:', initialAbilities);
+      setAbilityInventory(initialAbilities);
     } else {
-      const base = getBaseAbilitiesPerLevel();
-      const combinedAbilities = {
-        lightning: base.lightning + (initialAbilities.lightning || 0),
-        bomb: base.bomb + (initialAbilities.bomb || 0),
-        freeze: base.freeze + (initialAbilities.freeze || 0),
-        fire: base.fire + (initialAbilities.fire || 0),
-      };
-      console.log('🎮 initGame: Purchased abilities:', initialAbilities);
-      console.log('🎮 initGame: Combined abilities (base + purchased):', combinedAbilities);
-      setAbilityInventory(combinedAbilities);
+      setAbilityInventory({ lightning: 0, bomb: 0, freeze: 0, fire: 0 });
     }
 
     const grid: any[] = [];
@@ -812,7 +782,9 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
 
   const goToNextLevel = async () => {
     if (onLevelComplete) {
-      const stars = score >= 1000 ? 3 : score >= 500 ? 2 : score > 100 ? 1 : 0;
+      // Use star thresholds from DB config
+      const thresholds = gameSettings?.starThresholds || { one: 100, two: 400, three: 800 };
+      const stars = score >= thresholds.three ? 3 : score >= thresholds.two ? 2 : score >= thresholds.one ? 1 : 0;
 
       // Calculate coins earned
       const baseCoins = Math.floor(10 + (level * 2.5));
@@ -880,7 +852,9 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
   };
 
   // Calculate game results outside modal for accessibility
-  const earnedStars = score >= 800 ? 3 : score >= 400 ? 2 : score >= 100 ? 1 : 0;
+  // Use star thresholds from DB config
+  const starThresholds = gameSettings?.starThresholds || { one: 100, two: 400, three: 800 };
+  const earnedStars = score >= starThresholds.three ? 3 : score >= starThresholds.two ? 2 : score >= starThresholds.one ? 1 : 0;
 
   // Coin calculation - Strictly use DB values as requested
   const coinsPerLevel = gameSettings?.coinsPerLevel || 10;
@@ -891,22 +865,20 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
   const earnedRewardValue = (score / scoreRangeValue) * rewardValuePerRange;
 
   // In-Game Coins Reward - "Only coins perlevel should be fetch from mdb and that much only be give"
-  const shouldGiveRewards = earnedStars > 0;
-  const totalCoinsEarned = shouldGiveRewards ? coinsPerLevel : 0;
-
-  // Bonus coins for UI display purposes (if needed, but strictly part of totalCoinsEarned now)
-  const levelBonusCoins = 0;
+  // Win condition: 2 or 3 stars (level cleared)
+  const isWin = earnedStars >= 2;
+  const totalCoinsEarned = isWin ? coinsPerLevel : 0;
 
   // Debug coin calculation
   if (gameState !== 'playing') {
     console.log('💰 Coin Calculation Debug:', {
       score,
       earnedStars,
+      isWin,
       gameState,
       coinsPerLevel,
       earnedRewardValue,
-      totalCoinsEarned,
-      levelBonusCoins
+      totalCoinsEarned
     });
   }
 
@@ -1021,79 +993,41 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
 
               {gameState === 'won' && (
                 <View style={styles.rewardDetailsContainer}>
+                  {/* Victory Header */}
                   <Text style={styles.rewardTitle}>🎉 MISSION COMPLETE! 🎉</Text>
 
-                  {/* Main Achievement Display */}
-                  <View style={styles.achievementDisplay}>
-                    {/* Stars Display */}
-                    <View style={styles.starsContainer}>
-                      <Text style={styles.starsLabel}>STARS EARNED</Text>
-                      <View style={styles.starsRow}>
-                        {[1, 2, 3].map((starNum) => (
-                          <MaterialIcon
-                            key={starNum}
-                            name="star"
-                            family="material"
-                            size={40}
-                            color={starNum <= earnedStars ? "#FFD700" : "#444"}
-                            style={styles.starIcon}
-                          />
-                        ))}
-                      </View>
-                      <Text style={styles.starsCount}>{earnedStars}/3</Text>
+                  {/* Simple 2-Column Grid - Score and Coins */}
+                  <View style={styles.simpleStatsGrid}>
+                    {/* Score */}
+                    <View style={styles.simpleStatCard}>
+                      <MaterialIcon name="trending-up" family="material" size={32} color="#00E0FF" />
+                      <Text style={styles.simpleStatValue}>{score.toLocaleString()}</Text>
+                      <Text style={styles.simpleStatLabel}>SCORE</Text>
                     </View>
 
-                    {/* Score Display */}
-                    <View style={styles.scoreContainer}>
-                      <Text style={styles.scoreLabel}>FINAL SCORE</Text>
-                      <Text style={styles.scoreValue}>{score.toLocaleString()}</Text>
-                    </View>
-
-                    {/* Coins Display */}
-                    <View style={styles.coinsContainer}>
-                      <Text style={styles.coinsLabel}>COINS EARNED</Text>
-                      <View style={styles.coinsRow}>
-                        <MaterialIcon
-                          name={GAME_ICONS.COIN.name}
-                          family={GAME_ICONS.COIN.family}
-                          size={32}
-                          color={ICON_COLORS.GOLD}
-                        />
-                        <Text style={styles.coinsValue}>+{totalCoinsEarned}</Text>
-                      </View>
+                    {/* Coins */}
+                    <View style={styles.simpleStatCard}>
+                      <MaterialIcon name={GAME_ICONS.COIN.name} family={GAME_ICONS.COIN.family} size={32} color={ICON_COLORS.GOLD} />
+                      <Text style={styles.simpleStatValue}>+{totalCoinsEarned}</Text>
+                      <Text style={styles.simpleStatLabel}>COINS</Text>
                     </View>
                   </View>
 
-                  <View style={styles.rewardBreakdown}>
-                    <Text style={styles.rewardBreakdownTitle}>📊 MISSION DETAILS</Text>
-                    <Text style={styles.rewardBreakdownItem}>🎮 Moves Used: {30 - moves}/{30}</Text>
-                    <Text style={styles.rewardBreakdownItem}>⚡ Abilities Used: {Object.values(abilitiesUsedCount).reduce((a, b) => a + b, 0)}</Text>
-                  </View>
-
-                  <View style={styles.modalRewardsContainer}>
-                    {/* Show Bonus Coins and Reward Bolts only if earnedStars >= 2 */}
-                    {earnedStars >= 2 && (
-                      <>
-                        <View style={styles.modalCoins}>
-                          <MaterialIcon
-                            name="bolt"
-                            family="material"
-                            size={24}
-                            color="#ff9900ff"
-                          />
-                          <Text style={[styles.modalCoinsText, { color: '#ff9900ff' }]}>
-                            +{earnedRewardValue.toFixed(2)} REWARD
-                          </Text>
-                        </View>
-
-                      </>
-                    )}
-                  </View>
-
+                  {/* SHIB Earnings */}
                   {earnedStars >= 2 && (
-                    <Text style={styles.nextLevelUnlocked}>
-                      🚀 NEXT LEVEL UNLOCKED!
-                    </Text>
+                    <View style={styles.earningsCard}>
+                      <MaterialIcon name="bolt" family="material" size={28} color="#FF9900" />
+                      <View style={styles.earningsInfo}>
+                        <Text style={styles.earningsLabel}>SHIB EARNINGS</Text>
+                        <Text style={styles.earningsValue}>+{earnedRewardValue.toFixed(8)}</Text>
+                      </View>
+                      <MaterialIcon name="check-circle" family="material" size={24} color="#00FF88" />
+                    </View>
+                  )}
+
+                  {/* Next Level Unlock */}
+                  {earnedStars >= 2 && (
+                    <Text style={styles.nextLevelText}>🚀 NEXT LEVEL UNLOCKED!</Text>
                   )}
                 </View>
               )}

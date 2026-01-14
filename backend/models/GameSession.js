@@ -207,7 +207,7 @@ gameSessionSchema.statics.getLevelLeaderboard = async function (level, limit = 5
     },
     {
       $group: {
-        _id: '$userId',
+        _id: '$email',
         bestScore: { $first: '$score' },
         bestTime: { $first: '$duration' },
         completedAt: { $first: '$completedAt' }
@@ -250,8 +250,9 @@ gameSessionSchema.methods.calculateCoinsEarned = async function () {
 
   let coins = 0;
 
-  // Simple: Fixed coins per level completion (default 10)
-  if (this.isWin) {
+  // Win condition: 2 or 3 stars (level cleared)
+  // Fixed coins per level completion (default 10)
+  if (this.isWin && this.stars >= 2) {
     coins = config?.coinsPerLevel || 10;
   }
 

@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
-   
+
     totalCoins: {
       type: Number,
       default: 100 // Starting coins
@@ -224,7 +224,7 @@ userSchema.methods.getGameData = function () {
   }
 
   return {
-    userId: this._id,
+    email: this.email,
     ...gameData,
     rank: null // Will be calculated separately
   };
@@ -245,6 +245,7 @@ userSchema.methods.initializeUserAbilities = async function () {
     // Set starting counts for each ability
     abilities.forEach(ability => {
       if (!this.gameData.abilities.has(ability.name)) {
+        // Initialize to base starting count (2), ensuring DB matches game state
         const startingCount = ability.abilityMetadata?.startingCount || 2;
         this.gameData.abilities.set(ability.name, startingCount);
       }

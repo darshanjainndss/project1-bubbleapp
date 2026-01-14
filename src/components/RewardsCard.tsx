@@ -66,8 +66,8 @@ const RewardsCard: React.FC<RewardsCardProps> = ({
                 <>
                   <Text style={styles.rewardAmount}>
                     {claimedEarnings.toLocaleString(undefined, { 
-                      minimumFractionDigits: 4, 
-                      maximumFractionDigits: 4 
+                      minimumFractionDigits: 8, 
+                      maximumFractionDigits: 8 
                     })} SHIB
                   </Text>
                   <Text style={styles.rewardLabel}>Available Rewards</Text>
@@ -109,11 +109,11 @@ const styles = StyleSheet.create({
   },
   rewardsCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(0, 255, 136, 0.2)',
-    padding: 16,
-    marginBottom: 12,
+    padding: 12,
+    marginBottom: 10,
   },
   cardRow: {
     flexDirection: 'row',
@@ -126,19 +126,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255, 153, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   rewardDetails: {
     flex: 1,
   },
   rewardAmount: {
-    fontSize: SCREEN_WIDTH > 380 ? 16 : 14,
+    fontSize: SCREEN_WIDTH > 380 ? 14 : 12,
     fontWeight: '700',
     color: '#00FF88',
     fontFamily: 'monospace',
@@ -151,13 +151,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   withdrawButton: {
-    backgroundColor: '#00FF88',
+    backgroundColor: '#FF6B35',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginLeft: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    marginLeft: 8,
   },
   withdrawButtonText: {
     color: '#FFF',
@@ -168,15 +168,15 @@ const styles = StyleSheet.create({
   },
   historyRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   historyButton: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 12,
+    padding: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

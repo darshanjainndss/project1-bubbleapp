@@ -17,9 +17,8 @@ export interface UserGameData {
 }
 
 export interface LeaderboardEntry {
-  userId: string;
-  username: string;
   email: string;
+  username: string;
   score: number;
   level: number;
   coins: number;
@@ -52,14 +51,14 @@ class StorageService {
   }
 
   // Get user-specific storage key
-  private static getUserDataKey(userId: string): string {
-    return `${this.USER_DATA_PREFIX}${userId}`;
+  private static getUserDataKey(email: string): string {
+    return `${this.USER_DATA_PREFIX}${email}`;
   }
 
-  // Save current user ID
-  static async setCurrentUser(userId: string): Promise<void> {
+  // Save current user email
+  static async setCurrentUser(email: string): Promise<void> {
     try {
-      await AsyncStorage.setItem(this.CURRENT_USER_KEY, userId);
+      await AsyncStorage.setItem(this.CURRENT_USER_KEY, email);
     } catch (error) {
       console.error('Error saving current user:', error);
     }
@@ -76,9 +75,9 @@ class StorageService {
   }
 
   // Load user game data
-  static async loadUserData(userId: string): Promise<UserGameData> {
+  static async loadUserData(email: string): Promise<UserGameData> {
     try {
-      const key = this.getUserDataKey(userId);
+      const key = this.getUserDataKey(email);
       const data = await AsyncStorage.getItem(key);
       
       if (data) {
@@ -89,7 +88,7 @@ class StorageService {
       
       // Return default data for new users
       const defaultData = this.getDefaultUserData();
-      await this.saveUserData(userId, defaultData);
+      await this.saveUserData(email, defaultData);
       return defaultData;
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -98,14 +97,14 @@ class StorageService {
   }
 
   // Save user game data
-  static async saveUserData(userId: string, data: UserGameData): Promise<void> {
+  static async saveUserData(email: string, data: UserGameData): Promise<void> {
     try {
-      const key = this.getUserDataKey(userId);
+      const key = this.getUserDataKey(email);
       data.lastPlayedDate = new Date().toISOString();
       await AsyncStorage.setItem(key, JSON.stringify(data));
       
       // Also update leaderboard
-      await this.updateLeaderboard(userId, data);
+      await this.updateLeaderboard(email, data);
     } catch (error) {
       console.error('Error saving user data:', error);
     }
@@ -113,26 +112,26 @@ class StorageService {
 
   // Update specific fields of user data
   static async updateUserData(
-    userId: string, 
+    email: string, 
     updates: Partial<UserGameData>
   ): Promise<UserGameData> {
     try {
-      const currentData = await this.loadUserData(userId);
+      const currentData = await this.loadUserData(email);
       const updatedData = { ...currentData, ...updates };
-      await this.saveUserData(userId, updatedData);
+      await this.saveUserData(email, updatedData);
       return updatedData;
     } catch (error) {
       console.error('Error updating user data:', error);
-      return await this.loadUserData(userId);
+      return await this.loadUserData(email);
     }
   }
 
   // Add coins to user
-  static async addCoins(userId: string, amount: number): Promise<number> {
+  static async addCoins(email: string, amount: number): Promise<number> {
     try {
-      const userData = await this.loadUserData(userId);
+      const userData = await this.loadUserData(email);
       userData.coins += amount;
-      await this.saveUserData(userId, userData);
+      await this.saveUserData(email, userData);
       return userData.coins;
     } catch (error) {
       console.error('Error adding coins:', error);
@@ -141,12 +140,12 @@ class StorageService {
   }
 
   // Spend coins
-  static async spendCoins(userId: string, amount: number): Promise<boolean> {
+  static async spendCoins(email: string, amount: number): Promise<boolean> {
     try {
-      const userData = await this.loadUserData(userId);
+      const userData = await this.loadUserData(email);
       if (userData.coins >= amount) {
         userData.coins -= amount;
-        await this.saveUserData(userId, userData);
+        await this.saveUserData(email, userData);
         return true;
       }
       return false;
@@ -158,13 +157,13 @@ class StorageService {
 
   // Update level completion
   static async completeLevel(
-    userId: string, 
+    email: string, 
     level: number, 
     stars: number, 
     scoreEarned: number
   ): Promise<UserGameData> {
     try {
-      const userData = await this.loadUserData(userId);
+      const userData = await this.loadUserData(email);
       
       // Add to completed levels if not already completed
       if (!userData.completedLevels.includes(level)) {
@@ -186,27 +185,27 @@ class StorageService {
         userData.currentLevel = level + 1;
       }
       
-      await this.saveUserData(userId, userData);
+      await this.saveUserData(email, userData);
       return userData;
     } catch (error) {
       console.error('Error completing level:', error);
-      return await this.loadUserData(userId);
+      return await this.loadUserData(email);
     }
   }
 
   // Purchase ability
   static async purchaseAbility(
-    userId: string, 
+    email: string, 
     abilityId: keyof UserGameData['abilityInventory'], 
     price: number
   ): Promise<{ success: boolean; newInventory: UserGameData['abilityInventory']; newCoins: number }> {
     try {
-      const userData = await this.loadUserData(userId);
+      const userData = await this.loadUserData(email);
       
       if (userData.coins >= price) {
         userData.coins -= price;
         userData.abilityInventory[abilityId] += 1;
-        await this.saveUserData(userId, userData);
+        await this.saveUserData(email, userData);
         
         return {
           success: true,
@@ -222,7 +221,7 @@ class StorageService {
       };
     } catch (error) {
       console.error('Error purchasing ability:', error);
-      const userData = await this.loadUserData(userId);
+      const userData = await this.loadUserData(email);
       return {
         success: false,
         newInventory: userData.abilityInventory,
@@ -233,15 +232,15 @@ class StorageService {
 
   // Use ability
   static async useAbility(
-    userId: string, 
+    email: string, 
     abilityId: keyof UserGameData['abilityInventory']
   ): Promise<{ success: boolean; newInventory: UserGameData['abilityInventory'] }> {
     try {
-      const userData = await this.loadUserData(userId);
+      const userData = await this.loadUserData(email);
       
       if (userData.abilityInventory[abilityId] > 0) {
         userData.abilityInventory[abilityId] -= 1;
-        await this.saveUserData(userId, userData);
+        await this.saveUserData(email, userData);
         
         return {
           success: true,
@@ -255,7 +254,7 @@ class StorageService {
       };
     } catch (error) {
       console.error('Error using ability:', error);
-      const userData = await this.loadUserData(userId);
+      const userData = await this.loadUserData(email);
       return {
         success: false,
         newInventory: userData.abilityInventory,
@@ -264,18 +263,17 @@ class StorageService {
   }
 
   // Leaderboard functions
-  private static async updateLeaderboard(userId: string, userData: UserGameData): Promise<void> {
+  private static async updateLeaderboard(email: string, userData: UserGameData): Promise<void> {
     try {
       // Get current user info (you'll need to pass this from auth context)
       const leaderboard = await this.getLeaderboard();
       
       // Find existing entry or create new one
-      const existingIndex = leaderboard.findIndex(entry => entry.userId === userId);
+      const existingIndex = leaderboard.findIndex(entry => entry.email === email);
       
       const leaderboardEntry: LeaderboardEntry = {
-        userId,
-        username: `Player_${userId.substring(0, 8)}`, // You can improve this with real usernames
-        email: '', // You can get this from auth context
+        email,
+        username: `Player_${email.substring(0, 8)}`, // You can improve this with real usernames
         score: userData.score,
         level: userData.currentLevel,
         coins: userData.coins,
