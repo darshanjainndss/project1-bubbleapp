@@ -10,9 +10,9 @@ import {
 } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import mobileAds, { MaxAdContentRating } from 'react-native-google-mobile-ads';
-import LoadingScreen from './src/components/LoadingScreen';
-import Roadmap from './src/components/Roadmap';
-import LoginScreen from './src/components/LoginScreen';
+import LoadingScreen from './src/components/common/LoadingScreen';
+import Roadmap from './src/screens/RoadmapScreen';
+import LoginScreen from './src/screens/LoginScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import ConfigService from './src/services/ConfigService';
 

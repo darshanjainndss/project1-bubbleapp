@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
-import ConfigService from '../services/ConfigService';
+import ConfigService from '../../services/ConfigService';
 
 interface AdBannerProps {
   size?: BannerAdSize;

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { Animated } from 'react-native';
-import { BUBBLE_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT, GRID_TOP, ROW_HEIGHT } from '../styles/GameScreenStyles';
+import { BUBBLE_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT, GRID_TOP, ROW_HEIGHT } from '../styles/screens/GameScreenStyles';
 import { getPos, getHexNeighbors } from '../utils/gameUtils';
 import { COLORS } from '../data/levelPatterns';
 

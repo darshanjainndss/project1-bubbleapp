@@ -1,7 +1,7 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, Animated, SafeAreaView, Platform, Dimensions, TouchableOpacity } from 'react-native';
 import MaterialIcon from './MaterialIcon';
-import { ICON_COLORS } from '../config/icons';
+import { ICON_COLORS } from '../../config/icons';
 
 const { width } = Dimensions.get('window');
 

@@ -1,9 +1,9 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Image } from "react-native";
-import MaterialIcon from "../MaterialIcon";
-import HelpButton from "../HelpButton";
+import MaterialIcon from "../common/MaterialIcon";
+import HelpButton from "../common/HelpButton";
 import { GAME_ICONS, ICON_COLORS } from "../../config/icons";
-import { styles } from "../../styles/GameScreenStyles";
+import { styles } from "../../styles/screens/GameScreenStyles";
 
 const COLOR_MAP: Record<string, any> = {
     "#ff3b30": require("../../images/red.webp"),

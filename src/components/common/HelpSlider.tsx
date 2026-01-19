@@ -136,8 +136,6 @@ const HelpSlider: React.FC<HelpSliderProps> = ({
     }
   ];
 
-  if (!visible) return null;
-
   return (
     <Modal
       transparent

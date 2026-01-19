@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Image, Dimensions, Animated, Easing } from 'react-native';
 import LottieView from 'lottie-react-native';
-import SettingsService from '../services/SettingsService';
+import SettingsService from '../../services/SettingsService';
 
 interface BubbleBlastProps {
     x: number;
@@ -17,12 +17,12 @@ const SPARKLE_COUNT = 5;
 
 /* Replicate Color Map */
 const COLOR_MAP: Record<string, any> = {
-    "#ff3b30": require("../images/red.webp"),
-    "#ff9500": require("../images/orange.webp"),
-    "#ffd60a": require("../images/yellow.webp"),
-    "#34c759": require("../images/green.webp"),
-    "#007aff": require("../images/blue.webp"),
-    "#af52de": require("../images/purple.webp"),
+    "#ff3b30": require("../../images/red.webp"),
+    "#ff9500": require("../../images/orange.webp"),
+    "#ffd60a": require("../../images/yellow.webp"),
+    "#34c759": require("../../images/green.webp"),
+    "#007aff": require("../../images/blue.webp"),
+    "#af52de": require("../../images/purple.webp"),
 };
 
 const BubbleBlast = React.memo(({ x, y, color, delay = 0, onComplete }: BubbleBlastProps) => {
@@ -62,7 +62,7 @@ const BubbleBlast = React.memo(({ x, y, color, delay = 0, onComplete }: BubbleBl
     const runPopAnimation = () => {
         // Light vibration feedback for individual bubble blast
         SettingsService.vibrateClick();
-        
+
         Animated.parallel([
             // 1. Bubble "Pop" (Scale Up -> Shrink & Fade)
             Animated.sequence([
@@ -140,7 +140,7 @@ const BubbleBlast = React.memo(({ x, y, color, delay = 0, onComplete }: BubbleBl
         <View style={[styles.container, { left: x, top: y }]} pointerEvents="none">
             {/* Red Lightning Lottie Background */}
             <LottieView
-                source={require("../images/Spark.json")}
+                source={require("../../images/Spark.json")}
                 autoPlay
                 loop={false}
                 style={styles.lottie}

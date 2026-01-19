@@ -190,4 +190,149 @@ router.post('/purchase', auth, async (req, res) => {
     }
 });
 
+// Initialize default shop items
+router.post('/initialize', async (req, res) => {
+    try {
+        const defaultItems = [
+            // Coin Packs
+            {
+                name: 'coin_pack_100',
+                displayName: '100 Coins Pack',
+                description: 'Get 100 coins to buy power-ups and abilities.',
+                type: 'coin_pack',
+                icon: 'monetization-on',
+                color: '#FFD60A',
+                priceCoins: 0,
+                priceMoney: 29,
+                currency: '₹',
+                coinReward: 100,
+                sortOrder: 1
+            },
+            {
+                name: 'coin_pack_500',
+                displayName: '500 Coins Pack',
+                description: 'A medium pack of 500 coins for more power.',
+                type: 'coin_pack',
+                icon: 'savings',
+                color: '#FFD60A',
+                priceCoins: 0,
+                priceMoney: 99,
+                currency: '₹',
+                coinReward: 500,
+                sortOrder: 2
+            },
+            {
+                name: 'coin_pack_1200',
+                displayName: '1200 Coins Pack',
+                description: 'Best value! 1200 coins for big spenders.',
+                type: 'coin_pack',
+                icon: 'account-balance-wallet',
+                color: '#FFD60A',
+                priceCoins: 0,
+                priceMoney: 199,
+                currency: '₹',
+                coinReward: 1200,
+                sortOrder: 3
+            },
+            // Ability Bundles
+            {
+                name: 'starter_ability_pack',
+                displayName: 'Starter Pack',
+                description: '5x each ability to get you started.',
+                type: 'bundle',
+                icon: 'card-giftcard',
+                color: '#4CAF50',
+                priceCoins: 0,
+                priceMoney: 49,
+                currency: '₹',
+                items: [
+                    { abilityName: 'lightning', quantity: 5 },
+                    { abilityName: 'bomb', quantity: 5 },
+                    { abilityName: 'freeze', quantity: 5 },
+                    { abilityName: 'fire', quantity: 5 }
+                ],
+                sortOrder: 4
+            },
+            {
+                name: 'pro_ability_pack',
+                displayName: 'Pro Ability Pack',
+                description: '15x each ability for serious players.',
+                type: 'bundle',
+                icon: 'stars',
+                color: '#2196F3',
+                priceCoins: 0,
+                priceMoney: 99,
+                currency: '₹',
+                items: [
+                    { abilityName: 'lightning', quantity: 15 },
+                    { abilityName: 'bomb', quantity: 15 },
+                    { abilityName: 'freeze', quantity: 15 },
+                    { abilityName: 'fire', quantity: 15 }
+                ],
+                sortOrder: 5
+            },
+            {
+                name: 'mega_all_ability_pack',
+                displayName: 'Mega Pack',
+                description: '50x each ability. Never run out of power!',
+                type: 'bundle',
+                icon: 'diamond',
+                color: '#E91E63',
+                priceCoins: 0,
+                priceMoney: 299,
+                currency: '₹',
+                items: [
+                    { abilityName: 'lightning', quantity: 50 },
+                    { abilityName: 'bomb', quantity: 50 },
+                    { abilityName: 'freeze', quantity: 50 },
+                    { abilityName: 'fire', quantity: 50 }
+                ],
+                sortOrder: 6
+            },
+            // Subscriptions
+            {
+                name: 'vip_monthly',
+                displayName: 'Monthly VIP',
+                description: '30 days of VIP benefits!',
+                type: 'subscription',
+                icon: 'crown',
+                color: '#FFD700',
+                priceCoins: 0,
+                priceMoney: 199,
+                currency: '₹',
+                subscriptionDays: 30,
+                features: ['Ad-free experience', 'Double daily rewards', 'Special VIP badge'],
+                sortOrder: 7
+            },
+            {
+                name: 'vip_yearly',
+                displayName: 'Yearly VIP',
+                description: '365 days of VIP benefits! Best value!',
+                type: 'subscription',
+                icon: 'crown',
+                color: '#FFD700',
+                priceCoins: 0,
+                priceMoney: 1999,
+                currency: '₹',
+                subscriptionDays: 365,
+                features: ['Ad-free experience', 'Triple daily rewards', 'Special VIP badge', 'Exclusive levels'],
+                sortOrder: 8
+            }
+        ];
+
+        // Clear existing items and insert defaults
+        await ShopItem.deleteMany({});
+        const result = await ShopItem.insertMany(defaultItems);
+
+        res.json({
+            success: true,
+            message: 'Shop initialized with production-ready items',
+            count: result.length
+        });
+    } catch (error) {
+        console.error('Error initializing shop:', error);
+        res.status(500).json({ success: false, message: 'Failed to initialize shop' });
+    }
+});
+
 module.exports = router;

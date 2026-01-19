@@ -7,7 +7,7 @@ const API_BASE_URL = __DEV__
 
 // Fallback URL for emulators and devices
 const API_FALLBACK_URL = 'http://10.0.2.2:3001/api'; // Android emulator localhost
-const API_DEVICE_URL = 'http://192.168.1.50:3001/api'; // For physical devices on network - Updated IP
+const API_DEVICE_URL = 'http://192.168.0.135:3001/api'; // For physical devices on network - Updated IP
 
 // Network test function with fallback URLs
 const testNetworkConnection = async (): Promise<{ success: boolean; url?: string }> => {
@@ -221,25 +221,37 @@ export interface AdUnitsResponse {
   error?: string;
 }
 
-
 class BackendService {
   private authToken: string | null = null;
   private currentUser: UserProfile | null = null;
   private workingApiUrl: string = API_BASE_URL; // Will be updated after network test
+  private readyPromise: Promise<void>;
 
   constructor() {
-    this.loadAuthToken();
-    // Start network test early
-    this.ensureWorkingUrl();
+    this.readyPromise = this.init();
+  }
+
+  private async init(): Promise<void> {
+    try {
+      await Promise.all([
+        this.loadAuthToken(),
+        this.initWorkingUrl()
+      ]);
+      console.log('✅ BackendService initialized');
+    } catch (error) {
+      console.error('❌ BackendService initialization failed:', error);
+    }
+  }
+
+  private async initWorkingUrl(): Promise<void> {
+    const result = await testNetworkConnection();
+    if (result.success && result.url) {
+      this.workingApiUrl = result.url;
+    }
   }
 
   private async ensureWorkingUrl(): Promise<string> {
-    if (this.workingApiUrl === API_BASE_URL) {
-      const result = await testNetworkConnection();
-      if (result.success && result.url) {
-        this.workingApiUrl = result.url;
-      }
-    }
+    await this.readyPromise;
     return this.workingApiUrl;
   }
 
@@ -276,26 +288,48 @@ class BackendService {
   }
 
   async ensureAuthenticated(firebaseUser: any): Promise<boolean> {
-    console.log('🔍 ensureAuthenticated called with user:', firebaseUser?.email || firebaseUser?.displayName || 'Anonymous');
-    console.log('🔍 Current isAuthenticated():', this.isAuthenticated());
+    console.log('🔍 ensureAuthenticated called for:', firebaseUser?.email || 'Anonymous');
 
-    if (this.isAuthenticated()) return true;
+    // Always wait for the service to be ready (AsyncStorage loaded)
+    await this.readyPromise;
+
+    if (this.isAuthenticated()) {
+      console.log('✅ Already authenticated in BackendService');
+      return true;
+    }
+
     if (!firebaseUser) {
       console.log('❌ No Firebase user provided');
       return false;
     }
 
-    console.log('🔑 Logging in with Google...');
-    // Handle regular Google users
-    const result = await this.loginWithGoogle(
-      firebaseUser.uid,
-      firebaseUser.email || '',
-      firebaseUser.displayName || 'Commander',
-      firebaseUser.photoURL || undefined
-    );
+    // Check if it's a Google user or Anonymous user
+    const isGoogle = firebaseUser.providerData?.some((p: any) => p.providerId === 'google.com');
+    const isAnonymous = firebaseUser.isAnonymous;
 
-    console.log('🔍 Login result:', result.success ? 'Success' : `Failed: ${result.error}`);
-    return result.success;
+    if (isGoogle) {
+      console.log('🔑 Logging in with Google backend...');
+      const result = await this.loginWithGoogle(
+        firebaseUser.uid,
+        firebaseUser.email || '',
+        firebaseUser.displayName || 'Commander',
+        firebaseUser.photoURL || undefined
+      );
+      return result.success;
+    } else if (isAnonymous) {
+      console.log('� Logging in as Anonymous backend...');
+      const result = await this.loginWithAnonymous(
+        firebaseUser.uid,
+        firebaseUser.displayName || 'Guest'
+      );
+      return result.success;
+    }
+
+    // For Email/Password users, they should have been authenticated by LoginScreen calling loginUser.
+    // If we reach here, it means we have a Firebase session but no Backend session.
+    // This can happen on app restart if token expired or wasn't saved.
+    console.log('⚠️ Firebase session exists but no backend token for non-Google user');
+    return false;
   }
 
   async clearAuthToken(): Promise<void> {
@@ -401,6 +435,34 @@ class BackendService {
   }
 
 
+  // Anonymous Login
+  async loginWithAnonymous(firebaseId: string, displayName: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/auth/anonymous-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firebaseId,
+          displayName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await this.saveAuthToken(data.token, data.user);
+        return { success: true, user: data.user };
+      } else {
+        return { success: false, error: data.message || 'Anonymous login failed' };
+      }
+    } catch (error) {
+      console.error('Anonymous login error:', error);
+      return { success: false, error: 'Network error during anonymous login' };
+    }
+  }
 
   // Logout
   async logout(): Promise<void> {

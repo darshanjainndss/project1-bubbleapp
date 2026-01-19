@@ -9,8 +9,9 @@ import {
   Animated,
   StatusBar,
   RefreshControl,
+  Modal,
 } from 'react-native';
-import MaterialIcon from './MaterialIcon';
+import MaterialIcon from '../components/common/MaterialIcon';
 import { ICON_COLORS } from '../config/icons';
 import BackendService from '../services/BackendService';
 import { useAuth } from '../context/AuthContext';
@@ -90,7 +91,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
       if (leaderboardResult.success && leaderboardResult.leaderboard) {
         // Trust the backend's sorting and ranking - don't re-sort on client
         const data = leaderboardResult.leaderboard;
-        
+
         setLeaderboardData(data);
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } else {
@@ -171,10 +172,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 
   // Removed TopThreePodium for simplified UI
 
-  if (!isVisible) return null;
-
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Modal
+      visible={isVisible}
+      transparent={false}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
@@ -206,7 +211,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                 </View>
                 <View style={styles.userTexts}>
                   <Text style={styles.greeting}>{(user?.email || 'User').split('@')[0]}</Text>
-                 
+
                 </View>
               </View>
               <View style={styles.userStatsGrid}>
@@ -261,7 +266,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
           )}
         </View>
       </SafeAreaView>
-    </Animated.View>
+      </Animated.View>
+    </Modal>
   );
 };
 

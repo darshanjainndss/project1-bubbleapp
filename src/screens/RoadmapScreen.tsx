@@ -16,28 +16,31 @@ import {
 } from "react-native";
 import LottieView from 'lottie-react-native';
 import GameScreen from './GameScreen';
-import SpaceBackground from "./SpaceBackground.tsx";
-import Leaderboard from './Leaderboard';
-import MaterialIcon from './MaterialIcon';
-import AdBanner from './AdBanner';
-import RewardedAdButton from './RewardedAdButton';
+import SpaceBackground from "../components/common/SpaceBackground";
+import Leaderboard from './LeaderboardScreen';
+import MaterialIcon from '../components/common/MaterialIcon';
+import AdBanner from '../components/common/AdBanner';
+import RewardedAdButton from '../components/common/RewardedAdButton';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { getLevelPattern, getLevelMoves } from '../data/levelPatterns';
 import { useAuth } from '../context/AuthContext';
-import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from "../styles/RoadmapStyles";
+import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from "../styles/screens/RoadmapStyles";
 import BackendService from '../services/BackendService';
 import ConfigService from '../services/ConfigService';
-import ConfirmationModal from './ConfirmationModal';
-import ToastNotification, { ToastRef } from './ToastNotification';
+import ConfirmationModal from '../components/common/ConfirmationModal';
+import ToastNotification, { ToastRef } from '../components/common/ToastNotification';
 import SettingsService from '../services/SettingsService';
 // Removed ethers due to Metro bundling issues in React Native. Using regex for validation instead.
-import Shop from './Shop';
-import RewardHistory from './RewardHistory';
-import WithdrawHistory from './WithdrawHistory';
-import RewardsCard from './RewardsCard';
-import HelpSlider from './HelpSlider';
-import HelpButton from './HelpButton';
-import MessageModal from './MessageModal';
+import Shop from '../components/game/Shop';
+import RewardHistory from '../components/game/RewardHistory';
+import WithdrawHistory from '../components/game/WithdrawHistory';
+
+import WithdrawModal from '../components/game/WithdrawModal';
+import ProfilePopup from '../components/game/ProfilePopup';
+import EarnCoinsPopup from '../components/game/EarnCoinsPopup';
+import HelpSlider from '../components/common/HelpSlider';
+import HelpButton from '../components/common/HelpButton';
+import MessageModal from '../components/common/MessageModal';
 
 // Helper function to safely call vibration
 const safeVibrate = () => {
@@ -180,10 +183,317 @@ const ICONS = [
   'https://img.icons8.com/fluency/512/venus-planet.png',
   'https://img.icons8.com/fluency/512/neptune-planet.png',
   'https://img.icons8.com/fluency/512/supernova.png',
-  'https://img.icons8.com/fluency/512/shooting-star.png',
 ];
 
-// Initial fallback for UI while loading (empty until backend fetches)
+const localStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  withdrawCard: {
+    width: SCREEN_WIDTH * 0.85,
+    backgroundColor: '#0A0A14',
+    borderRadius: 30,
+    padding: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 255, 0.3)',
+    alignItems: 'center',
+  },
+  withdrawTitle: {
+    color: '#00E0FF',
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 5,
+    letterSpacing: 2,
+  },
+  withdrawLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 20,
+    letterSpacing: 1,
+  },
+  withdrawInput: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    paddingVertical: SCREEN_WIDTH > 380 ? 12 : 10,
+    color: '#FFF',
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  withdrawBtn: {
+    width: '100%',
+    backgroundColor: '#00FF88',
+    borderRadius: 15,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  withdrawBtnText: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  withdrawCancelBtn: {
+    marginTop: 15,
+    padding: 10,
+  },
+  withdrawCancelText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  withdrawInlineBtn: {
+    backgroundColor: 'rgba(0, 255, 136, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 136, 0.3)',
+  },
+  withdrawInlineText: {
+    color: '#00FF88',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  // Top HUD Styles
+  topHudWrapper: {
+    position: 'absolute',
+    top: 50,
+    left: SCREEN_WIDTH > 600 ? (SCREEN_WIDTH - 600) / 2 : '5%',
+    right: SCREEN_WIDTH > 600 ? (SCREEN_WIDTH - 600) / 2 : '5%',
+    maxWidth: 600,
+    zIndex: 100,
+  },
+  topHudInner: {
+    backgroundColor: 'rgba(10, 10, 20, 0.95)',
+    borderRadius: SCREEN_WIDTH > 380 ? 25 : 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 224, 255, 0.4)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SCREEN_WIDTH > 380 ? 8 : 6,
+    paddingRight: SCREEN_WIDTH > 380 ? 15 : 10,
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  topHudProfileBtn: {
+    marginRight: SCREEN_WIDTH > 380 ? 12 : 8,
+  },
+  topHudAvatarCircle: {
+    width: SCREEN_WIDTH > 380 ? 44 : 38,
+    height: SCREEN_WIDTH > 380 ? 44 : 38,
+    borderRadius: SCREEN_WIDTH > 380 ? 22 : 19,
+    backgroundColor: 'rgba(0, 224, 255, 0.1)',
+    borderWidth: 1.5,
+    borderColor: '#00E0FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topHudStats: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    marginRight: 12,
+  },
+  topHudStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  topHudStatText: {
+    color: '#FFF',
+    fontSize: SCREEN_WIDTH > 380 ? 14 : 11,
+    fontWeight: '900',
+    marginLeft: SCREEN_WIDTH > 380 ? 8 : 4,
+    fontFamily: 'monospace',
+    letterSpacing: 0.5,
+  },
+  topHudDivider: {
+    width: 1.5,
+    height: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 15,
+  },
+  logoutButton: {
+    padding: 5,
+  },
+  bottomNavGrid: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+    backgroundColor: 'rgba(5, 5, 10, 0.98)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly', // Even distribution of 5 elements
+    paddingHorizontal: 0,
+    paddingBottom: 10,
+    borderTopWidth: 2,
+    borderTopColor: '#00E0FF',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 20,
+    zIndex: 90,
+  },
+  placeholderNavItem: {
+    width: 60, // Match Map button width
+    height: '100%',
+  },
+  centerBtnContainer: {
+    position: 'absolute',
+    left: '50%',
+    top: -25, // Float up
+    marginLeft: -30, // Half of width (60/2)
+    alignItems: 'center',
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+  },
+  navText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  centerMapBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#00E0FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#000',
+    shadowColor: '#00E0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  adBannerContainer: {
+    position: 'absolute',
+    bottom: 80, // Above nav bar
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 80,
+  },
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  earnCoinsPopupContent: {
+    width: SCREEN_WIDTH * 0.85,
+    backgroundColor: '#0A0A14',
+    borderRadius: 30,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 214, 10, 0.3)',
+    shadowColor: ICON_COLORS.GOLD,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 25,
+    elevation: 20,
+    overflow: 'hidden',
+  },
+  closePopupBtn: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 10,
+    padding: 5,
+  },
+  earnCoinsIcon: {
+    marginBottom: 20,
+    shadowColor: ICON_COLORS.GOLD,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+  },
+  earnCoinsTitle: {
+    color: '#FFF',
+    fontSize: SCREEN_WIDTH > 400 ? 26 : 22,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+    textShadowColor: ICON_COLORS.GOLD,
+    textShadowRadius: 10,
+  },
+  earnCoinsDescription: {
+    color: '#94A3B8',
+    fontSize: SCREEN_WIDTH > 400 ? 16 : 14,
+    textAlign: 'center',
+    lineHeight: SCREEN_WIDTH > 400 ? 22 : 18,
+    marginBottom: 25,
+    paddingHorizontal: 10,
+  },
+  earnCoinsRewardBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  earnCoinsRewardText: {
+    color: ICON_COLORS.GOLD,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 10,
+    textShadowColor: ICON_COLORS.GOLD,
+    textShadowRadius: 5,
+  },
+  earnCoinsButtons: {
+    width: '100%',
+    gap: 15,
+  },
+  earnCoinsWatchBtnComponent: {
+    backgroundColor: 'rgba(255, 214, 10, 0.1)',
+    borderColor: ICON_COLORS.GOLD,
+  },
+  earnCoinsLaterBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.5)',
+  },
+  earnCoinsLaterBtnText: {
+    color: '#94A3B8',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
 
 // Top HUD Component - with Modern Floating Design
 const TopHUD = ({ coins, score, onProfilePress, onHelp }: any) => (
@@ -215,8 +525,6 @@ const TopHUD = ({ coins, score, onProfilePress, onHelp }: any) => (
   </View>
 );
 
-
-// Bottom Navigation Bar Component
 // Bottom Navigation Bar Component - with Center Map Button
 const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) => (
   <View style={localStyles.bottomNavGrid}>
@@ -255,514 +563,6 @@ const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) =>
   </View>
 );
 
-// Withdraw Modal Component
-const WithdrawModal = ({ visible, onClose }: any) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
-  const [claimedEarnings, setClaimedEarnings] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
-  const [msgModal, setMsgModal] = useState({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info' as 'success' | 'error' | 'info'
-  });
-
-  useEffect(() => {
-    if (visible) {
-      loadData();
-    }
-  }, [visible]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [rewardRes, withdrawRes] = await Promise.all([
-        BackendService.getRewardHistoryOnly(),
-        BackendService.getWithdrawHistoryOnly()
-      ]);
-
-      if (rewardRes.success && rewardRes.history) {
-        const total = rewardRes.history
-          .filter(r => r.status === 'claimed')
-          .reduce((sum, r) => sum + (r.reward || r.scoreEarning || 0), 0);
-        setClaimedEarnings(total);
-      }
-
-      if (withdrawRes.success && withdrawRes.history) {
-        setHistory(withdrawRes.history);
-      }
-    } catch (error) {
-      console.error('Failed to load withdrawal data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleWithdraw = async () => {
-    if (claimedEarnings <= 0) {
-      setMsgModal({
-        visible: true,
-        title: 'INSUFFICIENT FUNDS',
-        message: 'You do not have any available earnings for withdrawal at this time.',
-        type: 'error'
-      });
-      return;
-    }
-
-    if (!walletAddress.trim()) {
-      setMsgModal({
-        visible: true,
-        title: 'WALLET REQUIRED',
-        message: 'Please enter a valid SHIB wallet address to receive your rewards.',
-        type: 'error'
-      });
-      return;
-    }
-
-    // Wallet Address Validation using local regex
-    // This is more performant than importing the entire ethers library in React Native
-    const isValidWallet = /^0x[a-fA-F0-9]{40}$/.test(walletAddress);
-    if (!isValidWallet) {
-      setMsgModal({
-        visible: true,
-        title: 'INVALID WALLET',
-        message: 'The wallet address provided is not a valid Ethereum-compatible address. Please check and try again.',
-        type: 'error'
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const result = await BackendService.requestWithdrawal(walletAddress);
-      if (result.success) {
-        setMsgModal({
-          visible: true,
-          title: 'REQUEST SENT',
-          message: `Your withdrawal request for ${result.amount?.toFixed(8)} SHIB has been submitted successfully! It will be processed shortly.`,
-          type: 'success'
-        });
-        // We will close the main modal after the user clicks "Continue" on the success modal
-      } else {
-        setMsgModal({
-          visible: true,
-          title: 'WITHDRAWAL FAILED',
-          message: result.error || 'The system could not process your withdrawal request. Please try again later.',
-          type: 'error'
-        });
-      }
-    } catch (error) {
-      setMsgModal({
-        visible: true,
-        title: 'SYSTEM ERROR',
-        message: 'A connection error occurred. Please verify your internet and try again.',
-        type: 'error'
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={localStyles.modalOverlay}>
-        <View style={[localStyles.withdrawCard, { maxHeight: '80%', width: '90%' }]}>
-          <Text style={localStyles.withdrawTitle}>WITHDRAWAL</Text>
-          <View style={{ alignItems: 'center', marginVertical: 15, padding: 15, backgroundColor: 'rgba(0, 224, 255, 0.05)', borderRadius: 15, width: '100%' }}>
-            <Text style={[localStyles.withdrawLabel, { fontSize: 13, marginBottom: 5 }]}>AVAILABLE REWARDS</Text>
-            <Text style={{ color: '#00E0FF', fontSize: 28, fontWeight: '900', letterSpacing: 1 }}>{claimedEarnings.toFixed(8)}</Text>
-            <Text style={{ color: '#00E0FF', fontSize: 14, fontWeight: '700', marginTop: 2 }}>SHIB</Text>
-          </View>
-
-          <View style={{ width: '100%', marginBottom: 15 }}>
-            <Text style={[localStyles.withdrawLabel, { marginBottom: 8 }]}>WALLET ADDRESS</Text>
-            <TextInput
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                borderRadius: 12,
-                padding: 12,
-                color: '#FFF',
-                borderWidth: 1,
-                borderColor: 'rgba(0, 224, 255, 0.2)',
-                fontFamily: 'monospace',
-                fontSize: 12
-              }}
-              placeholder="Enter your SHIB wallet address"
-              placeholderTextColor="#64748B"
-              value={walletAddress}
-              onChangeText={setWalletAddress}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[localStyles.withdrawBtn, (isSubmitting || claimedEarnings <= 0) && { opacity: 0.5 }]}
-            onPress={handleWithdraw}
-            disabled={isSubmitting || claimedEarnings <= 0}
-          >
-            <Text style={localStyles.withdrawBtnText}>
-              {isSubmitting ? "PROCESSING..." : "REQUEST WITHDRAWAL"}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={{ width: '100%', marginTop: 20, flex: 1 }}>
-            <Text style={[localStyles.withdrawLabel, { marginBottom: 10 }]}>WITHDRAWAL HISTORY</Text>
-            {loading ? (
-              <ActivityIndicator color="#00E0FF" />
-            ) : history.length === 0 ? (
-              <Text style={{ color: '#64748B', textAlign: 'center', fontStyle: 'italic' }}>No history found</Text>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {history.map((item) => (
-                  <View key={item._id} style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    padding: 12,
-                    borderRadius: 12,
-                    marginBottom: 8,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <View>
-                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{(item.reward || item.scoreEarning || 0).toFixed(8)} SHIB</Text>
-                      <Text style={{ color: '#64748B', fontSize: 10 }}>{new Date(item.date).toLocaleDateString()}</Text>
-                    </View>
-                    <View style={{
-                      backgroundColor: item.status === 'pending' ? 'rgba(255, 165, 0, 0.2)' : 'rgba(0, 255, 136, 0.2)',
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 6
-                    }}>
-                      <Text style={{
-                        color: item.status === 'pending' ? '#FFA500' : '#00FF88',
-                        fontSize: 10,
-                        fontWeight: 'bold'
-                      }}>{item.status.toUpperCase()}</Text>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-
-          <TouchableOpacity style={localStyles.withdrawCancelBtn} onPress={onClose} disabled={isSubmitting}>
-            <Text style={localStyles.withdrawCancelText}>CLOSE</Text>
-          </TouchableOpacity>
-        </View>
-
-        <MessageModal
-          visible={msgModal.visible}
-          title={msgModal.title}
-          message={msgModal.message}
-          type={msgModal.type}
-          onClose={() => {
-            setMsgModal(prev => ({ ...prev, visible: false }));
-            if (msgModal.type === 'success') {
-              onClose(); // Close withdrawal modal on success
-              loadData();
-            }
-          }}
-        />
-      </View>
-    </Modal>
-  );
-};
-
-// Profile Popup Component
-const ProfilePopup = ({ visible, onClose, user, userGameData, coins, currentLevel, onLogout, scoreRange, reward, onWithdrawPress, onRewardHistoryPress, onWithdrawHistoryPress }: any) => {
-  const [vibrationEnabled, setVibrationEnabled] = useState(true);
-  const [vibrationSupported, setVibrationSupported] = useState(true);
-  const [claimedEarnings, setClaimedEarnings] = useState(0);
-
-  useEffect(() => {
-    if (visible) {
-      loadEarnings();
-    }
-  }, [visible]);
-
-  const loadEarnings = async () => {
-    try {
-      const result = await BackendService.getRewardHistoryOnly();
-      if (result.success && result.history) {
-        const total = result.history
-          .filter(r => r.status === 'claimed')
-          .reduce((sum, r) => sum + (r.reward || r.scoreEarning || 0), 0);
-        setClaimedEarnings(total);
-      }
-    } catch (error) {
-      console.error('Failed to load earnings for profile:', error);
-    }
-  };
-
-  const currentScoreEarnings = claimedEarnings;
-
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-
-  // Load vibration setting on mount
-  useEffect(() => {
-    if (visible) {
-      // Load vibration setting
-      const loadVibrationSetting = async () => {
-        try {
-          await SettingsService.ensureLoaded();
-          setVibrationEnabled(SettingsService.getSetting('vibrationEnabled'));
-          setVibrationSupported(SettingsService.isVibrationSupported());
-        } catch (error) {
-          console.error('Error loading vibration setting:', error);
-          setVibrationEnabled(true);
-          setVibrationSupported(true);
-        }
-      };
-      loadVibrationSetting();
-
-      // Start animations
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      scaleAnim.setValue(0.9);
-      opacityAnim.setValue(0);
-    }
-  }, [visible, scaleAnim, opacityAnim]);
-
-  const toggleVibration = async () => {
-    if (!vibrationSupported) return;
-
-    try {
-      const newValue = !vibrationEnabled;
-      setVibrationEnabled(newValue);
-      await SettingsService.setVibrationEnabled(newValue);
-
-      // Give feedback when enabling vibration
-      if (newValue) {
-        try {
-          SettingsService.vibrateClick();
-        } catch (error) {
-          console.warn('Vibration feedback failed:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Error toggling vibration:', error);
-    }
-  };
-
-  if (!visible || !user) return null;
-
-  // Get name without @gmail.com or domain
-  const rawName = user.displayName || user.email?.split('@')[0] || 'Explorer';
-  const cleanName = rawName.replace(/@.*/, '');
-
-  return (
-    <View style={localStyles.popupOverlay}>
-      <Animated.View style={[
-        localStyles.popupContent,
-        {
-          opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }]
-        }
-      ]}>
-        {/* Header Background Decoration */}
-        <View style={localStyles.profileHeaderBg}>
-          <View style={localStyles.profileHeaderCircle} />
-        </View>
-
-        <TouchableOpacity style={localStyles.closePopupBtn} onPress={onClose}>
-          <MaterialIcon name="close" family="material" size={24} color="#FFF" />
-        </TouchableOpacity>
-
-        <FlatList
-          data={[1]} // Using FlatList as a container for better performance and scroll handling
-          keyExtractor={() => 'profile-content'}
-          renderItem={() => (
-            <View style={{ paddingBottom: 20 }}>
-              <View style={localStyles.profileMainCard}>
-                <View style={localStyles.popupAvatar}>
-                  <View style={localStyles.avatarRing}>
-                    <MaterialIcon name="account-circle" family="material" size={SCREEN_WIDTH > 380 ? 90 : 70} color={ICON_COLORS.PRIMARY} />
-                  </View>
-                  <View style={localStyles.onlineStatus} />
-                </View>
-
-                <Text style={localStyles.popupName}>{cleanName}</Text>
-                <Text style={localStyles.popupLabel}>SPACE COMMANDER</Text>
-
-                <View style={localStyles.rankBadge}>
-                  <MaterialIcon name="verified" family="material" size={14} color="#00E0FF" />
-                  <Text style={localStyles.rankText}>ELITE EXPLORER</Text>
-                </View>
-              </View>
-
-              {/* Nested Cards Section */}
-              <View style={localStyles.cardsContainer}>
-                <Text style={localStyles.sectionHeader}>COMMANDER STATS</Text>
-                <View style={localStyles.profileStatsGrid}>
-                  <View style={localStyles.nestedCard}>
-                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(0, 224, 255, 0.1)' }]}>
-                      <MaterialIcon name="trending-up" family="material" size={22} color={ICON_COLORS.SUCCESS} />
-                    </View>
-                    <View style={localStyles.cardContent}>
-                      <Text style={localStyles.cardValue}>{currentLevel}</Text>
-                      <Text style={localStyles.cardLabel}>LEVEL</Text>
-                    </View>
-                  </View>
-
-                  <View style={localStyles.nestedCard}>
-                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 214, 10, 0.1)' }]}>
-                      <MaterialIcon name="monetization-on" family="material" size={22} color={ICON_COLORS.GOLD} />
-                    </View>
-                    <View style={localStyles.cardContent}>
-                      <Text style={localStyles.cardValue}>{coins.toLocaleString()}</Text>
-                      <Text style={localStyles.cardLabel}>COINS</Text>
-                    </View>
-                  </View>
-
-                  <View style={localStyles.nestedCard}>
-                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}>
-                      <MaterialIcon name="stars" family="material" size={22} color="#FF3B30" />
-                    </View>
-                    <View style={localStyles.cardContent}>
-                      <Text style={localStyles.cardValue}>{(userGameData?.totalScore || 0).toLocaleString()}</Text>
-                      <Text style={localStyles.cardLabel}>EXP</Text>
-                    </View>
-                  </View>
-
-                  <View style={localStyles.nestedCard}>
-                    <View style={[localStyles.cardIconBox, { backgroundColor: 'rgba(88, 86, 214, 0.1)' }]}>
-                      <MaterialIcon name="visibility" family="material" size={SCREEN_WIDTH > 380 ? 22 : 18} color="#5856D6" />
-                    </View>
-                    <View style={localStyles.cardContent}>
-                      <Text style={localStyles.cardValue}>{(userGameData?.totalAdEarnings || 0).toLocaleString()}</Text>
-                      <Text style={localStyles.cardLabel}>AD REWARD</Text>
-                    </View>
-                  </View>
-
-                  <RewardsCard
-                    onWithdrawPress={onWithdrawPress}
-                    onRewardHistoryPress={onRewardHistoryPress}
-                    onWithdrawHistoryPress={onWithdrawHistoryPress}
-                    style={{ marginBottom: 12 }}
-                  />
-                </View>
-
-                <Text style={localStyles.sectionHeader}>SYSTEM SETTINGS</Text>
-                <View style={localStyles.settingsCard}>
-                  <TouchableOpacity
-                    style={[
-                      localStyles.settingRow,
-                      !vibrationSupported && localStyles.profileSettingDisabled
-                    ]}
-                    onPress={toggleVibration}
-                    disabled={!vibrationSupported}
-                  >
-                    <View style={localStyles.settingInfo}>
-                      <View style={localStyles.settingIconWrap}>
-                        <MaterialIcon
-                          name={GAME_ICONS.VIBRATION.name}
-                          family={GAME_ICONS.VIBRATION.family}
-                          size={SCREEN_WIDTH > 380 ? 20 : 18}
-                          color={vibrationEnabled ? ICON_COLORS.PRIMARY : "#94A3B8"}
-                        />
-                      </View>
-                      <Text style={localStyles.settingText}>Haptic Feedback</Text>
-                    </View>
-                    <View style={[
-                      localStyles.modernToggle,
-                      vibrationEnabled && vibrationSupported && localStyles.toggleActive
-                    ]}>
-                      <View style={[
-                        localStyles.toggleCircle,
-                        vibrationEnabled && vibrationSupported && localStyles.circleActive
-                      ]} />
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Logout Section */}
-              <TouchableOpacity style={localStyles.modernLogoutBtn} onPress={onLogout}>
-                <MaterialIcon name="power-settings-new" family="material" size={20} color="#FFF" />
-                <Text style={localStyles.logoutBtnText}>DISCONNECT SESSION</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          showsVerticalScrollIndicator={false}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
-
-
-// Earn Coins Popup Component
-const EarnCoinsPopup = ({ visible, onClose, onWatchAd, rewardAmount }: any) => {
-  if (!visible) return null;
-
-  return (
-    <View style={localStyles.popupOverlay}>
-      <View style={localStyles.earnCoinsPopupContent}>
-        <TouchableOpacity style={localStyles.closePopupBtn} onPress={onClose}>
-          <MaterialIcon name="close" family="material" size={24} color="#FFF" />
-        </TouchableOpacity>
-
-        {/* Coin Icon */}
-        <View style={localStyles.earnCoinsIcon}>
-          <MaterialIcon
-            name={GAME_ICONS.COIN.name}
-            family={GAME_ICONS.COIN.family}
-            size={SCREEN_WIDTH > 400 ? 80 : 60}
-            color={ICON_COLORS.GOLD}
-          />
-        </View>
-
-        <Text style={localStyles.earnCoinsTitle}>Earn Free Coins!</Text>
-        <Text style={localStyles.earnCoinsDescription}>
-          Watch a short video ad to earn coins that you can use to buy power-ups and abilities.
-        </Text>
-
-        {/* Reward Info */}
-        <View style={localStyles.earnCoinsRewardBox}>
-          <MaterialIcon
-            name={GAME_ICONS.COIN.name}
-            family={GAME_ICONS.COIN.family}
-            size={SCREEN_WIDTH > 400 ? 32 : 24}
-            color={ICON_COLORS.GOLD}
-          />
-          <Text style={localStyles.earnCoinsRewardText}>+{rewardAmount} Coins</Text>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={localStyles.earnCoinsButtons}>
-          <RewardedAdButton
-            onReward={(amount) => {
-              onWatchAd(amount);
-            }}
-            rewardAmount={rewardAmount}
-            style={localStyles.earnCoinsWatchBtnComponent}
-          />
-
-          <TouchableOpacity style={localStyles.earnCoinsLaterBtn} onPress={onClose}>
-            <Text style={localStyles.earnCoinsLaterBtnText}>Maybe Later</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-};
 
 const Roadmap: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -1339,7 +1139,7 @@ const Roadmap: React.FC = () => {
     }
   };
 
-  // Loading Indicator Component - Battle Transition Loading (Different from app loading)
+  // Loading indicator for level transitions
   const LoadingIndicator = () => (
     <View style={styles.loadingContainer}>
       <LottieView
@@ -1390,6 +1190,7 @@ const Roadmap: React.FC = () => {
       </View>
     );
   };
+
 
   // Individual Level Item Component for better performance
   const LevelItem = React.memo(({ item, index }: { item: any, index: number }) => {
@@ -1515,20 +1316,6 @@ const Roadmap: React.FC = () => {
     );
   });
 
-  const getRoadmapPosition = (index: number) => {
-    const isEven = index % 2 === 0;
-    const x = SCREEN_WIDTH * (isEven ? 0.22 : 0.78);
-    // INVERTED Y Logic: Level 1 (Index 0) at the BOTTOM
-    // Total Levels = 100.
-    // Index 0 -> Bottom. Index 99 -> Top.
-    const verticalSpacing = 220;
-    const topPadding = 150;
-    const invertedIndex = (levels.length - 1) - index;
-
-    const y = topPadding + (invertedIndex * verticalSpacing);
-
-    return { x, y };
-  };
 
   // Connecting dots removed for cleaner UI
   // const connectingDots = useMemo(() => {
@@ -1630,6 +1417,8 @@ const Roadmap: React.FC = () => {
               setAbilityInventory(newInventory);
             }}
             abilityStartingCounts={abilityStartingCounts}
+            onWatchAd={handleWatchAd}
+            adRewardAmount={adRewardAmount}
           />
 
           {/* Top HUD */}
@@ -1724,8 +1513,6 @@ const Roadmap: React.FC = () => {
             coins={coins}
             currentLevel={currentLevel}
             onLogout={handleLogout}
-            scoreRange={scoreRange}
-            reward={scoreReward}
             onWithdrawPress={() => {
               setShowProfilePopup(false);
               setShowWithdrawModal(true);
@@ -1796,551 +1583,4 @@ const Roadmap: React.FC = () => {
 
 export default Roadmap;
 
-const localStyles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  withdrawCard: {
-    width: SCREEN_WIDTH * 0.85,
-    backgroundColor: '#0A0A14',
-    borderRadius: 30,
-    padding: 25,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.3)',
-    alignItems: 'center',
-  },
-  withdrawTitle: {
-    color: '#00E0FF',
-    fontSize: 22,
-    fontWeight: '900',
-    marginBottom: 5,
-    letterSpacing: 2,
-  },
-  withdrawLabel: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 20,
-    letterSpacing: 1,
-  },
-  withdrawInput: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 15,
-    paddingHorizontal: 15,
-    paddingVertical: SCREEN_WIDTH > 380 ? 12 : 10,
-    color: '#FFF',
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  withdrawBtn: {
-    width: '100%',
-    backgroundColor: '#00FF88',
-    borderRadius: 15,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  withdrawBtnText: {
-    color: '#000',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  withdrawCancelBtn: {
-    marginTop: 15,
-    padding: 10,
-  },
-  withdrawCancelText: {
-    color: '#64748B',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  withdrawInlineBtn: {
-    backgroundColor: 'rgba(0, 255, 136, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 136, 0.3)',
-  },
-  withdrawInlineText: {
-    color: '#00FF88',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  // Top HUD Styles
-  topHudWrapper: {
-    position: 'absolute',
-    top: 50,
-    left: SCREEN_WIDTH > 600 ? (SCREEN_WIDTH - 600) / 2 : '5%',
-    right: SCREEN_WIDTH > 600 ? (SCREEN_WIDTH - 600) / 2 : '5%',
-    maxWidth: 600,
-    zIndex: 100,
-  },
-  topHudInner: {
-    backgroundColor: 'rgba(10, 10, 20, 0.95)',
-    borderRadius: SCREEN_WIDTH > 380 ? 25 : 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 224, 255, 0.4)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SCREEN_WIDTH > 380 ? 8 : 6,
-    paddingRight: SCREEN_WIDTH > 380 ? 15 : 10,
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 10,
-  },
-  topHudProfileBtn: {
-    marginRight: SCREEN_WIDTH > 380 ? 12 : 8,
-  },
-  topHudAvatarCircle: {
-    width: SCREEN_WIDTH > 380 ? 44 : 38,
-    height: SCREEN_WIDTH > 380 ? 44 : 38,
-    borderRadius: SCREEN_WIDTH > 380 ? 22 : 19,
-    backgroundColor: 'rgba(0, 224, 255, 0.1)',
-    borderWidth: 1.5,
-    borderColor: '#00E0FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topHudStats: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 18,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    marginRight: 12,
-  },
-  topHudStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  topHudStatText: {
-    color: '#FFF',
-    fontSize: SCREEN_WIDTH > 380 ? 14 : 11,
-    fontWeight: '900',
-    marginLeft: SCREEN_WIDTH > 380 ? 8 : 4,
-    fontFamily: 'monospace',
-    letterSpacing: 0.5,
-  },
-  topHudDivider: {
-    width: 1.5,
-    height: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    marginHorizontal: 15,
-  },
-  logoutButton: {
-    padding: 5,
-  },
-  bottomNavGrid: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 70,
-    backgroundColor: 'rgba(5, 5, 10, 0.98)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly', // Even distribution of 5 elements
-    paddingHorizontal: 0,
-    paddingBottom: 10,
-    borderTopWidth: 2,
-    borderTopColor: '#00E0FF',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    elevation: 20,
-    zIndex: 90,
-  },
-  placeholderNavItem: {
-    width: 60, // Match Map button width
-    height: '100%',
-  },
-  centerBtnContainer: {
-    position: 'absolute',
-    left: '50%',
-    top: -25, // Float up
-    marginLeft: -30, // Half of width (60/2)
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-  },
-  centerMapBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#00E0FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 15,
-    elevation: 10,
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  adBannerContainer: {
-    position: 'absolute',
-    bottom: 110, // Increased more to be safely above the raised Map button and its text
-    left: 0,
-    right: 0,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    zIndex: 95,
-  },
-  // We need to adjust styles for AdBanner container if we want it visible
-  // The original styles.adBannerContainer was bottom: 0. 
-  // I will just let them overlap for now or rely on the user to request adjustment if it looks bad.
-  // Wait, I can override adBannerContainer style in the render.
 
-  navItem: {
-    width: 60, // Fixed width for all items ensures perfectly equal spacing
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 5,
-  },
-  navText: {
-    color: '#94A3B8',
-    fontSize: 10,
-    marginTop: 4,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-  // Profile popup Styles
-  popupOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2000,
-  },
-  popupContent: {
-    width: SCREEN_WIDTH > 500 ? 460 : '94%',
-    maxWidth: 500,
-    maxHeight: SCREEN_HEIGHT * 0.85,
-    backgroundColor: '#0A0A14',
-    borderRadius: SCREEN_WIDTH > 400 ? 32 : 24,
-    borderWidth: 1.5,
-    borderColor: 'rgba(0, 224, 255, 0.3)',
-    shadowColor: '#00E0FF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 30,
-    elevation: 20,
-    overflow: 'hidden',
-  },
-  profileHeaderBg: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: SCREEN_WIDTH > 400 ? 140 : 100,
-    backgroundColor: 'rgba(0, 224, 255, 0.05)',
-    overflow: 'hidden',
-  },
-  profileHeaderCircle: {
-    position: 'absolute',
-    top: SCREEN_WIDTH > 400 ? -120 : -80,
-    right: SCREEN_WIDTH > 400 ? -60 : -40,
-    width: SCREEN_WIDTH > 400 ? 300 : 200,
-    height: SCREEN_WIDTH > 400 ? 300 : 200,
-    borderRadius: SCREEN_WIDTH > 400 ? 150 : 100,
-    backgroundColor: 'rgba(0, 224, 255, 0.1)',
-  },
-  closePopupBtn: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    padding: 8,
-    borderRadius: 20,
-    // Explicitly remove shadow/elevation that might be inherited or caused by interaction
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  profileMainCard: {
-    alignItems: 'center',
-    marginTop: SCREEN_WIDTH > 380 ? 45 : 30,
-    marginBottom: SCREEN_WIDTH > 380 ? 20 : 10,
-  },
-  popupAvatar: {
-    position: 'relative',
-    marginBottom: 15,
-  },
-  avatarRing: {
-    padding: 4,
-    borderRadius: SCREEN_WIDTH > 380 ? 60 : 50,
-    borderWidth: 2,
-    borderColor: '#00E0FF',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  onlineStatus: {
-    position: 'absolute',
-    bottom: SCREEN_WIDTH > 380 ? 5 : 3,
-    right: SCREEN_WIDTH > 380 ? 5 : 3,
-    width: SCREEN_WIDTH > 380 ? 18 : 14,
-    height: SCREEN_WIDTH > 380 ? 18 : 14,
-    borderRadius: 9,
-    backgroundColor: '#00FF88',
-    borderWidth: 3,
-    borderColor: '#0A0A14',
-  },
-  popupName: {
-    color: '#FFF',
-    fontSize: SCREEN_WIDTH > 380 ? 28 : 22,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(0, 224, 255, 0.5)',
-    textShadowRadius: 10,
-  },
-  popupLabel: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 3,
-    marginTop: 4,
-  },
-  rankBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 224, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 224, 255, 0.2)',
-  },
-  rankText: {
-    color: '#00E0FF',
-    fontSize: 10,
-    fontWeight: '900',
-    marginLeft: 6,
-    letterSpacing: 1,
-  },
-  cardsContainer: {
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 2,
-    marginBottom: 12,
-    marginTop: 10,
-  },
-  profileStatsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  nestedCard: {
-    width: SCREEN_WIDTH > 380 ? '48%' : '100%',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 20,
-    padding: SCREEN_WIDTH > 380 ? 16 : 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  cardIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardValue: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-  },
-  cardLabel: {
-    color: '#64748B',
-    fontSize: 9,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  settingsCard: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 20,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-  },
-  settingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingIconWrap: {
-    width: SCREEN_WIDTH > 380 ? 36 : 32,
-    height: SCREEN_WIDTH > 380 ? 36 : 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  settingText: {
-    color: '#E2E8F0',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  modernToggle: {
-    width: 46,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#1E1E2E',
-    padding: 3,
-    justifyContent: 'center',
-  },
-  toggleActive: {
-    backgroundColor: 'rgba(0, 224, 255, 0.2)',
-  },
-  toggleCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#475569',
-  },
-  circleActive: {
-    backgroundColor: '#00E0FF',
-    transform: [{ translateX: 22 }],
-  },
-  modernLogoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    marginHorizontal: 20,
-    marginTop: 25,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.2)',
-  },
-  logoutBtnText: {
-    color: '#FF3B30',
-    fontSize: 13,
-    fontWeight: '900',
-    marginLeft: 10,
-    letterSpacing: 1.5,
-  },
-  profileSettingDisabled: {
-    opacity: 0.5,
-  },
-  // Earn Coins Popup Styles
-  earnCoinsPopupContent: {
-    width: SCREEN_WIDTH > 500 ? 400 : '85%',
-    backgroundColor: 'rgba(5, 5, 10, 0.98)',
-    borderTopLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    borderTopRightRadius: 10,
-    borderBottomLeftRadius: 10,
-    borderWidth: 2,
-    borderColor: ICON_COLORS.GOLD,
-    padding: SCREEN_WIDTH > 400 ? 30 : 20,
-    alignItems: 'center',
-    shadowColor: ICON_COLORS.GOLD,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 25,
-    elevation: 20,
-    overflow: 'hidden',
-  },
-  earnCoinsIcon: {
-    marginBottom: 20,
-    shadowColor: ICON_COLORS.GOLD,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-  },
-  earnCoinsTitle: {
-    color: '#FFF',
-    fontSize: SCREEN_WIDTH > 400 ? 26 : 22,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
-    textShadowColor: ICON_COLORS.GOLD,
-    textShadowRadius: 10,
-  },
-  earnCoinsDescription: {
-    color: '#94A3B8',
-    fontSize: SCREEN_WIDTH > 400 ? 16 : 14,
-    textAlign: 'center',
-    lineHeight: SCREEN_WIDTH > 400 ? 22 : 18,
-    marginBottom: 25,
-    paddingHorizontal: 10,
-  },
-  earnCoinsRewardBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderRadius: 15,
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    marginBottom: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-  },
-  earnCoinsRewardText: {
-    color: ICON_COLORS.GOLD,
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 10,
-    textShadowColor: ICON_COLORS.GOLD,
-    textShadowRadius: 5,
-  },
-  earnCoinsButtons: {
-    width: '100%',
-    gap: 15,
-  },
-  earnCoinsWatchBtnComponent: {
-    backgroundColor: 'rgba(255, 214, 10, 0.1)',
-    borderColor: ICON_COLORS.GOLD,
-  },
-  earnCoinsLaterBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.5)',
-  },
-  earnCoinsLaterBtnText: {
-    color: '#94A3B8',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

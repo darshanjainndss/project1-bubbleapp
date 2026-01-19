@@ -1,5 +1,5 @@
 import { Animated } from "react-native";
-import { BUBBLE_SIZE, ROW_HEIGHT, SCREEN_WIDTH, GRID_TOP, SCREEN_HEIGHT } from "../styles/GameScreenStyles";
+import { BUBBLE_SIZE, ROW_HEIGHT, SCREEN_WIDTH, GRID_TOP, SCREEN_HEIGHT } from "../styles/screens/GameScreenStyles";
 import { COLORS } from "../data/levelPatterns";
 import SettingsService from '../services/SettingsService';
 
@@ -87,7 +87,7 @@ export const updateCommonState = (
     setMoves((m: number) => Math.max(0, m - 1));
 
     const remaining = grid.filter(b => b.visible).length;
-    
+
     if (remaining === 0) {
         console.log('🏆 Level completed! All bubbles cleared.');
         setGameState('won');

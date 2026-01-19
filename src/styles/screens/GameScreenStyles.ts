@@ -38,6 +38,11 @@ export const styles = StyleSheet.create({
         shadowRadius: 10,
         elevation: 20,
     },
+    statItem: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+    },
     verticalDivider: {
         width: 1,
         height: 25,

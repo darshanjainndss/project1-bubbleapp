@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TouchableOpacity, Text, View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { RewardedAd, AdEventType, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
 import MaterialIcon from './MaterialIcon';
-import ConfigService from '../services/ConfigService';
-import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
+import ConfigService from '../../services/ConfigService';
+import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../../config/icons';
 
 interface RewardedAdButtonProps {
   onReward: (amount: number) => void;

@@ -13,11 +13,11 @@ import {
   Dimensions,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
-import SpaceBackground from './SpaceBackground';
-import MaterialIcon from './MaterialIcon';
+import SpaceBackground from '../components/common/SpaceBackground';
+import MaterialIcon from '../components/common/MaterialIcon';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../config/icons';
 import { AuthService } from '../services/AuthService';
-import ToastNotification, { ToastRef } from './ToastNotification';
+import ToastNotification, { ToastRef } from '../components/common/ToastNotification';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 

@@ -3,14 +3,14 @@ import {
   View, StyleSheet, Dimensions, Image, Text, StatusBar, Animated, TouchableOpacity, ActivityIndicator,
 } from "react-native";
 import LottieView from 'lottie-react-native';
-import SpaceBackground from "./SpaceBackground";
-import BubbleBlast from "./BubbleBlast"; // Import BubbleBlast animation
-import MaterialIcon from "./MaterialIcon";
-import HelpSlider from "./HelpSlider";
+import SpaceBackground from "../components/common/SpaceBackground";
+import BubbleBlast from "../components/game/BubbleBlast";
+import MaterialIcon from "../components/common/MaterialIcon";
+import HelpSlider from "../components/common/HelpSlider";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../config/icons";
-import { Bubble, BubbleGrid, PulsatingBorder } from "./game/GameGridComponents";
-import { GameHUD } from "./game/GameHUD";
-import OptimizedLaser from "./game/OptimizedLaser";
+import { Bubble, BubbleGrid, PulsatingBorder } from "../components/game/GameGridComponents";
+import { GameHUD } from "../components/game/GameHUD";
+import OptimizedLaser from "../components/game/OptimizedLaser";
 import { useAuth } from '../context/AuthContext';
 import SettingsService from '../services/SettingsService';
 import ConfigService from '../services/ConfigService';
@@ -25,8 +25,8 @@ import {
   createShotFromCannonCenter
 } from "../utils/laserUtils";
 import BackendService from "../services/BackendService";
-import ConfirmationModal from "./ConfirmationModal";
-import ToastNotification, { ToastRef } from "./ToastNotification";
+import ConfirmationModal from "../components/common/ConfirmationModal";
+import ToastNotification, { ToastRef } from "../components/common/ToastNotification";
 
 import {
   styles,
@@ -38,7 +38,7 @@ import {
   SCREEN_WIDTH,
   SCREEN_HEIGHT,
   GRID_COLS
-} from "../styles/GameScreenStyles";
+} from "../styles/screens/GameScreenStyles";
 
 const COLOR_MAP: Record<string, any> = {
   "#ff3b30": require("../images/red.webp"),
@@ -818,7 +818,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
         if (user && BackendService.isAuthenticated() && score > 0) {
           console.log('🚪 User exiting game, submitting incomplete session...');
 
-          const stars = score >= 800 ? 3 : score >= 400 ? 2 : score >= 100 ? 1 : 0;
+          const stars = score >= starThresholds.three ? 3 : score >= starThresholds.two ? 2 : score >= starThresholds.one ? 1 : 0;
           const sessionData = {
             level,
             score,
