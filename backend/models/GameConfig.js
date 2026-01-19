@@ -34,6 +34,11 @@ const gameConfigSchema = new mongoose.Schema({
         default: 1,
         required: true
     },
+    minWithdrawAmount: {
+        type: mongoose.Schema.Types.Decimal128,
+        default: 0.00000001,
+        required: true
+    },
 
     // Metadata
     updatedAt: {

@@ -189,10 +189,7 @@ const HelpSlider: React.FC<HelpSliderProps> = ({
               </View>
             ))}
 
-            <View style={styles.footerInfo}>
-              <MaterialIcon name="info-outline" family="material" size={16} color="rgba(255,255,255,0.4)" />
-              <Text style={styles.footerText}>Every mission consumes 1 energy core.</Text>
-            </View>
+          
           </ScrollView>
 
           <TouchableOpacity style={styles.bottomBtn} onPress={onClose}>

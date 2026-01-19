@@ -10,7 +10,6 @@ import {
     Dimensions,
 } from 'react-native';
 import MaterialIcon from '../common/MaterialIcon';
-import RewardedAdButton from '../common/RewardedAdButton';
 import ToastNotification, { ToastRef } from '../common/ToastNotification';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../../config/icons';
 import BackendService, { type ShopItem } from '../../services/BackendService';
@@ -25,27 +24,25 @@ interface ShopProps {
     abilityInventory: Record<string, number>;
     onInventoryUpdate: (newInventory: Record<string, number>) => void;
     abilityStartingCounts: Record<string, number>;
-    onWatchAd: (amount: number) => void;
-    adRewardAmount: number;
 }
 
 const ABILITY_ICON_MAP: Record<string, { name: string; family: string; color: string }> = {
-    lightning: { name: 'flash', family: 'material', color: '#FFD700' },
-    bomb: { name: 'bomb', family: 'material-community', color: '#FF4444' },
-    freeze: { name: 'snowflake', family: 'material-community', color: '#00BFFF' },
-    fire: { name: 'fire', family: 'material-community', color: '#FF6600' },
+    lightning: { name: 'bolt', family: 'material', color: '#FFD700' },
+    bomb: { name: 'whatshot', family: 'material', color: '#FF4444' },
+    freeze: { name: 'ac-unit', family: 'material', color: '#00BFFF' },
+    fire: { name: 'local-fire-department', family: 'material', color: '#FF6600' },
 };
 
 const SHOP_ICON_MAP: Record<string, { name: string; family: string }> = {
-    'flash': { name: 'flash', family: 'material' },
-    'bomb': { name: 'bomb', family: 'material-community' },
-    'snowflake': { name: 'snowflake', family: 'material-community' },
-    'fire': { name: 'fire', family: 'material-community' },
+    'flash': { name: 'bolt', family: 'material' },
+    'bomb': { name: 'whatshot', family: 'material' },
+    'snowflake': { name: 'ac-unit', family: 'material' },
+    'fire': { name: 'local-fire-department', family: 'material' },
     'star': { name: 'star', family: 'material' },
-    'gift': { name: 'gift', family: 'material-community' },
-    'diamond': { name: 'diamond', family: 'material-community' },
+    'gift': { name: 'card-giftcard', family: 'material' },
+    'diamond': { name: 'diamond', family: 'material' },
     'calendar-outline': { name: 'calendar-today', family: 'material' },
-    'crown': { name: 'crown', family: 'material-community' },
+    'crown': { name: 'emoji-events', family: 'material' },
     'trophy': { name: 'trophy', family: 'material' },
     'monetization-on': { name: 'monetization-on', family: 'material' },
     'account-balance-wallet': { name: 'account-balance-wallet', family: 'material' },
@@ -60,8 +57,6 @@ const Shop: React.FC<ShopProps> = ({
     abilityInventory,
     onInventoryUpdate,
     abilityStartingCounts,
-    onWatchAd,
-    adRewardAmount,
 }) => {
     const [shopItems, setShopItems] = useState<ShopItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -463,13 +458,6 @@ const Shop: React.FC<ShopProps> = ({
                             <Text style={styles.coinsText}>{coins.toLocaleString()}</Text>
                         </View>
                     </View>
-                    <TouchableOpacity
-                        style={styles.addCoinsBtn}
-                        onPress={() => setShowAddCoins(true)}
-                        activeOpacity={0.8}
-                    >
-                        <MaterialIcon name="add" family="material" size={20} color="#000" />
-                    </TouchableOpacity>
                 </View>
 
                 {/* Content */}
@@ -483,21 +471,6 @@ const Shop: React.FC<ShopProps> = ({
                         <View style={styles.scrollPadding}>
                             {/* Inventory Section */}
                             {renderInventorySection()}
-
-                            {/* Earn Coins Section */}
-                            <View style={styles.earnSection}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.earnTitle}>NEED MORE COINS?</Text>
-                                    <Text style={styles.earnDescription}>
-                                        Watch a video to earn {adRewardAmount} coins instantly!
-                                    </Text>
-                                </View>
-                                <RewardedAdButton
-                                    onReward={onWatchAd}
-                                    rewardAmount={adRewardAmount}
-                                    style={styles.adButton}
-                                />
-                            </View>
 
                             {/* Shop Items Grid */}
                             <View style={styles.sectionHeader}>
@@ -710,18 +683,6 @@ const styles = StyleSheet.create({
         textShadowRadius: 10,
         fontFamily: 'monospace',
     },
-    addCoinsBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#FFD60A',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#FFD60A',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
-    },
     content: {
         flex: 1,
     },
@@ -867,37 +828,6 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         fontFamily: 'monospace',
         letterSpacing: 0.5,
-    },
-    earnSection: {
-        marginBottom: 24,
-        padding: 16,
-        backgroundColor: 'rgba(0, 224, 255, 0.05)',
-        borderRadius: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: 'rgba(0, 224, 255, 0.2)',
-        gap: 12
-    },
-    earnTitle: {
-        color: '#00FF88',
-        fontSize: 14,
-        fontWeight: '900',
-        marginBottom: 4,
-        letterSpacing: 1,
-        fontFamily: 'monospace',
-    },
-    earnDescription: {
-        color: '#94A3B8',
-        fontSize: 11,
-        fontFamily: 'monospace',
-        lineHeight: 14,
-    },
-    adButton: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
     },
     sectionHeader: {
         flexDirection: 'row',

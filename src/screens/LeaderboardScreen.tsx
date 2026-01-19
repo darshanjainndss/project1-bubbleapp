@@ -219,10 +219,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                   <Text style={styles.gridLabel}>TOTAL SCORE</Text>
                   <Text style={styles.gridValue}>{userGameData.totalScore.toLocaleString()}</Text>
                 </View>
-                <View style={styles.userGridItem}>
-                  <Text style={styles.gridLabel}>WINS</Text>
-                  <Text style={styles.gridValue}>{userGameData.gamesWon}</Text>
-                </View>
+                
                 <View style={styles.userGridItem}>
                   <Text style={styles.gridLabel}>COINS</Text>
                   <Text style={[styles.gridValue, { color: '#FFD700' }]}>{userGameData.totalCoins}</Text>

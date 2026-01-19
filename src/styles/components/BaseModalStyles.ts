@@ -43,11 +43,15 @@ export const baseModalStyles = StyleSheet.create({
         marginBottom: 24,
     },
     footer: {
-        flexDirection: 'row',
+        flexDirection: 'column',
         gap: 12,
+        paddingTop: 16,
+        paddingHorizontal: 16,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.05)',
     },
     primaryBtn: {
-        flex: 1,
+        width: '100%',
         height: 56,
         backgroundColor: '#00E0FF',
         borderRadius: 16,
@@ -66,7 +70,7 @@ export const baseModalStyles = StyleSheet.create({
         textTransform: 'uppercase',
     },
     secondaryBtn: {
-        flex: 1,
+        width: '100%',
         height: 56,
         backgroundColor: 'rgba(255, 255, 255, 0.04)',
         borderRadius: 16,

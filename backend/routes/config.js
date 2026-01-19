@@ -171,13 +171,15 @@ router.get('/game', async (req, res) => {
           coinsPerLevel: gameSettings.coinsPerLevel || 10,
           starThresholds: gameSettings.starThresholds || { one: 100, two: 400, three: 800 },
           scoreRange: gameSettings.scoreRange || 100,
-          rewardPerRange: gameSettings.rewardPerRange ? parseFloat(gameSettings.rewardPerRange.toString()) : 1
+          rewardPerRange: gameSettings.rewardPerRange ? parseFloat(gameSettings.rewardPerRange.toString()) : 1,
+          minWithdrawAmount: gameSettings.minWithdrawAmount ? parseFloat(gameSettings.minWithdrawAmount.toString()) : 0.00000001
         } : {
           // Default fallbacks if no config in DB
           coinsPerLevel: 10,
           starThresholds: { one: 100, two: 400, three: 800 },
           scoreRange: 100,
-          rewardPerRange: 1
+          rewardPerRange: 1,
+          minWithdrawAmount: 0.00000001
         },
         platform,
         rewardAmount
@@ -198,7 +200,7 @@ router.get('/game', async (req, res) => {
 // @access  Public (In production this should be protected)
 router.post('/game', async (req, res) => {
   try {
-    const { coinsPerLevel, scoreRange, rewardPerRange, starThresholds } = req.body;
+    const { coinsPerLevel, scoreRange, rewardPerRange, starThresholds, minWithdrawAmount } = req.body;
 
     let config = await GameConfig.findOne({ key: 'default' });
 
@@ -210,6 +212,7 @@ router.post('/game', async (req, res) => {
     if (scoreRange !== undefined) config.scoreRange = scoreRange;
     if (rewardPerRange !== undefined) config.rewardPerRange = rewardPerRange;
     if (starThresholds !== undefined) config.starThresholds = starThresholds;
+    if (minWithdrawAmount !== undefined) config.minWithdrawAmount = minWithdrawAmount;
 
     await config.save();
 
@@ -220,7 +223,8 @@ router.post('/game', async (req, res) => {
         coinsPerLevel: config.coinsPerLevel,
         starThresholds: config.starThresholds,
         scoreRange: config.scoreRange,
-        rewardPerRange: config.rewardPerRange ? parseFloat(config.rewardPerRange.toString()) : 1
+        rewardPerRange: config.rewardPerRange ? parseFloat(config.rewardPerRange.toString()) : 1,
+        minWithdrawAmount: config.minWithdrawAmount ? parseFloat(config.minWithdrawAmount.toString()) : 0.00000001
       }
     });
   } catch (error) {

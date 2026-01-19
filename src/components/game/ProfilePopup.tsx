@@ -127,10 +127,7 @@ const ProfilePopup: React.FC<ProfilePopupProps> = ({
                         </View>
                         <View style={styles.nameSection}>
                             <Text style={styles.userName}>{cleanName}</Text>
-                            <View style={styles.rankBadge}>
-                                <MaterialIcon name="shield" family="material" size={12} color="#00FF88" />
-                                <Text style={styles.rankText}>ELITE MISSIONARY</Text>
-                            </View>
+                          
                         </View>
                     </View>
                 </LinearGradient>

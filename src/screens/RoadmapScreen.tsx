@@ -575,7 +575,7 @@ const Roadmap: React.FC = () => {
   const [showShop, setShowShop] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
-  const [showInstructionModal, setShowInstructionModal] = useState(false);
+  const [showHelpSlider, setShowHelpSlider] = useState(false);
   const [showEarnCoinsPopup, setShowEarnCoinsPopup] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showRewardHistory, setShowRewardHistory] = useState(false);
@@ -1417,8 +1417,6 @@ const Roadmap: React.FC = () => {
               setAbilityInventory(newInventory);
             }}
             abilityStartingCounts={abilityStartingCounts}
-            onWatchAd={handleWatchAd}
-            adRewardAmount={adRewardAmount}
           />
 
           {/* Top HUD */}
@@ -1431,7 +1429,7 @@ const Roadmap: React.FC = () => {
             }}
             onHelp={() => {
               safeVibrate();
-              setShowInstructionModal(true);
+              setShowHelpSlider(true);
             }}
           />
 
@@ -1560,10 +1558,10 @@ const Roadmap: React.FC = () => {
             rewardAmount={adRewardAmount}
           />
 
-          {/* Help Slider (replaces Instruction Modal) */}
+          {/* Help Slider */}
           <HelpSlider
-            visible={showInstructionModal}
-            onClose={() => setShowInstructionModal(false)}
+            visible={showHelpSlider}
+            onClose={() => setShowHelpSlider(false)}
             adRewardAmount={adRewardAmount}
             levelReward={baseRewardAmount}
             starBonus={starBonusAmount}

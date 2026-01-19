@@ -201,6 +201,7 @@ export interface GameConfig {
     completionBonusMultiplier: number;
     scoreRange?: number;
     rewardPerRange?: number;
+    minWithdrawAmount?: number;
   };
   platform: 'android' | 'ios';
   rewardAmount: number;
