@@ -682,9 +682,9 @@ const Roadmap: React.FC = () => {
         console.warn('Failed to load dynamic configs:', configResults.reason);
       }
 
-      // Now fetch user game data
-      console.log('� BFetching user game data from backend...');
-      const result = await BackendService.getUserGameData(true);
+      // Now fetch user game data - ALWAYS use fresh data when user changes
+      console.log('📊 Fetching user game data from backend...');
+      const result = await BackendService.getUserGameData(false); // Force fresh data, no cache
       console.log('📊 Backend response:', result.success ? 'SUCCESS' : 'FAILED', result.data ? `Score: ${result.data.totalScore}, Coins: ${result.data.totalCoins}` : result.error);
 
       if (result.success && result.data) {

@@ -362,6 +362,9 @@ class BackendService {
       await AsyncStorage.setItem('currentUser', JSON.stringify(user));
       this.authToken = token;
       this.currentUser = user;
+      // Clear user data cache when new user logs in to prevent showing previous user's data
+      this.userDataCache = null;
+      console.log('🔑 Saved auth token and cleared user data cache for:', user.email);
     } catch (error) {
       console.error('Error saving auth token:', error);
     }
@@ -430,6 +433,9 @@ class BackendService {
       await AsyncStorage.removeItem('currentUser');
       this.authToken = null;
       this.currentUser = null;
+      // Clear user data cache when logging out to prevent showing old user's data
+      this.userDataCache = null;
+      console.log('🧹 Cleared auth token and user data cache');
     } catch (error) {
       console.error('Error clearing auth token:', error);
     }
