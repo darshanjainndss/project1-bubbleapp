@@ -66,7 +66,7 @@ const handleValidationErrors = (req, res, next) => {
 // @access  Private
 router.get('/profile', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
+    const user = req.user;
 
     if (!user) {
       return res.status(404).json({
@@ -106,7 +106,7 @@ router.put('/profile', auth, [
   try {
     const { displayName, profilePicture } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -140,7 +140,7 @@ router.put('/profile', auth, [
 // @access  Private
 router.get('/game-data', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findOne({ email: req.userEmail, isActive: true });
 
     if (!user) {
       return res.status(404).json({
@@ -156,10 +156,16 @@ router.get('/game-data', auth, async (req, res) => {
     }
 
     // Get user's rank
-    const rank = await User.getUserRank(req.userId);
+    const rank = await User.getUserRank(user.email);
 
     const gameData = user.getGameData();
     gameData.rank = rank;
+
+    // Sanitize any potential NaN values from historical corrupted state
+    gameData.totalScore = Number(gameData.totalScore) || 0;
+    gameData.highScore = Number(gameData.highScore) || 0;
+    gameData.totalCoins = Number(gameData.totalCoins) || 0;
+    gameData.gamesPlayed = Number(gameData.gamesPlayed) || 0;
 
     res.json({
       success: true,
@@ -180,7 +186,7 @@ router.get('/game-data', auth, async (req, res) => {
 // @access  Private
 router.put('/game-data', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = req.user;
 
     if (!user) {
       return res.status(404).json({
@@ -222,7 +228,7 @@ router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (r
   try {
     const { amount, operation, isAdReward } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -243,7 +249,7 @@ router.put('/coins', auth, validateCoinsUpdate, handleValidationErrors, async (r
       const allowedReward = rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50;
 
       if (amount !== allowedReward) {
-        console.warn(`⚠️ User ${req.userId} attempted to claim ${amount} coins for an ad, but allowed is ${allowedReward}. Enforcing allowed.`);
+        console.warn(`⚠️ User ${req.userEmail} attempted to claim ${amount} coins for an ad, but allowed is ${allowedReward}. Enforcing allowed.`);
         actualAmount = allowedReward;
       }
     }
@@ -292,7 +298,7 @@ router.put('/abilities', auth, validateAbilitiesUpdate, handleValidationErrors, 
   try {
     const { abilities } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -301,8 +307,8 @@ router.put('/abilities', auth, validateAbilitiesUpdate, handleValidationErrors, 
     }
 
     // Update abilities
-    const Ability = require('../models/Ability');
-    const activeAbilities = await Ability.find({ isActive: true }).select('name');
+    const ShopItem = require('../models/ShopItem');
+    const activeAbilities = await ShopItem.find({ type: 'ability', isActive: true }).select('name');
     const activeAbilityNames = activeAbilities.map(a => a.name);
 
     Object.keys(abilities).forEach(ability => {
@@ -342,7 +348,7 @@ router.post('/purchase-abilities', auth, [
   try {
     const { ability, quantity } = req.body;
 
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -355,8 +361,8 @@ router.post('/purchase-abilities', auth, [
       await user.initializeUserAbilities();
     }
 
-    const Ability = require('../models/Ability');
-    const abilityDoc = await Ability.findOne({ name: ability, isActive: true });
+    const ShopItem = require('../models/ShopItem');
+    const abilityDoc = await ShopItem.findOne({ name: ability, type: 'ability', isActive: true });
 
     if (!abilityDoc) {
       return res.status(404).json({
@@ -365,7 +371,7 @@ router.post('/purchase-abilities', auth, [
       });
     }
 
-    const totalCost = abilityDoc.price * quantity;
+    const totalCost = abilityDoc.priceCoins * quantity;
 
     // Check if user has enough coins
     if (user.gameData.totalCoins < totalCost) {
@@ -407,7 +413,7 @@ router.post('/purchase-abilities', auth, [
 // @access  Private
 router.get('/rank', auth, async (req, res) => {
   try {
-    const rank = await User.getUserRank(req.userId);
+    const rank = await User.getUserRank(req.userEmail);
 
     if (rank === null) {
       return res.status(404).json({
@@ -435,7 +441,7 @@ router.get('/rank', auth, async (req, res) => {
 // @access  Private
 router.get('/stats', auth, async (req, res) => {
   try {
-    const stats = await GameSession.getUserStats(req.userId);
+    const stats = await GameSession.getUserStats(req.userEmail);
 
     res.json({
       success: true,
@@ -447,6 +453,47 @@ router.get('/stats', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error fetching user statistics'
+    });
+  }
+});
+
+// @route   GET /api/user/debug-abilities
+// @desc    Debug endpoint to check user abilities
+// @access  Private
+router.get('/debug-abilities', auth, async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Convert Map to object for easier debugging
+    const abilitiesObj = {};
+    if (user.gameData.abilities) {
+      user.gameData.abilities.forEach((value, key) => {
+        abilitiesObj[key] = value;
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        email: user.email,
+        totalCoins: user.gameData.totalCoins,
+        abilities: abilitiesObj,
+        abilitiesMapSize: user.gameData.abilities ? user.gameData.abilities.size : 0,
+        currentLevel: user.gameData.currentLevel
+      }
+    });
+
+  } catch (error) {
+    console.error('Debug abilities error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error getting debug abilities'
     });
   }
 });

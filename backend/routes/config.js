@@ -1,5 +1,5 @@
 const express = require('express');
-const Ability = require('../models/Ability');
+const ShopItem = require('../models/ShopItem');
 const AdConfig = require('../models/AdConfig');
 const AdUnit = require('../models/AdUnit');
 const GameConfig = require('../models/GameConfig');
@@ -15,9 +15,20 @@ const router = express.Router();
 // @access  Public
 router.get('/abilities', async (req, res) => {
   try {
-    const abilities = await Ability.getActiveAbilities();
+    const abilities = await ShopItem.getActiveAbilities();
 
-    const abilitiesData = abilities.map(ability => ability.toPublic());
+    const abilitiesData = abilities.map(ability => ({
+      id: ability._id,
+      name: ability.name,
+      displayName: ability.displayName,
+      description: ability.description,
+      icon: ability.icon,
+      effect: ability.abilityMetadata?.effect,
+      pointsPerBubble: ability.abilityMetadata?.pointsPerBubble,
+      price: ability.priceCoins,
+      startingCount: ability.abilityMetadata?.startingCount || 2,
+      sortOrder: ability.sortOrder
+    }));
 
     res.json({
       success: true,
@@ -40,7 +51,7 @@ router.get('/abilities/:name', async (req, res) => {
   try {
     const { name } = req.params;
 
-    const ability = await Ability.getAbilityByName(name);
+    const ability = await ShopItem.getAbilityByName(name);
 
     if (!ability) {
       return res.status(404).json({
@@ -51,7 +62,18 @@ router.get('/abilities/:name', async (req, res) => {
 
     res.json({
       success: true,
-      ability: ability.toPublic()
+      ability: {
+        id: ability._id,
+        name: ability.name,
+        displayName: ability.displayName,
+        description: ability.description,
+        icon: ability.icon,
+        effect: ability.abilityMetadata?.effect,
+        pointsPerBubble: ability.abilityMetadata?.pointsPerBubble,
+        price: ability.priceCoins,
+        startingCount: ability.abilityMetadata?.startingCount || 2,
+        sortOrder: ability.sortOrder
+      }
     });
   } catch (error) {
     console.error('Error fetching ability config:', error);
@@ -118,13 +140,24 @@ router.get('/game', async (req, res) => {
 
     // Fetch abilities and ad config in parallel
     const [abilities, adConfig, rewardedAds, gameSettings] = await Promise.all([
-      Ability.getActiveAbilities(),
+      ShopItem.getActiveAbilities(),
       AdConfig.getConfigForPlatform(platform),
       AdUnit.find({ platform, adType: 'rewarded', isActive: true }).sort({ priority: 1 }),
       GameConfig.getConfig()
     ]);
 
-    const abilitiesData = abilities.map(ability => ability.toPublic());
+    const abilitiesData = abilities.map(ability => ({
+      id: ability._id,
+      name: ability.name,
+      displayName: ability.displayName,
+      description: ability.description,
+      icon: ability.icon,
+      effect: ability.abilityMetadata?.effect,
+      pointsPerBubble: ability.abilityMetadata?.pointsPerBubble,
+      price: ability.priceCoins,
+      startingCount: ability.abilityMetadata?.startingCount || 2,
+      sortOrder: ability.sortOrder
+    }));
 
     // Get reward amount from first active rewarded ad unit, fallback to 50
     const rewardAmount = rewardedAds.length > 0 ? (rewardedAds[0].rewardedAmount || 50) : 50;
@@ -134,7 +167,20 @@ router.get('/game', async (req, res) => {
       config: {
         abilities: abilitiesData,
         ads: adConfig,
-        gameSettings: gameSettings ? gameSettings.winningRewards : null,
+        gameSettings: gameSettings ? {
+          coinsPerLevel: gameSettings.coinsPerLevel || 10,
+          starThresholds: gameSettings.starThresholds || { one: 200, two: 600, three: 1000 },
+          scoreRange: gameSettings.scoreRange || 100,
+          rewardPerRange: gameSettings.rewardPerRange ? parseFloat(gameSettings.rewardPerRange.toString()) : 1,
+          minWithdrawAmount: gameSettings.minWithdrawAmount ? parseFloat(gameSettings.minWithdrawAmount.toString()) : 0.00000001
+        } : {
+          // Default fallbacks if no config in DB
+          coinsPerLevel: 10,
+          starThresholds: { one: 200, two: 600, three: 1000 },
+          scoreRange: 100,
+          rewardPerRange: 1,
+          minWithdrawAmount: 0.00000001
+        },
         platform,
         rewardAmount
       }
@@ -144,6 +190,48 @@ router.get('/game', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch game configuration',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// @route   POST /api/config/game
+// @desc    Update game configuration
+// @access  Public (In production this should be protected)
+router.post('/game', async (req, res) => {
+  try {
+    const { coinsPerLevel, scoreRange, rewardPerRange, starThresholds, minWithdrawAmount } = req.body;
+
+    let config = await GameConfig.findOne({ key: 'default' });
+
+    if (!config) {
+      config = new GameConfig({ key: 'default' });
+    }
+
+    if (coinsPerLevel !== undefined) config.coinsPerLevel = coinsPerLevel;
+    if (scoreRange !== undefined) config.scoreRange = scoreRange;
+    if (rewardPerRange !== undefined) config.rewardPerRange = rewardPerRange;
+    if (starThresholds !== undefined) config.starThresholds = starThresholds;
+    if (minWithdrawAmount !== undefined) config.minWithdrawAmount = minWithdrawAmount;
+
+    await config.save();
+
+    res.json({
+      success: true,
+      message: 'Game configuration updated successfully',
+      config: {
+        coinsPerLevel: config.coinsPerLevel,
+        starThresholds: config.starThresholds,
+        scoreRange: config.scoreRange,
+        rewardPerRange: config.rewardPerRange ? parseFloat(config.rewardPerRange.toString()) : 1,
+        minWithdrawAmount: config.minWithdrawAmount ? parseFloat(config.minWithdrawAmount.toString()) : 0.00000001
+      }
+    });
+  } catch (error) {
+    console.error('Error updating game config:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update game configuration',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

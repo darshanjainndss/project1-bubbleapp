@@ -50,10 +50,7 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
-    highScore: {
-      type: Number,
-      default: 0
-    },
+
     totalCoins: {
       type: Number,
       default: 100 // Starting coins
@@ -103,6 +100,17 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
+  },
+
+  // Subscription information
+  subscription: {
+    active: {
+      type: Boolean,
+      default: false
+    },
+    type: String,
+    expiresAt: Date,
+    features: [String]
   },
 
   // Account timestamps
@@ -216,18 +224,18 @@ userSchema.methods.getGameData = function () {
   }
 
   return {
-    userId: this._id,
+    email: this.email,
     ...gameData,
     rank: null // Will be calculated separately
   };
 };
 
-// Instance method to initialize user abilities from Ability model
+// Instance method to initialize user abilities from ShopItem model
 userSchema.methods.initializeUserAbilities = async function () {
-  const Ability = require('./Ability');
+  const ShopItem = require('./ShopItem');
 
   try {
-    const abilities = await Ability.getActiveAbilities();
+    const abilities = await ShopItem.getActiveAbilities();
 
     // Initialize abilities map if it doesn't exist
     if (!this.gameData.abilities) {
@@ -237,7 +245,9 @@ userSchema.methods.initializeUserAbilities = async function () {
     // Set starting counts for each ability
     abilities.forEach(ability => {
       if (!this.gameData.abilities.has(ability.name)) {
-        this.gameData.abilities.set(ability.name, ability.startingCount);
+        // Initialize to base starting count (2), ensuring DB matches game state
+        const startingCount = ability.abilityMetadata?.startingCount || 2;
+        this.gameData.abilities.set(ability.name, startingCount);
       }
     });
 
@@ -315,7 +325,7 @@ userSchema.statics.getLeaderboard = async function (limit = 100) {
 };
 
 // Static method to get user rank
-userSchema.statics.getUserRank = async function (userId) {
+userSchema.statics.getUserRank = async function (email) {
   const pipeline = [
     {
       $match: { isActive: true }
@@ -326,7 +336,7 @@ userSchema.statics.getUserRank = async function (userId) {
     {
       $group: {
         _id: null,
-        users: { $push: '$_id' }
+        users: { $push: '$email' }
       }
     },
     {
@@ -336,7 +346,7 @@ userSchema.statics.getUserRank = async function (userId) {
       }
     },
     {
-      $match: { users: new mongoose.Types.ObjectId(userId) }
+      $match: { users: email }
     },
     {
       $project: {

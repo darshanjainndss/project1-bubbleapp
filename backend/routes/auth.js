@@ -52,8 +52,8 @@ const validateGoogleLogin = [
 // HELPER FUNCTIONS
 // ============================================================================
 
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+const generateToken = (email) => {
+  return jwt.sign({ email }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
 };
@@ -79,7 +79,7 @@ const handleValidationErrors = (req, res, next) => {
 // @access  Public
 router.post('/register', validateRegistration, handleValidationErrors, async (req, res) => {
   try {
-    const { email, password, displayName } = req.body;
+    const { email, password, displayName, firebaseId } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -95,6 +95,7 @@ router.post('/register', validateRegistration, handleValidationErrors, async (re
       email,
       password,
       displayName,
+      firebaseId, // Save firebaseId if provided
       isGoogleLogin: false,
       isVerified: false
     });
@@ -102,7 +103,7 @@ router.post('/register', validateRegistration, handleValidationErrors, async (re
     await user.save();
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -128,7 +129,7 @@ router.post('/register', validateRegistration, handleValidationErrors, async (re
 // @access  Public
 router.post('/login', validateLogin, handleValidationErrors, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, firebaseId } = req.body;
 
     // Find user by email
     const user = await User.findOne({ email, isActive: true });
@@ -156,8 +157,14 @@ router.post('/login', validateLogin, handleValidationErrors, async (req, res) =>
       });
     }
 
+    // Update firebaseId if provided and different
+    if (firebaseId && user.firebaseId !== firebaseId) {
+      user.firebaseId = firebaseId;
+      await user.save();
+    }
+
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -174,6 +181,61 @@ router.post('/login', validateLogin, handleValidationErrors, async (req, res) =>
     res.status(500).json({
       success: false,
       message: 'Server error during login'
+    });
+  }
+});
+
+// @route   POST /api/auth/firebase-login
+// @desc    Login user with Firebase ID (Session Recovery)
+// @access  Public
+router.post('/firebase-login', async (req, res) => {
+  try {
+    const { firebaseId, email } = req.body;
+
+    if (!firebaseId || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Firebase ID and email are required'
+      });
+    }
+
+    // Find user by firebaseId AND email to be safe
+    let user = await User.findOne({ firebaseId, email, isActive: true });
+
+    if (!user) {
+      // Fallback: Check by email only, and if found, update firebaseId (linking)
+      // This is helpful if the user registered via email/password but firebaseId wasn't saved initially
+      user = await User.findOne({ email, isActive: true });
+
+      if (user && !user.firebaseId) {
+        user.firebaseId = firebaseId;
+        await user.save();
+      } else if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+    }
+
+    // Generate JWT token
+    const token = generateToken(user.email);
+
+    // Update last login
+    await user.updateLastLogin();
+
+    res.json({
+      success: true,
+      message: 'Firebase login successful',
+      token,
+      user: user.getPublicProfile()
+    });
+
+  } catch (error) {
+    console.error('Firebase login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during Firebase login'
     });
   }
 });
@@ -210,9 +272,11 @@ router.post('/google-login', validateGoogleLogin, handleValidationErrors, async 
     if (!user) {
       // Check if user exists by email (might be switching from email/password to Google)
       user = await User.findOne({ email, isActive: true });
-      
+
       if (user && !user.isGoogleLogin) {
         // Update existing email/password user to Google login
+        // But keep the password so they can still use it if they want? 
+        // Or strictly switch? Logic here says "Update... to Google login"
         user.firebaseId = firebaseId;
         user.isGoogleLogin = true;
         user.displayName = displayName;
@@ -238,7 +302,7 @@ router.post('/google-login', validateGoogleLogin, handleValidationErrors, async 
     }
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -294,7 +358,7 @@ router.post('/anonymous-login', async (req, res) => {
     }
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user.email);
 
     // Update last login
     await user.updateLastLogin();
@@ -333,7 +397,7 @@ router.post('/logout', async (req, res) => {
 router.post('/verify-token', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -342,9 +406,9 @@ router.post('/verify-token', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-password');
+    const user = await User.findOne({ email: decoded.email, isActive: true }).select('-password');
 
-    if (!user || !user.isActive) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Invalid token'

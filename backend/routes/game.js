@@ -2,6 +2,9 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const GameSession = require('../models/GameSession');
+// LevelReward model removed as part of consolidation
+const RewardHistory = require('../models/RewardHistory');
+const GameConfig = require('../models/GameConfig');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -85,7 +88,7 @@ router.post('/progress', auth, async (req, res) => {
     } = req.body;
 
     // Get user
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -96,25 +99,36 @@ router.post('/progress', auth, async (req, res) => {
     // Update progress data
     user.gameData.lastPlayedAt = new Date();
 
-    // Update level stars if this is better than previous attempt
-    const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
-    if (stars > currentStars) {
-      user.gameData.levelStars.set(level.toString(), stars);
+    // Only update permanent level progress and high scores if this is NOT a partial heartbeat update
+    // Aborted or unfinished games should not count towards permanent progress
+    // We strictly check for isPartial === false or isPartial === 'false'
+    const isActuallyComplete = isPartial === false || isPartial === 'false';
 
-      // Add to completed levels if not already there
-      if (!user.gameData.completedLevels.includes(level)) {
-        user.gameData.completedLevels.push(level);
+    if (isActuallyComplete) {
+      const config = await GameConfig.getConfig();
+      const thresholds = config?.starThresholds || { one: 200, two: 600, three: 1000 };
+
+      // Use star threshold from DB
+      const calculatedStars = score >= thresholds.three ? 3 : score >= thresholds.two ? 2 : score >= thresholds.one ? 1 : 0;
+
+      console.log(`📊 Permanent Progress Update: email=${user.email}, score=${score}, stars_body=${stars}, stars_calc=${calculatedStars}`);
+
+      // Update level stars if this is better than previous attempt
+      const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
+      if (calculatedStars > currentStars) {
+        user.gameData.levelStars.set(level.toString(), calculatedStars);
+
+        // Add to completed levels if not already there
+        if (!user.gameData.completedLevels.includes(level)) {
+          user.gameData.completedLevels.push(level);
+        }
       }
-    }
 
-    // Update high score if this is better
-    if (score > user.gameData.highScore) {
-      user.gameData.highScore = score;
-    }
-
-    // Check if next level should be unlocked (2+ stars required)
-    if (stars >= 2 && level >= user.gameData.currentLevel) {
-      user.gameData.currentLevel = level + 1;
+      // Check if next level should be unlocked (2+ stars required)
+      if (calculatedStars >= 2 && level >= user.gameData.currentLevel) {
+        console.log(`🚀 Level Up (Progress): ${user.gameData.currentLevel} -> ${level + 1}`);
+        user.gameData.currentLevel = level + 1;
+      }
     }
 
     await user.save();
@@ -123,10 +137,9 @@ router.post('/progress', auth, async (req, res) => {
       success: true,
       message: 'Progress updated successfully',
       updatedGameData: {
-        totalScore: user.gameData.totalScore,
-        highScore: user.gameData.highScore,
-        totalCoins: user.gameData.totalCoins,
-        currentLevel: user.gameData.currentLevel,
+        totalScore: Number(user.gameData.totalScore) || 0,
+        totalCoins: Number(user.gameData.totalCoins) || 0,
+        currentLevel: Number(user.gameData.currentLevel) || 1,
         completedLevels: user.gameData.completedLevels,
         levelStars: Object.fromEntries(user.gameData.levelStars),
         abilities: user.gameData.abilities
@@ -161,7 +174,7 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     } = req.body;
 
     // Get user
-    const user = await User.findById(req.userId);
+    const user = req.user;
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -169,9 +182,11 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       });
     }
 
+    console.log(`🎮 Processing Session: User=${user.email}, Level=${level}, Score=${score}, Stars=${stars}, isWin=${isWin}`);
+
     // Create game session
     const gameSession = new GameSession({
-      userId: req.userId,
+      email: user.email,
       level,
       score,
       moves,
@@ -190,52 +205,137 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
     });
 
     // Calculate coins earned
-    const coinsEarned = await gameSession.calculateCoinsEarned();
+    let coinsEarned = 0;
+    if (req.body.coinsEarned !== undefined && req.body.coinsEarned !== null) {
+      coinsEarned = parseInt(req.body.coinsEarned) || 0;
+      gameSession.coinsEarned = coinsEarned;
+    } else {
+      coinsEarned = await gameSession.calculateCoinsEarned();
+    }
 
     // Save game session
     await gameSession.save();
+    console.log(`✅ Session Saved: ID=${gameSession.sessionId}, Coins=${coinsEarned}`);
 
-    // Update user game data
-    user.gameData.gamesPlayed += 1;
-    user.gameData.totalScore += score;
+    // Update basic user metrics
+    user.gameData.gamesPlayed = (Number(user.gameData.gamesPlayed) || 0) + 1;
     user.gameData.lastPlayedAt = new Date();
 
-    // Update level stars (always update, even on loss)
-    const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
-    if (stars > currentStars) {
-      user.gameData.levelStars.set(level.toString(), stars);
+    // Only update total score and level progress if the game was won
+    if (isWin) {
+      user.gameData.totalScore = (Number(user.gameData.totalScore) || 0) + score;
+
+      // Update level stars if this is better than previous attempt
+      const currentStars = user.gameData.levelStars.get(level.toString()) || 0;
+      if (stars > currentStars) {
+        user.gameData.levelStars.set(level.toString(), stars);
+      }
+
+      // Add to completed levels if not already there and has at least 1 star
+      if (stars > 0 && !user.gameData.completedLevels.includes(level)) {
+        user.gameData.completedLevels.push(level);
+      }
+
+      // Update high score if this is better
+      const currentHighScore = Number(user.gameData.highScore) || 0;
+      if (score > currentHighScore) {
+        user.gameData.highScore = score;
+      }
+
+      // Check if next level should be unlocked (2+ stars required)
+      if (stars >= 2 && level >= user.gameData.currentLevel) {
+        console.log(`📊 Level Up: ${user.gameData.currentLevel} -> ${level + 1}`);
+        user.gameData.currentLevel = level + 1;
+      } else {
+        console.log(`📊 No Level Up: stars=${stars}, currentLevel=${user.gameData.currentLevel}`);
+      }
     }
 
-    // Add to completed levels if not already there and has at least 1 star
-    if (stars > 0 && !user.gameData.completedLevels.includes(level)) {
-      user.gameData.completedLevels.push(level);
-    }
+    // Add coins earned (which should be 0 on loss anyway based on model logic)
+    user.gameData.totalCoins = (Number(user.gameData.totalCoins) || 0) + coinsEarned;
 
-    // Update high score if this is better
-    if (score > user.gameData.highScore) {
-      user.gameData.highScore = score;
-    }
+    // --- ABILITY CALCULATIONS (Deduction & Rewards) ---
+    const allAbilityTypes = ['lightning', 'bomb', 'freeze', 'fire'];
+    const finalAbilities = {};
 
-    // Check if next level should be unlocked (2+ stars required)
-    if (stars >= 2 && level >= user.gameData.currentLevel) {
-      user.gameData.currentLevel = level + 1;
-    }
-
-    // Add coins earned
-    user.gameData.totalCoins += coinsEarned;
-
-    // Deduct abilities used
-    Object.keys(abilitiesUsed).forEach(ability => {
-      if (['lightning', 'bomb', 'freeze', 'fire'].includes(ability)) {
-        const used = abilitiesUsed[ability] || 0;
-        user.gameData.abilities[ability] = Math.max(0, user.gameData.abilities[ability] - used);
+    // Get current counts from DB
+    allAbilityTypes.forEach(ability => {
+      if (user.gameData.abilities instanceof Map) {
+        finalAbilities[ability] = user.gameData.abilities.get(ability) || 0;
+      } else {
+        finalAbilities[ability] = user.gameData.abilities[ability] || 0;
       }
     });
+
+    // Step 1: Deduct Usage
+    Object.keys(abilitiesUsed).forEach(ability => {
+      if (allAbilityTypes.includes(ability)) {
+        const used = parseInt(abilitiesUsed[ability]) || 0;
+        finalAbilities[ability] = Math.max(0, finalAbilities[ability] - used);
+      }
+    });
+
+    // Step 2: Add Level Clear Reward (+2)
+    if (isWin && stars >= 2) {
+      console.log('🎁 Level Clear Reward: Giving 2 of each ability');
+      allAbilityTypes.forEach(ability => {
+        finalAbilities[ability] += 2;
+      });
+    }
+
+    // Step 3: Apply back to User model
+    allAbilityTypes.forEach(ability => {
+      if (user.gameData.abilities instanceof Map) {
+        user.gameData.abilities.set(ability, finalAbilities[ability]);
+      } else {
+        user.gameData.abilities[ability] = finalAbilities[ability];
+      }
+    });
+
+    console.log('📈 Final Ability Update:', finalAbilities);
 
     // Check for achievements
     const newAchievements = checkAchievements(user, gameSession);
     if (newAchievements.length > 0) {
       user.gameData.achievements.push(...newAchievements);
+    }
+
+    // Handle level rewards (one-time per level) - Only for withdrawal tracking
+    let levelRewardAwarded = false;
+
+    if (isWin && stars >= 2) {
+      const config = await GameConfig.getConfig();
+
+      // Check if user already received reward for this level
+      const existingReward = await RewardHistory.findOne({
+        email: user.email,
+        level: level,
+        status: { $in: ['claimed', 'withdrawn'] }
+      });
+
+      if (!existingReward) {
+        // Calculate withdrawal reward based on score
+        const scoreRange = config?.scoreRange || 100;
+        const rewardPerRange = config?.rewardPerRange ? parseFloat(config.rewardPerRange.toString()) : 1;
+        const rewardValue = (score / scoreRange) * rewardPerRange;
+
+        const rewardHistory = new RewardHistory({
+          email: user.email,
+          level: level,
+          reward: rewardValue,
+          coins: config.coinsPerLevel || 10,
+          stars: stars,
+          score: score,
+          status: 'claimed',
+          date: new Date()
+        });
+
+        await rewardHistory.save();
+        levelRewardAwarded = true;
+        console.log(`🎁 Reward Saved: Level=${level}, WithdrawalReward=${rewardValue}, Coins=${config.coinsPerLevel}`);
+      } else {
+        console.log(`ℹ️ Reward already claimed for Level ${level}`);
+      }
     }
 
     await user.save();
@@ -245,16 +345,21 @@ router.post('/session', auth, validateGameSession, handleValidationErrors, async
       message: 'Game session submitted successfully',
       sessionId: gameSession.sessionId,
       coinsEarned,
+      levelReward: levelRewardAwarded ? {
+        awarded: true,
+        stars: stars,
+        level: level
+      } : null,
       newAchievements,
       updatedGameData: {
-        totalScore: user.gameData.totalScore,
-        highScore: user.gameData.highScore,
-        totalCoins: user.gameData.totalCoins,
-        currentLevel: user.gameData.currentLevel,
-        gamesPlayed: user.gameData.gamesPlayed,
+        totalScore: Number(user.gameData.totalScore) || 0,
+        highScore: Number(user.gameData.highScore) || 0,
+        totalCoins: Number(user.gameData.totalCoins) || 0,
+        currentLevel: Number(user.gameData.currentLevel) || 1,
+        gamesPlayed: Number(user.gameData.gamesPlayed) || 0,
         completedLevels: user.gameData.completedLevels,
         levelStars: Object.fromEntries(user.gameData.levelStars),
-        abilities: user.gameData.abilities
+        abilities: Object.fromEntries(user.gameData.abilities)
       }
     });
 
@@ -274,7 +379,7 @@ router.get('/sessions', auth, async (req, res) => {
   try {
     const { page = 1, limit = 20, level } = req.query;
 
-    const query = { userId: req.userId };
+    const query = { email: req.user.email };
     if (level) {
       query.level = parseInt(level);
     }
@@ -343,7 +448,7 @@ router.get('/level/:level/best-score', auth, async (req, res) => {
     const { level } = req.params;
 
     const bestScore = await GameSession.getUserBestScore(
-      req.userId,
+      req.user.email,
       parseInt(level)
     );
 

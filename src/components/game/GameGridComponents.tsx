@@ -1,13 +1,13 @@
 import React, { useRef, useEffect } from "react";
 import { View, Image, Animated } from "react-native";
-import MaterialIcon from "../MaterialIcon";
+import MaterialIcon from "../common/MaterialIcon";
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from "../../config/icons";
 import {
     styles,
     BUBBLE_SIZE,
     ROW_HEIGHT,
     GRID_TOP
-} from "../../styles/GameScreenStyles";
+} from "../../styles/screens/GameScreenStyles";
 
 const COLOR_MAP: Record<string, any> = {
     "#ff3b30": require("../../images/red.webp"),

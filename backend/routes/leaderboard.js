@@ -16,16 +16,20 @@ router.get('/', async (req, res) => {
     const { limit = 100, type = 'highScore' } = req.query;
 
     let sortField;
+    let finalSortField;
     switch (type) {
       case 'totalScore':
         sortField = { 'gameData.totalScore': -1, 'gameData.highScore': -1 };
+        finalSortField = { totalScore: -1, highScore: -1 };
         break;
       case 'gamesWon':
         sortField = { 'gameData.gamesWon': -1, 'gameData.highScore': -1 };
+        finalSortField = { gamesWon: -1, highScore: -1 };
         break;
       case 'highScore':
       default:
         sortField = { 'gameData.highScore': -1, 'gameData.totalScore': -1 };
+        finalSortField = { highScore: -1, totalScore: -1 };
         break;
     }
 
@@ -45,7 +49,6 @@ router.get('/', async (req, res) => {
       },
       {
         $project: {
-          userId: '$_id',
           email: 1,
           displayName: 1,
           profilePicture: 1,
@@ -85,7 +88,7 @@ router.get('/', async (req, res) => {
         // Group by email to remove duplicates, keeping the one with highest score
         $group: {
           _id: '$email',
-          userId: { $first: '$userId' },
+          email: { $first: '$email' },
           displayName: { $first: '$displayName' },
           profilePicture: { $first: '$profilePicture' },
           highScore: { $max: '$highScore' },
@@ -98,14 +101,14 @@ router.get('/', async (req, res) => {
         }
       },
       {
-        $sort: sortField
+        $sort: finalSortField
       },
       {
         $limit: parseInt(limit)
       },
       {
         $project: {
-          userId: 1,
+          email: '$_id',
           displayName: 1,
           profilePicture: 1,
           highScore: 1,
@@ -161,7 +164,7 @@ router.get('/weekly', async (req, res) => {
       },
       {
         $group: {
-          _id: '$userId',
+          _id: '$email',
           totalScore: { $sum: '$score' },
           highScore: { $max: '$score' },
           gamesWon: { $sum: 1 },
@@ -172,7 +175,7 @@ router.get('/weekly', async (req, res) => {
         $lookup: {
           from: 'users',
           localField: '_id',
-          foreignField: '_id',
+          foreignField: 'email',
           as: 'user'
         }
       },
@@ -186,8 +189,7 @@ router.get('/weekly', async (req, res) => {
       },
       {
         $project: {
-          userId: '$_id',
-          email: '$user.email',
+          email: '$_id',
           displayName: '$user.displayName',
           profilePicture: '$user.profilePicture',
           totalScore: 1,
@@ -212,7 +214,7 @@ router.get('/weekly', async (req, res) => {
         // Group by email to remove duplicates, keeping the one with highest score
         $group: {
           _id: '$email',
-          userId: { $first: '$userId' },
+          email: { $first: '$email' },
           displayName: { $first: '$displayName' },
           profilePicture: { $first: '$profilePicture' },
           totalScore: { $max: '$totalScore' },
@@ -229,7 +231,7 @@ router.get('/weekly', async (req, res) => {
       },
       {
         $project: {
-          userId: 1,
+          email: '$_id',
           displayName: 1,
           profilePicture: 1,
           totalScore: 1,
@@ -282,7 +284,7 @@ router.get('/monthly', async (req, res) => {
       },
       {
         $group: {
-          _id: '$userId',
+          _id: '$email',
           totalScore: { $sum: '$score' },
           highScore: { $max: '$score' },
           gamesWon: { $sum: 1 },
@@ -293,7 +295,7 @@ router.get('/monthly', async (req, res) => {
         $lookup: {
           from: 'users',
           localField: '_id',
-          foreignField: '_id',
+          foreignField: 'email',
           as: 'user'
         }
       },
@@ -307,8 +309,7 @@ router.get('/monthly', async (req, res) => {
       },
       {
         $project: {
-          userId: '$_id',
-          email: '$user.email',
+          email: '$_id',
           displayName: '$user.displayName',
           profilePicture: '$user.profilePicture',
           totalScore: 1,
@@ -333,7 +334,7 @@ router.get('/monthly', async (req, res) => {
         // Group by email to remove duplicates, keeping the one with highest score
         $group: {
           _id: '$email',
-          userId: { $first: '$userId' },
+          email: { $first: '$email' },
           displayName: { $first: '$displayName' },
           profilePicture: { $first: '$profilePicture' },
           totalScore: { $max: '$totalScore' },
@@ -350,7 +351,7 @@ router.get('/monthly', async (req, res) => {
       },
       {
         $project: {
-          userId: 1,
+          email: '$_id',
           displayName: 1,
           profilePicture: 1,
           totalScore: 1,
@@ -379,30 +380,6 @@ router.get('/monthly', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error fetching monthly leaderboard'
-    });
-  }
-});
-
-// @route   GET /api/leaderboard/friends/:userId
-// @desc    Get friends leaderboard (placeholder - requires friends system)
-// @access  Public
-router.get('/friends/:userId', async (req, res) => {
-  try {
-    // This is a placeholder for friends leaderboard
-    // You would need to implement a friends system first
-
-    res.json({
-      success: true,
-      message: 'Friends leaderboard not implemented yet',
-      leaderboard: [],
-      total: 0
-    });
-
-  } catch (error) {
-    console.error('Get friends leaderboard error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching friends leaderboard'
     });
   }
 });
@@ -481,6 +458,7 @@ router.get('/top-players', async (req, res) => {
         // Group by email to remove duplicates, keeping the one with highest score
         $group: {
           _id: '$email',
+          email: { $first: '$email' },
           displayName: { $first: '$displayName' },
           profilePicture: { $first: '$profilePicture' },
           highScore: { $max: '$highScore' },
@@ -505,6 +483,7 @@ router.get('/top-players', async (req, res) => {
       },
       {
         $project: {
+          email: '$_id',
           displayName: 1,
           profilePicture: 1,
           highScore: 1,

@@ -9,8 +9,8 @@ const AD_UNITS_CACHE_KEY = 'cached_ad_units';
 const GAME_CONFIG_CACHE_KEY = 'cached_game_config';
 const CONFIG_TIMESTAMP_KEY = 'config_cache_timestamp';
 
-// Cache duration (5 minutes in development, 24 hours in production)
-const CACHE_DURATION = __DEV__ ? 0 : 24 * 60 * 60 * 1000;
+// Cache duration (5 minutes in development, 2 minutes in production for better performance)
+const CACHE_DURATION = __DEV__ ? 5 * 60 * 1000 : 2 * 60 * 1000; // 5 min dev, 2 min prod
 
 
 // Fallback configurations (in case backend is unavailable)
@@ -231,7 +231,10 @@ class ConfigService {
             coinsPerLevelMultiplier: 2.5,
             starBonusBase: 5,
             starBonusLevelMultiplier: 0.5,
-            completionBonusMultiplier: 1.2
+            completionBonusMultiplier: 1.2,
+            scoreRange: 100,
+            rewardPerRange: 1,
+            starThresholds: { one: 200, two: 600, three: 1000 }
           },
           platform: platform,
           rewardAmount: 50
@@ -248,7 +251,9 @@ class ConfigService {
           coinsPerLevelMultiplier: 2.5,
           starBonusBase: 5,
           starBonusLevelMultiplier: 0.5,
-          completionBonusMultiplier: 1.2
+          completionBonusMultiplier: 1.2,
+          scoreRange: 100,
+          rewardPerRange: 1
         },
         platform: Platform.OS as 'android' | 'ios',
         rewardAmount: 50
@@ -351,6 +356,22 @@ class ConfigService {
     }
 
     return await this.getAdUnits(true);
+  }
+
+  // Force refresh game config only (useful when game settings are updated in database)
+  async refreshGameConfig(): Promise<GameConfig> {
+    console.log('🔄 Force refreshing game config from database...');
+    this.gameConfig = null;
+
+    // Clear game config cache and timestamp to force fresh fetch
+    try {
+      await AsyncStorage.multiRemove([GAME_CONFIG_CACHE_KEY, CONFIG_TIMESTAMP_KEY]);
+      console.log('🗑️ Cleared game config cache and timestamp');
+    } catch (error) {
+      console.error('Error clearing game config cache:', error);
+    }
+
+    return await this.getGameConfig(true);
   }
 
   // Nuclear option - clear everything and start fresh
@@ -497,33 +518,7 @@ class ConfigService {
     }
   }
 
-  async initializeAbilities(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const result = await BackendService.initializeAbilities();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error initializing abilities:', error);
-      return { success: false, error: 'Failed to initialize abilities' };
-    }
-  }
 
-  async resetAbilities(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const result = await BackendService.resetAbilities();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error resetting abilities:', error);
-      return { success: false, error: 'Failed to reset abilities' };
-    }
-  }
 
   // ============================================================================
   // AD CONFIG MANAGEMENT METHODS
@@ -604,33 +599,7 @@ class ConfigService {
     }
   }
 
-  async initializeAdConfigs(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const result = await BackendService.initializeAdConfigs();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error initializing ad configs:', error);
-      return { success: false, error: 'Failed to initialize ad configurations' };
-    }
-  }
 
-  async resetAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const result = await BackendService.resetAdConfigs();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error resetting ad configs:', error);
-      return { success: false, error: 'Failed to reset ad configurations' };
-    }
-  }
 
   // ============================================================================
   // AD UNIT MANAGEMENT METHODS
@@ -738,19 +707,7 @@ class ConfigService {
     }
   }
 
-  async resetAdUnits(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const result = await BackendService.resetAdUnits();
-      if (result.success) {
-        // Clear cache to force refresh
-        await this.clearCache();
-      }
-      return result;
-    } catch (error) {
-      console.error('Error resetting ad units:', error);
-      return { success: false, error: 'Failed to reset ad units' };
-    }
-  }
+
 }
 
 export default new ConfigService();

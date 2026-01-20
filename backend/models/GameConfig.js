@@ -9,28 +9,35 @@ const gameConfigSchema = new mongoose.Schema({
         unique: true
     },
 
-    // Winning Rewards Configuration
-    winningRewards: {
-        baseCoins: {
-            type: Number,
-            default: 10
-        },
-        coinsPerLevelMultiplier: {
-            type: Number,
-            default: 2.5
-        },
-        starBonusBase: {
-            type: Number,
-            default: 5
-        },
-        starBonusLevelMultiplier: {
-            type: Number,
-            default: 0.5
-        },
-        completionBonusMultiplier: {
-            type: Number,
-            default: 1.2
-        }
+    // Simple coin reward per level completion
+    coinsPerLevel: {
+        type: Number,
+        default: 10,
+        required: true
+    },
+
+    // Star thresholds for scoring
+    starThresholds: {
+        one: { type: Number, default: 100, required: true },
+        two: { type: Number, default: 400, required: true },
+        three: { type: Number, default: 800, required: true }
+    },
+
+    // Withdrawal reward calculation
+    scoreRange: {
+        type: Number,
+        default: 100,
+        required: true
+    },
+    rewardPerRange: {
+        type: mongoose.Schema.Types.Decimal128,
+        default: 1,
+        required: true
+    },
+    minWithdrawAmount: {
+        type: mongoose.Schema.Types.Decimal128,
+        default: 0.00000001,
+        required: true
     },
 
     // Metadata
@@ -48,24 +55,10 @@ gameConfigSchema.pre('save', function (next) {
 
 // Static methods
 gameConfigSchema.statics.getConfig = async function () {
-    let config = await this.findOne({ key: 'default' });
-
-    if (!config) {
-        // Create default config if it doesn't exist
-        config = await this.create({
-            key: 'default',
-            winningRewards: {
-                baseCoins: 10,
-                coinsPerLevelMultiplier: 2.5,
-                starBonusBase: 5,
-                starBonusLevelMultiplier: 0.5,
-                completionBonusMultiplier: 1.2
-            }
-        });
-        console.log('🌱 Application: Auto-seeded default GameConfig');
-    }
-
-    return config;
+    // Try to find the default config, or just the first available one to be more robust
+    const config = await this.findOne({ key: 'default' });
+    if (config) return config;
+    return await this.findOne({});
 };
 
 module.exports = mongoose.model('GameConfig', gameConfigSchema);

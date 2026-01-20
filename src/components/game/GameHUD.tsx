@@ -1,9 +1,9 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Image } from "react-native";
-import MaterialIcon from "../MaterialIcon";
-import HelpButton from "../HelpButton";
+import MaterialIcon from "../common/MaterialIcon";
+import HelpButton from "../common/HelpButton";
 import { GAME_ICONS, ICON_COLORS } from "../../config/icons";
-import { styles } from "../../styles/GameScreenStyles";
+import { styles } from "../../styles/screens/GameScreenStyles";
 
 const COLOR_MAP: Record<string, any> = {
     "#ff3b30": require("../../images/red.webp"),
@@ -37,6 +37,11 @@ interface GameHUDProps {
     onActivateBomb: () => void;
     onActivateFreeze: () => void;
     onActivateFire: () => void;
+    starThresholds?: {
+        one: number;
+        two: number;
+        three: number;
+    };
 }
 
 export const GameHUD = ({
@@ -51,7 +56,8 @@ export const GameHUD = ({
     onActivateLightning,
     onActivateBomb,
     onActivateFreeze,
-    onActivateFire
+    onActivateFire,
+    starThresholds = { one: 200, two: 600, three: 1000 }
 }: GameHUDProps) => {
     return (
         <>
@@ -67,9 +73,9 @@ export const GameHUD = ({
                         <Text style={styles.statLabel}>SCORE</Text>
                         <Text style={styles.statValue}>{score.toLocaleString()}</Text>
                         <View style={styles.starProgressContainer}>
-                            <View style={[styles.starProgressDot, score > 100 && styles.starProgressDotActive]} />
-                            <View style={[styles.starProgressDot, score > 500 && styles.starProgressDotActive]} />
-                            <View style={[styles.starProgressDot, score > 1000 && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= starThresholds.one && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= starThresholds.two && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= starThresholds.three && styles.starProgressDotActive]} />
                         </View>
                     </View>
                     <HelpButton onPress={onShowInstructions || (() => { })} />

@@ -7,9 +7,9 @@ const API_BASE_URL = __DEV__
 
 // Fallback URL for emulators and devices
 const API_FALLBACK_URL = 'http://10.0.2.2:3001/api'; // Android emulator localhost
-const API_DEVICE_URL = 'http://192.168.1.39:3001/api'; // For physical devices on network - Updated IP
+const API_DEVICE_URL = 'http://192.168.1.50:3001/api'; // For physical devices on network - Updated IP
 
-// Network test function with fallback URLs
+// Network test function with fallback URLs - OPTIMIZED
 const testNetworkConnection = async (): Promise<{ success: boolean; url?: string }> => {
   const urlsToTest = [
     API_DEVICE_URL,      // Try device IP first (most likely to work on physical device)
@@ -17,13 +17,14 @@ const testNetworkConnection = async (): Promise<{ success: boolean; url?: string
     API_BASE_URL,        // Finally regular localhost
   ];
 
-  for (const url of urlsToTest) {
+  // Test all URLs in parallel with shorter timeout for faster results
+  const testPromises = urlsToTest.map(async (url) => {
     try {
       console.log(`🧪 Testing connection to: ${url}`);
 
-      // Create a timeout promise
+      // Reduced timeout for faster failure detection
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 5000) // Increased timeout
+        setTimeout(() => reject(new Error('Request timeout')), 2000) // Reduced from 5s to 2s
       );
 
       const fetchPromise = fetch(`${url}/health`, {
@@ -39,10 +40,27 @@ const testNetworkConnection = async (): Promise<{ success: boolean; url?: string
         console.log(`✅ Connection successful to: ${url}`);
         return { success: true, url };
       }
+      return { success: false };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.log(`❌ Connection failed to: ${url}`, errorMessage);
+      return { success: false };
     }
+  });
+
+  // Wait for first successful connection or all to fail
+  try {
+    const results = await Promise.allSettled(testPromises);
+
+    // Return first successful result
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === 'fulfilled' && result.value.success) {
+        return result.value;
+      }
+    }
+  } catch (error) {
+    console.error('Network test error:', error);
   }
 
   return { success: false };
@@ -62,7 +80,7 @@ export interface UserProfile {
 }
 
 export interface UserGameData {
-  userId: string;
+  email: string;
   totalScore: number;
   highScore: number;
   totalCoins: number;
@@ -78,7 +96,7 @@ export interface UserGameData {
 }
 
 export interface LeaderboardEntry {
-  userId: string;
+  email: string;
   displayName: string;
   profilePicture?: string;
   highScore: number;
@@ -89,7 +107,7 @@ export interface LeaderboardEntry {
 
 export interface GameSession {
   sessionId: string;
-  userId: string;
+  email: string;
   level: number;
   score: number;
   moves: number;
@@ -118,6 +136,66 @@ export interface AbilityConfig {
   sortOrder: number;
 }
 
+export interface ShopItem {
+  _id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  type: 'ability' | 'bundle' | 'subscription' | 'coin_pack';
+  icon: string;
+  color: string;
+  priceCoins: number;
+  priceMoney: number;
+  currency: string;
+  items?: Array<{
+    abilityName: string;
+    quantity: number;
+  }>;
+  coinReward?: number;
+  subscriptionDays?: number;
+  features?: string[];
+  sortOrder: number;
+}
+
+export interface LevelReward {
+  _id: string;
+  email: string;
+  level: number;
+  stars: number;
+  coinsAwarded: number;
+  rewardClaimed: boolean;
+  claimedAt: string;
+  score: number;
+}
+
+export interface RewardHistoryItem {
+  _id: string;
+  email: string;
+  level: number;
+  reward: number; // Renamed from scoreEarning
+  scoreEarning?: number; // Legacy support
+  coins: number;
+  stars?: number; // Added
+  score?: number; // Added
+  status: 'claimed' | 'withdrawn';
+  date: string;
+  createdDate: string;
+  withdrawnDate?: string;
+  token?: string;
+}
+
+export interface WithdrawHistoryItem {
+  _id: string;
+  email: string;
+  reward: number; // Renamed from scoreEarning
+  scoreEarning?: number; // Legacy support
+  status: 'pending' | 'completed' | 'rejected' | 'paid';
+  date: string;
+  createdDate: string;
+  walletAddress?: string;
+  token?: string;
+}
+
 export interface AdConfig {
   platform: 'android' | 'ios';
   appId: string;
@@ -139,6 +217,14 @@ export interface GameConfig {
     starBonusBase: number;
     starBonusLevelMultiplier: number;
     completionBonusMultiplier: number;
+    scoreRange?: number;
+    rewardPerRange?: number;
+    minWithdrawAmount?: number;
+    starThresholds?: {
+      one: number;
+      two: number;
+      three: number;
+    };
   };
   platform: 'android' | 'ios';
   rewardAmount: number;
@@ -159,26 +245,94 @@ export interface AdUnitsResponse {
   error?: string;
 }
 
-
 class BackendService {
   private authToken: string | null = null;
   private currentUser: UserProfile | null = null;
   private workingApiUrl: string = API_BASE_URL; // Will be updated after network test
+  private readyPromise: Promise<void>;
+  private urlTestCache: { url: string; timestamp: number } | null = null;
+  private readonly URL_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  // Simple cache for frequently accessed data
+  private dataCache: Map<string, { data: any; timestamp: number }> = new Map();
+  private readonly CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
+
+  // User data cache with shorter duration for real-time updates
+  private userDataCache: { data: UserGameData; timestamp: number } | null = null;
+  private readonly USER_DATA_CACHE_DURATION = 30 * 1000; // 30 seconds
 
   constructor() {
-    this.loadAuthToken();
-    // Start network test early
-    this.ensureWorkingUrl();
+    this.readyPromise = this.init();
+  }
+
+  // Helper method to get cached data
+  private getCachedData(key: string): any | null {
+    const cached = this.dataCache.get(key);
+    if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  // Helper method to set cached data
+  private setCachedData(key: string, data: any): void {
+    this.dataCache.set(key, { data, timestamp: Date.now() });
+  }
+
+  private async init(): Promise<void> {
+    try {
+      await Promise.all([
+        this.loadAuthToken(),
+        this.initWorkingUrl()
+      ]);
+      console.log('✅ BackendService initialized');
+    } catch (error) {
+      console.error('❌ BackendService initialization failed:', error);
+    }
+  }
+
+  private async initWorkingUrl(): Promise<void> {
+    const result = await testNetworkConnection();
+    if (result.success && result.url) {
+      this.workingApiUrl = result.url;
+      this.urlTestCache = { url: result.url, timestamp: Date.now() };
+    }
   }
 
   private async ensureWorkingUrl(): Promise<string> {
-    if (this.workingApiUrl === API_BASE_URL) {
-      const result = await testNetworkConnection();
-      if (result.success && result.url) {
-        this.workingApiUrl = result.url;
-      }
+    await this.readyPromise;
+
+    // Use cached URL if still valid
+    if (this.urlTestCache && (Date.now() - this.urlTestCache.timestamp) < this.URL_CACHE_DURATION) {
+      return this.urlTestCache.url;
     }
+
+    // Re-test if cache expired
+    const result = await testNetworkConnection();
+    if (result.success && result.url) {
+      this.workingApiUrl = result.url;
+      this.urlTestCache = { url: result.url, timestamp: Date.now() };
+    }
+
     return this.workingApiUrl;
+  }
+
+  // Helper method to make requests with timeout
+  private async makeRequest(url: string, options: RequestInit, timeout: number = 10000): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   }
 
   // ============================================================================
@@ -214,26 +368,60 @@ class BackendService {
   }
 
   async ensureAuthenticated(firebaseUser: any): Promise<boolean> {
-    console.log('🔍 ensureAuthenticated called with user:', firebaseUser?.email || firebaseUser?.displayName || 'Anonymous');
-    console.log('🔍 Current isAuthenticated():', this.isAuthenticated());
+    console.log('🔍 ensureAuthenticated called for:', firebaseUser?.email || 'Anonymous');
 
-    if (this.isAuthenticated()) return true;
+    // Always wait for the service to be ready (AsyncStorage loaded)
+    await this.readyPromise;
+
+    if (this.isAuthenticated()) {
+      console.log('✅ Already authenticated in BackendService');
+      return true;
+    }
+
     if (!firebaseUser) {
       console.log('❌ No Firebase user provided');
       return false;
     }
 
-    console.log('🔑 Logging in with Google...');
-    // Handle regular Google users
-    const result = await this.loginWithGoogle(
-      firebaseUser.uid,
-      firebaseUser.email || '',
-      firebaseUser.displayName || 'Commander',
-      firebaseUser.photoURL || undefined
-    );
+    // Check if it's a Google user or Anonymous user
+    const isGoogle = firebaseUser.providerData?.some((p: any) => p.providerId === 'google.com');
+    const isAnonymous = firebaseUser.isAnonymous;
 
-    console.log('🔍 Login result:', result.success ? 'Success' : `Failed: ${result.error}`);
-    return result.success;
+    try {
+      let result;
+      if (isGoogle) {
+        console.log('🔑 Logging in with Google backend...');
+        result = await this.loginWithGoogle(
+          firebaseUser.uid,
+          firebaseUser.email || '',
+          firebaseUser.displayName || 'Commander',
+          firebaseUser.photoURL || undefined
+        );
+      } else if (isAnonymous) {
+        console.log('👤 Logging in as Anonymous backend...');
+        result = await this.loginWithAnonymous(
+          firebaseUser.uid,
+          firebaseUser.displayName || 'Guest'
+        );
+      } else {
+        // For Email/Password users, they should have been authenticated by AuthService
+        // If we reach here, it means we have a Firebase session but no Backend session.
+        // This is the "session recovery" scenario.
+        console.log('⚠️ Firebase session exists but no backend token. Attempting session recovery...');
+
+        if (firebaseUser.email) {
+          result = await this.loginWithFirebase(firebaseUser.uid, firebaseUser.email);
+        } else {
+          console.log('❌ Cannot recover session: No email in firebase user');
+          return false;
+        }
+      }
+
+      return result.success;
+    } catch (error) {
+      console.error('❌ ensureAuthenticated error:', error);
+      return false;
+    }
   }
 
   async clearAuthToken(): Promise<void> {
@@ -248,10 +436,10 @@ class BackendService {
   }
 
   // Register with email/password
-  async registerUser(email: string, password: string, displayName: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+  async registerUser(email: string, password: string, displayName: string, firebaseId?: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
     try {
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/auth/register`, {
+      const response = await this.makeRequest(`${baseUrl}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -260,8 +448,9 @@ class BackendService {
           email,
           password,
           displayName,
+          firebaseId,
         }),
-      });
+      }, 8000); // 8 second timeout
 
       const data = await response.json();
 
@@ -278,10 +467,10 @@ class BackendService {
   }
 
   // Login with email/password
-  async loginUser(email: string, password: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+  async loginUser(email: string, password: string, firebaseId?: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
     try {
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/auth/login`, {
+      const response = await this.makeRequest(`${baseUrl}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -289,8 +478,9 @@ class BackendService {
         body: JSON.stringify({
           email,
           password,
+          firebaseId,
         }),
-      });
+      }, 8000); // 8 second timeout
 
       const data = await response.json();
 
@@ -303,6 +493,35 @@ class BackendService {
     } catch (error) {
       console.error('Login error:', error);
       return { success: false, error: 'Network error during login' };
+    }
+  }
+
+  // Login with Firebase ID (Session Recovery)
+  async loginWithFirebase(firebaseId: string, email: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await this.makeRequest(`${baseUrl}/auth/firebase-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firebaseId,
+          email,
+        }),
+      }, 8000);
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await this.saveAuthToken(data.token, data.user);
+        return { success: true, user: data.user };
+      } else {
+        return { success: false, error: data.message || 'Session recovery failed' };
+      }
+    } catch (error) {
+      console.error('Firebase login error:', error);
+      return { success: false, error: 'Network error during session recovery' };
     }
   }
 
@@ -339,6 +558,34 @@ class BackendService {
   }
 
 
+  // Anonymous Login
+  async loginWithAnonymous(firebaseId: string, displayName: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+    try {
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/auth/anonymous-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firebaseId,
+          displayName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await this.saveAuthToken(data.token, data.user);
+        return { success: true, user: data.user };
+      } else {
+        return { success: false, error: data.message || 'Anonymous login failed' };
+      }
+    } catch (error) {
+      console.error('Anonymous login error:', error);
+      return { success: false, error: 'Network error during anonymous login' };
+    }
+  }
 
   // Logout
   async logout(): Promise<void> {
@@ -364,24 +611,32 @@ class BackendService {
   // USER GAME DATA METHODS
   // ============================================================================
 
-  async getUserGameData(): Promise<{ success: boolean; data?: UserGameData; error?: string }> {
+  async getUserGameData(useCache: boolean = true): Promise<{ success: boolean; data?: UserGameData; error?: string }> {
     try {
       if (!this.authToken) {
         return { success: false, error: 'Not authenticated' };
       }
 
+      // Check cache first if enabled
+      if (useCache && this.userDataCache && (Date.now() - this.userDataCache.timestamp) < this.USER_DATA_CACHE_DURATION) {
+        console.log('📦 Using cached user game data');
+        return { success: true, data: this.userDataCache.data };
+      }
+
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/user/game-data`, {
+      const response = await this.makeRequest(`${baseUrl}/user/game-data`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
           'Content-Type': 'application/json',
         },
-      });
+      }, 8000); // 8 second timeout
 
       const data = await response.json();
 
       if (response.ok) {
+        // Cache the result
+        this.userDataCache = { data: data.gameData, timestamp: Date.now() };
         return { success: true, data: data.gameData };
       } else {
         return { success: false, error: data.message || 'Failed to fetch game data' };
@@ -399,18 +654,20 @@ class BackendService {
       }
 
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/user/game-data`, {
+      const response = await this.makeRequest(`${baseUrl}/user/game-data`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.authToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(gameData),
-      });
+      }, 8000);
 
       const data = await response.json();
 
       if (response.ok) {
+        // Invalidate cache after update
+        this.userDataCache = null;
         return { success: true };
       } else {
         return { success: false, error: data.message || 'Failed to update game data' };
@@ -491,13 +748,13 @@ class BackendService {
   // LEADERBOARD METHODS
   // ============================================================================
 
-  async getLeaderboard(limit: number = 100): Promise<{ success: boolean; leaderboard?: LeaderboardEntry[]; error?: string }> {
+  async getLeaderboard(limit: number = 100, type: string = 'totalScore'): Promise<{ success: boolean; leaderboard?: LeaderboardEntry[]; error?: string }> {
     try {
       console.log('🌐 Fetching leaderboard...');
 
       // Use the working URL directly, or test if needed
       const baseUrl = await this.ensureWorkingUrl();
-      const url = `${baseUrl}/leaderboard?limit=${limit}`;
+      const url = `${baseUrl}/leaderboard?limit=${limit}&type=${type}`;
       console.log('📡 Fetching leaderboard from:', url);
 
       const response = await fetch(url, {
@@ -567,11 +824,12 @@ class BackendService {
   // GAME SESSION METHODS
   // ============================================================================
 
-  async submitGameSession(session: Omit<GameSession, 'sessionId' | 'userId' | 'completedAt'>): Promise<{ success: boolean; data?: any; error?: string }> {
+  async submitGameSession(session: Omit<GameSession, 'sessionId' | 'email' | 'completedAt'>): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       console.log('🎮 submitGameSession called');
       console.log('🔍 Auth token exists:', !!this.authToken);
       console.log('🔍 Session data:', session);
+      console.log('💰 Submitting coinsEarned:', session.coinsEarned);
 
       if (!this.authToken) {
         console.log('❌ No auth token available');
@@ -681,13 +939,13 @@ class BackendService {
   }
 
   // ============================================================================
-  // CONFIG METHODS
+  // NEW SHOP METHODS
   // ============================================================================
 
-  async getAbilitiesConfig(): Promise<{ success: boolean; abilities?: AbilityConfig[]; error?: string }> {
+  async getShopItems(): Promise<{ success: boolean; items?: ShopItem[]; error?: string }> {
     try {
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/config/abilities`, {
+      const response = await fetch(`${baseUrl}/shop`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -697,6 +955,83 @@ class BackendService {
       const data = await response.json();
 
       if (response.ok) {
+        return { success: true, items: data.data };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch shop items' };
+      }
+    } catch (error) {
+      console.error('Get shop items error:', error);
+      return { success: false, error: 'Network error fetching shop items' };
+    }
+  }
+
+  async purchaseShopItem(itemId: string, paymentMethod: 'coins' | 'money'): Promise<{
+    success: boolean;
+    newCoinBalance?: number;
+    abilities?: Record<string, number>;
+    subscription?: any;
+    error?: string;
+  }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/shop/purchase`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ itemId, paymentMethod }),
+      });
+
+      const data = await response.json();
+      console.log('🛒 Purchase response data:', data);
+
+      if (response.ok) {
+        return {
+          success: true,
+          newCoinBalance: data.newCoinBalance,
+          abilities: data.abilities,
+          subscription: data.subscription
+        };
+      } else {
+        return { success: false, error: data.message || 'Purchase failed' };
+      }
+    } catch (error) {
+      console.error('Purchase shop item error:', error);
+      return { success: false, error: 'Network error purchasing shop item' };
+    }
+  }
+
+  // ============================================================================
+  // CONFIG METHODS
+  // ============================================================================
+
+  async getAbilitiesConfig(): Promise<{ success: boolean; abilities?: AbilityConfig[]; error?: string }> {
+    try {
+      // Check cache first
+      const cacheKey = 'abilities-config';
+      const cached = this.getCachedData(cacheKey);
+      if (cached) {
+        console.log('📦 Using cached abilities config');
+        return { success: true, abilities: cached };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await this.makeRequest(`${baseUrl}/config/abilities`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }, 6000);
+
+      const data = await response.json();
+
+      if (response.ok) {
+        this.setCachedData(cacheKey, data.abilities);
         return { success: true, abilities: data.abilities };
       } else {
         return { success: false, error: data.message || 'Failed to fetch abilities config' };
@@ -979,51 +1314,7 @@ class BackendService {
     }
   }
 
-  async initializeAbilities(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/ability/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, results: data.results };
-      } else {
-        return { success: false, error: data.message || 'Failed to initialize abilities' };
-      }
-    } catch (error) {
-      console.error('Initialize abilities error:', error);
-      return { success: false, error: 'Network error initializing abilities' };
-    }
-  }
-
-  async resetAbilities(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/ability/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, data: data.data, count: data.count };
-      } else {
-        return { success: false, error: data.message || 'Failed to reset abilities' };
-      }
-    } catch (error) {
-      console.error('Reset abilities error:', error);
-      return { success: false, error: 'Network error resetting abilities' };
-    }
-  }
 
   // ============================================================================
   // AD CONFIG MANAGEMENT METHODS
@@ -1159,51 +1450,7 @@ class BackendService {
     }
   }
 
-  async initializeAdConfigs(): Promise<{ success: boolean; results?: any[]; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/adconfig/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, results: data.results };
-      } else {
-        return { success: false, error: data.message || 'Failed to initialize ad configurations' };
-      }
-    } catch (error) {
-      console.error('Initialize ad configs error:', error);
-      return { success: false, error: 'Network error initializing ad configurations' };
-    }
-  }
-
-  async resetAdConfigs(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
-    try {
-      const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/adconfig/reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        return { success: true, data: data.data, count: data.count };
-      } else {
-        return { success: false, error: data.message || 'Failed to reset ad configurations' };
-      }
-    } catch (error) {
-      console.error('Reset ad configs error:', error);
-      return { success: false, error: 'Network error resetting ad configurations' };
-    }
-  }
 
   // ============================================================================
   // AD UNIT MANAGEMENT METHODS
@@ -1397,12 +1644,23 @@ class BackendService {
     }
   }
 
-  async resetAdUnits(): Promise<{ success: boolean; data?: any[]; count?: number; error?: string }> {
+
+
+  // ============================================================================
+  // REWARD METHODS
+  // ============================================================================
+
+  async getRewardHistory(limit: number = 50): Promise<{ success: boolean; rewards?: LevelReward[]; totalCoins?: number; error?: string }> {
     try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
       const baseUrl = await this.ensureWorkingUrl();
-      const response = await fetch(`${baseUrl}/adunit/reset`, {
-        method: 'POST',
+      const response = await fetch(`${baseUrl}/rewards/history?limit=${limit}`, {
+        method: 'GET',
         headers: {
+          'Authorization': `Bearer ${this.authToken}`,
           'Content-Type': 'application/json',
         },
       });
@@ -1410,13 +1668,162 @@ class BackendService {
       const data = await response.json();
 
       if (response.ok) {
-        return { success: true, data: data.data, count: data.count };
+        return {
+          success: true,
+          rewards: data.rewards,
+          totalCoins: data.totalCoins
+        };
       } else {
-        return { success: false, error: data.message || 'Failed to reset ad units' };
+        return { success: false, error: data.message || 'Failed to fetch reward history' };
       }
     } catch (error) {
-      console.error('Reset ad units error:', error);
-      return { success: false, error: 'Network error resetting ad units' };
+      console.error('Get reward history error:', error);
+      return { success: false, error: 'Network error fetching reward history' };
+    }
+  }
+
+  async checkLevelReward(level: number): Promise<{ success: boolean; claimed?: boolean; reward?: LevelReward; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/rewards/level/${level}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return {
+          success: true,
+          claimed: data.claimed,
+          reward: data.reward
+        };
+      } else {
+        return { success: false, error: data.message || 'Failed to check level reward' };
+      }
+    } catch (error) {
+      console.error('Check level reward error:', error);
+      return { success: false, error: 'Network error checking level reward' };
+    }
+  }
+
+  async getRewardStats(): Promise<{ success: boolean; stats?: any; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/rewards/stats`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, stats: data.stats };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch reward stats' };
+      }
+    } catch (error) {
+      console.error('Get reward stats error:', error);
+      return { success: false, error: 'Network error fetching reward stats' };
+    }
+  }
+
+  async getRewardHistoryOnly(): Promise<{ success: boolean; history?: RewardHistoryItem[]; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/withdraw/reward-history`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, history: data.history };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch reward history' };
+      }
+    } catch (error) {
+      console.error('Get reward history only error:', error);
+      return { success: false, error: 'Network error fetching reward history' };
+    }
+  }
+
+  async getWithdrawHistoryOnly(): Promise<{ success: boolean; history?: WithdrawHistoryItem[]; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/withdraw/withdraw-history`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, history: data.history };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch withdraw history' };
+      }
+    } catch (error) {
+      console.error('Get withdraw history only error:', error);
+      return { success: false, error: 'Network error fetching withdraw history' };
+    }
+  }
+
+  async requestWithdrawal(walletAddress: string): Promise<{ success: boolean; amount?: number; error?: string }> {
+    try {
+      if (!this.authToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const baseUrl = await this.ensureWorkingUrl();
+      const response = await fetch(`${baseUrl}/withdraw/request`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ walletAddress }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, amount: data.amount };
+      } else {
+        return { success: false, error: data.message || 'Withdrawal request failed' };
+      }
+    } catch (error) {
+      console.error('Request withdrawal error:', error);
+      return { success: false, error: 'Network error requesting withdrawal' };
     }
   }
 
