@@ -7,17 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:139222386798:android:63026bfc75b41894cafe7f",
+        "mobilesdk_app_id": "1:139222386798:android:6c22f1863d8b2757cafe7f",
         "android_client_info": {
-          "package_name": "com.bubbleapp"
+          "package_name": "vb.bitbybit.shibaearningmachine"
         }
       },
       "oauth_client": [
         {
-          "client_id": "139222386798-qp4c2fis2m6n1cqjvos4p7j7e36htqei.apps.googleusercontent.com",
+          "client_id": "139222386798-84v0p1l100atbv9s96gd63029ed5rs71.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.bubbleapp",
+            "package_name": "vb.bitbybit.shibaearningmachine",
             "certificate_hash": "9e2bff2ff9506780dcbc0d5c3150b40225292ea9"
           }
         },
@@ -44,4 +44,4 @@
     }
   ],
   "configuration_version": "1"
-}
+} 
