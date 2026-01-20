@@ -1,4 +1,4 @@
-package com.bubbleapp
+package vb.bitbybit.shibaearningmachine
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

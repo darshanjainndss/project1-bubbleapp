@@ -1,4 +1,4 @@
-package com.bubbleapp
+package vb.bitbybit.shibaearningmachine
 
 import android.app.Application
 import com.facebook.react.PackageList
