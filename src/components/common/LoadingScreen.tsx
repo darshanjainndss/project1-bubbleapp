@@ -53,10 +53,10 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ onLoadingComplete }) => {
       useNativeDriver: false,
     }).start();
 
-    // Complete loading after 3.5 seconds
+    // Complete loading after 1.5 seconds (reduced from 3.5s)
     const timer = setTimeout(() => {
       onLoadingComplete();
-    }, 3500);
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [fadeAnim, scaleAnim, rotateAnim, progressAnim, onLoadingComplete]);

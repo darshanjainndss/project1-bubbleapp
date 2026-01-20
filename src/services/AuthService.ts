@@ -7,22 +7,26 @@ export class AuthService {
   static async signUpWithEmail(email: string, password: string): Promise<FirebaseAuthTypes.UserCredential> {
     try {
       const userCredential = await auth().createUserWithEmailAndPassword(email, password);
-      
-      // Also register with backend
+
+      // Register with backend synchronously to ensure it completes
       try {
-        await BackendService.registerUser(email, password, email.split('@')[0]);
+        console.log('🔑 Registering with backend...');
+        await BackendService.registerUser(email, password, email.split('@')[0], userCredential.user.uid);
+        console.log('✅ Backend registration successful');
       } catch (backendError) {
         console.warn('Backend registration failed, but Firebase succeeded:', backendError);
+        // Continue anyway - the app will work with Firebase auth only
       }
-      
+
       return userCredential;
     } catch (error: any) {
       console.error('Email signup error:', error);
-      
+
       // If Firebase fails, try backend-only registration
       if (error.code === 'auth/network-request-failed' || error.message?.includes('Connection reset')) {
         try {
           console.log('Firebase failed, attempting backend-only registration...');
+          // Note: We don't have a firebaseId here since firebase failed
           const result = await BackendService.registerUser(email, password, email.split('@')[0]);
           if (result.success) {
             // Create a mock user credential for consistency
@@ -32,7 +36,7 @@ export class AuthService {
           console.error('Backend registration also failed:', backendError);
         }
       }
-      
+
       throw new Error(AuthService.getErrorMessage(error.code));
     }
   }
@@ -41,18 +45,21 @@ export class AuthService {
   static async signInWithEmail(email: string, password: string): Promise<FirebaseAuthTypes.UserCredential> {
     try {
       const userCredential = await auth().signInWithEmailAndPassword(email, password);
-      
-      // Also authenticate with backend
+
+      // Authenticate with backend synchronously to ensure it completes
       try {
-        await BackendService.loginUser(email, password);
+        console.log('🔑 Authenticating with backend...');
+        await BackendService.loginUser(email, password, userCredential.user.uid);
+        console.log('✅ Backend authentication successful');
       } catch (backendError) {
         console.warn('Backend login failed, but Firebase succeeded:', backendError);
+        // Continue anyway - the app will work with Firebase auth only
       }
-      
+
       return userCredential;
     } catch (error: any) {
       console.error('Email signin error:', error);
-      
+
       // If Firebase fails, try backend-only login
       if (error.code === 'auth/network-request-failed' || error.message?.includes('Connection reset')) {
         try {
@@ -67,7 +74,7 @@ export class AuthService {
           console.error('Backend login also failed:', backendError);
         }
       }
-      
+
       throw new Error(AuthService.getErrorMessage(error.code));
     }
   }

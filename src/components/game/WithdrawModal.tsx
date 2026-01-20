@@ -11,7 +11,8 @@ import {
     Easing,
     KeyboardAvoidingView,
     Platform,
-    ScrollView
+    ScrollView,
+    ActivityIndicator
 } from 'react-native';
 import BackendService from '../../services/BackendService';
 import MessageModal from '../common/MessageModal';
@@ -40,6 +41,15 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ visible, onClose }) => {
         type: 'info' as 'success' | 'error' | 'info'
     });
 
+    const [history, setHistory] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [historyTab, setHistoryTab] = useState<'pending' | 'completed'>('pending');
+    const [modalWidth, setModalWidth] = useState(() => {
+        // Initial estimate: Screen Width - Padding (20*2) clamped to MaxWidth (450)
+        const availableWidth = SCREEN_WIDTH - 40;
+        return Math.min(availableWidth, 450);
+    });
+
     const textInputRef = useRef<TextInput>(null);
     const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -55,6 +65,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ visible, onClose }) => {
         if (visible) {
             loadData();
             fetchConfig();
+            loadHistory();
             setIsInputFocused(false);
             setWalletAddress('');
 
@@ -140,6 +151,36 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ visible, onClose }) => {
         } catch (error) {
             console.error('Failed to load withdrawal data:', error);
         }
+    };
+
+    const loadHistory = async () => {
+        try {
+            setLoadingHistory(true);
+            const result = await BackendService.getWithdrawHistoryOnly();
+            if (result.success && result.history) {
+                setHistory(result.history);
+            }
+        } catch (error) {
+            console.error('Failed to load withdraw history:', error);
+        } finally {
+            setLoadingHistory(false);
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'completed':
+            case 'paid': return '#00FF88';
+            case 'pending': return '#FFA500';
+            case 'rejected': return '#FF3B30';
+            default: return '#AAA';
+        }
+    };
+
+    const filterHistory = () => {
+        return history.filter(item =>
+            historyTab === 'pending' ? item.status === 'pending' : item.status !== 'pending'
+        );
     };
 
     const handleWithdraw = async () => {
@@ -235,200 +276,308 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ visible, onClose }) => {
                             }
                         ]}
                     >
-                        {/* Header */}
-                        <View style={styles.header}>
-                            <View>
-                                <Text style={styles.headerTitle}>SECURE WITHDRAW</Text>
-                                <View style={styles.underline} />
-                            </View>
-                            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                                <MaterialIcon name="close" family="material" size={24} color="#FFF" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView
+                        <View
+                            onLayout={(e) => setModalWidth(e.nativeEvent.layout.width)}
                             style={{ width: '100%' }}
-                            contentContainerStyle={styles.scrollContent}
-                            showsVerticalScrollIndicator={false}
                         >
-                            {/* Premium Card Display */}
-                            <Animated.View style={[styles.cardContainer, { transform: [{ scale: cardPulse }] }]}>
-                                <LinearGradient
-                                    colors={['#1a1d2d', '#0f1219']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.card}
-                                >
-                                    {/* Card Shine Effect */}
-                                    <Animated.View
-                                        style={[
-                                            styles.shineOverlay,
-                                            {
-                                                transform: [
-                                                    {
-                                                        translateX: shineAnim.interpolate({
-                                                            inputRange: [-1, 2],
-                                                            outputRange: [-300, 600]
-                                                        })
-                                                    },
-                                                    { rotate: '45deg' }
-                                                ]
-                                            }
-                                        ]}
-                                    >
-                                        <LinearGradient
-                                            colors={['transparent', 'rgba(255,255,255,0.1)', 'transparent']}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 0 }}
-                                            style={{ flex: 1 }}
-                                        />
-                                    </Animated.View>
-
-                                    {/* Card Content */}
-                                    <View style={styles.cardHeader}>
-                                        <Text style={styles.cardLabel}>CRYPTO ASSET CARD</Text>
-                                        <MaterialIcon name="wifi" size={20} color="rgba(255,255,255,0.4)" style={{ transform: [{ rotate: '90deg' }] }} />
-                                    </View>
-
-                                    <View style={styles.chipContainer}>
-                                        <LinearGradient
-                                            colors={['#FFD700', '#FDB931', '#FFD700']}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.chip}
-                                        >
-                                            <View style={styles.chipLine1} />
-                                            <View style={styles.chipLine2} />
-                                        </LinearGradient>
-                                        <MaterialIcon name="nfc" size={24} color="rgba(255,255,255,0.3)" />
-                                    </View>
-
-                                    <View style={styles.balanceContainer}>
-                                        <Text style={styles.balanceLabel}>Available Balance</Text>
-                                        <View style={styles.balanceRow}>
-                                            <View style={styles.logoBadge}>
-                                                <Text style={styles.logoText}>SHIB</Text>
-                                            </View>
-                                            <Text style={styles.balanceAmount} numberOfLines={1} adjustsFontSizeToFit>
-                                                {claimedEarnings.toFixed(8)}
-                                            </Text>
-                                        </View>
-                                    </View>
-
-                                    <View style={styles.cardFooter}>
+                            <ScrollView
+                                horizontal
+                                pagingEnabled
+                                showsHorizontalScrollIndicator={false}
+                                style={{ width: '100%' }}
+                            >
+                                {/* PAGE 1: WITHDRAW REQUEST */}
+                                <View style={{ width: modalWidth }}>
+                                    {/* Header */}
+                                    <View style={styles.header}>
                                         <View>
-                                            <Text style={styles.cardFooterLabel}>HOLDER</Text>
-                                            <Text style={styles.cardFooterValue}>
-                                                {user?.email?.split('@')[0] || user?.displayName || 'PLAYER'}
-                                            </Text>
+                                            <Text style={styles.headerTitle}>SECURE WITHDRAW</Text>
+                                            <View style={styles.underline} />
                                         </View>
-                                        <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={styles.cardFooterLabel}>STATUS</Text>
-                                            <Text style={[styles.cardFooterValue, { color: isAmountMet ? '#00FF88' : '#FF4444' }]}>
-                                                {isAmountMet ? 'ACTIVE' : 'LOCKED'}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </LinearGradient>
-                            </Animated.View>
 
-                            {/* Progress Section */}
-                            <View style={styles.progressSection}>
-                                <View style={styles.progressLabels}>
-                                    <Text style={styles.progressText}>Withdrawal Limit Progress</Text>
-                                    <Text style={styles.progressValue}>{progressPercent.toFixed(0)}%</Text>
-                                </View>
-                                <View style={styles.progressBarBg}>
-                                    <LinearGradient
-                                        colors={['#FF4444', '#FFD700', '#00FF88']}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 0 }}
-                                        style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
-                                    />
-                                </View>
-                                <Text style={styles.minRequirement}>
-                                    Minimum Required: <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{minWithdrawAmount.toFixed(8)} SHIB</Text>
-                                </Text>
-                            </View>
-
-                            {/* Input Field */}
-                            <View style={styles.formSection}>
-                                <Text style={styles.inputLabel}>DESTINATION WALLET ADDRESS</Text>
-                                <TouchableOpacity
-                                    activeOpacity={0.9}
-                                    onPress={() => {
-                                        if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
-                                        focusTimeoutRef.current = setTimeout(() => textInputRef.current?.focus(), 50);
-                                    }}
-                                    style={[
-                                        styles.inputContainer,
-                                        isInputFocused && styles.inputContainerFocused
-                                    ]}
-                                >
-                                    <View style={styles.inputIconBg}>
-                                        <MaterialIcon name="account-balance-wallet" size={20} color={isInputFocused ? "#00E0FF" : "#64748B"} />
-                                    </View>
-                                    <TextInput
-                                        ref={textInputRef}
-                                        style={styles.textInput}
-                                        placeholder="Paste ERC-20 / BEP-20 Address"
-                                        placeholderTextColor="#475569"
-                                        value={walletAddress}
-                                        onChangeText={setWalletAddress}
-                                        onFocus={() => setIsInputFocused(true)}
-                                        onBlur={() => setIsInputFocused(false)}
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                        editable={!isSubmitting}
-                                    />
-                                    {walletAddress.length > 0 && (
-                                        <TouchableOpacity
-                                            onPress={() => setWalletAddress('')}
-                                            style={styles.clearButton}
-                                        >
-                                            <MaterialIcon name="cancel" size={18} color="#64748B" />
+                                        
+                                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                                            <MaterialIcon name="close" family="material" size={24} color="#FFF" />
                                         </TouchableOpacity>
-                                    )}
-                                </TouchableOpacity>
-                                <View style={styles.warningContainer}>
-                                    <MaterialIcon name="warning" size={12} color="#FBBF24" />
-                                    <Text style={styles.scamWarning}>
-                                        Double check your address. Transactions cannot be reversed.
-                                    </Text>
+                                    </View>
+
+                                    <ScrollView
+                                        style={{ width: '100%' }}
+                                        contentContainerStyle={styles.scrollContent}
+                                        showsVerticalScrollIndicator={false}
+                                    >
+                                        {/* Premium Card Display */}
+                                        <Animated.View style={[styles.cardContainer, { transform: [{ scale: cardPulse }] }]}>
+                                            <LinearGradient
+                                                colors={['#1a1d2d', '#0f1219']}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={styles.card}
+                                            >
+                                                {/* Card Shine Effect */}
+                                                <Animated.View
+                                                    style={[
+                                                        styles.shineOverlay,
+                                                        {
+                                                            transform: [
+                                                                {
+                                                                    translateX: shineAnim.interpolate({
+                                                                        inputRange: [-1, 2],
+                                                                        outputRange: [-300, 600]
+                                                                    })
+                                                                },
+                                                                { rotate: '45deg' }
+                                                            ]
+                                                        }
+                                                    ]}
+                                                >
+                                                    <LinearGradient
+                                                        colors={['transparent', 'rgba(255,255,255,0.1)', 'transparent']}
+                                                        start={{ x: 0, y: 0 }}
+                                                        end={{ x: 1, y: 0 }}
+                                                        style={{ flex: 1 }}
+                                                    />
+                                                </Animated.View>
+
+                                                {/* Card Content */}
+                                                <View style={styles.cardHeader}>
+                                                    <Text style={styles.cardLabel}>CRYPTO ASSET CARD</Text>
+                                                    <MaterialIcon name="wifi" size={20} color="rgba(255,255,255,0.4)" style={{ transform: [{ rotate: '90deg' }] }} />
+                                                </View>
+
+                                                <View style={styles.chipContainer}>
+                                                    <LinearGradient
+                                                        colors={['#FFD700', '#FDB931', '#FFD700']}
+                                                        start={{ x: 0, y: 0 }}
+                                                        end={{ x: 1, y: 1 }}
+                                                        style={styles.chip}
+                                                    >
+                                                        <View style={styles.chipLine1} />
+                                                        <View style={styles.chipLine2} />
+                                                    </LinearGradient>
+                                                    <MaterialIcon name="nfc" size={24} color="rgba(255,255,255,0.3)" />
+                                                </View>
+
+                                                <View style={styles.balanceContainer}>
+                                                    <Text style={styles.balanceLabel}>Available Balance</Text>
+                                                    <View style={styles.balanceRow}>
+                                                        <View style={styles.logoBadge}>
+                                                            <Text style={styles.logoText}>SHIB</Text>
+                                                        </View>
+                                                        <Text style={styles.balanceAmount} numberOfLines={1} adjustsFontSizeToFit>
+                                                            {claimedEarnings.toFixed(8)}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+
+                                                <View style={styles.cardFooter}>
+                                                    <View>
+                                                        <Text style={styles.cardFooterLabel}>HOLDER</Text>
+                                                        <Text style={styles.cardFooterValue}>
+                                                            {user?.email?.split('@')[0] || user?.displayName || 'PLAYER'}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={{ alignItems: 'flex-end' }}>
+                                                        <Text style={styles.cardFooterLabel}>STATUS</Text>
+                                                        <Text style={[styles.cardFooterValue, { color: isAmountMet ? '#00FF88' : '#FF4444' }]}>
+                                                            {isAmountMet ? 'ACTIVE' : 'LOCKED'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            </LinearGradient>
+                                        </Animated.View>
+
+                                        {/* Progress Section */}
+                                        <View style={styles.progressSection}>
+                                            <View style={styles.progressLabels}>
+                                                <Text style={styles.progressText}>Withdrawal Limit Progress</Text>
+                                                <Text style={styles.progressValue}>{progressPercent.toFixed(0)}%</Text>
+                                            </View>
+                                            <View style={styles.progressBarBg}>
+                                                <LinearGradient
+                                                    colors={['#FF4444', '#FFD700', '#00FF88']}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 0 }}
+                                                    style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
+                                                />
+                                            </View>
+                                            <Text style={styles.minRequirement}>
+                                                Minimum Required: <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{minWithdrawAmount.toFixed(8)} SHIB</Text>
+                                            </Text>
+                                        </View>
+
+                                        {/* Input Field */}
+                                        <View style={styles.formSection}>
+                                            <Text style={styles.inputLabel}>DESTINATION WALLET ADDRESS</Text>
+                                            <TouchableOpacity
+                                                activeOpacity={0.9}
+                                                onPress={() => {
+                                                    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+                                                    focusTimeoutRef.current = setTimeout(() => textInputRef.current?.focus(), 50);
+                                                }}
+                                                style={[
+                                                    styles.inputContainer,
+                                                    isInputFocused && styles.inputContainerFocused
+                                                ]}
+                                            >
+                                                <View style={styles.inputIconBg}>
+                                                    <MaterialIcon name="account-balance-wallet" size={20} color={isInputFocused ? "#00E0FF" : "#64748B"} />
+                                                </View>
+                                                <TextInput
+                                                    ref={textInputRef}
+                                                    style={styles.textInput}
+                                                    placeholder="Paste ERC-20 / BEP-20 Address"
+                                                    placeholderTextColor="#475569"
+                                                    value={walletAddress}
+                                                    onChangeText={setWalletAddress}
+                                                    onFocus={() => setIsInputFocused(true)}
+                                                    onBlur={() => setIsInputFocused(false)}
+                                                    autoCapitalize="none"
+                                                    autoCorrect={false}
+                                                    editable={!isSubmitting}
+                                                />
+                                                {walletAddress.length > 0 && (
+                                                    <TouchableOpacity
+                                                        onPress={() => setWalletAddress('')}
+                                                        style={styles.clearButton}
+                                                    >
+                                                        <MaterialIcon name="cancel" size={18} color="#64748B" />
+                                                    </TouchableOpacity>
+                                                )}
+                                            </TouchableOpacity>
+                                            <View style={styles.warningContainer}>
+                                                <MaterialIcon name="warning" size={12} color="#FBBF24" />
+                                                <Text style={styles.scamWarning}>
+                                                    Double check your address. Transactions cannot be reversed.
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                    </ScrollView>
+
+                                    {/* Action Footer */}
+                                    <View style={styles.actionFooter}>
+                                        <TouchableOpacity
+                                            style={[styles.cancelBtn]}
+                                            onPress={onClose}
+                                            disabled={isSubmitting}
+                                        >
+                                            <Text style={styles.cancelBtnText}>CANCEL</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.confirmBtn,
+                                                (!isAmountMet || isSubmitting) && styles.disabledBtn
+                                            ]}
+                                            onPress={handleWithdraw}
+                                            disabled={!isAmountMet || isSubmitting}
+                                        >
+                                            <LinearGradient
+                                                colors={isAmountMet ? ['#00E0FF', '#007AFF'] : ['#334155', '#1E293B']}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 0 }}
+                                                style={styles.gradientBtn}
+                                            >
+                                                <Text style={[styles.confirmBtnText, !isAmountMet && { color: '#64748B' }]}>
+                                                    {isSubmitting ? "PROCESSING..." : "CONFIRM WITHDRAWAL"}
+                                                </Text>
+                                            </LinearGradient>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Swipe Hint */}
+                                    <View style={{ alignItems: 'center', paddingBottom: 10 }}>
+                                        <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2 }} />
+                                        <Text style={{ color: 'rgba(255, 255, 255, 0.57)', fontSize: 15, marginTop: 10 }}>
+                                            --- SWIPE LEFT FOR HISTORY ---
+                                        </Text>
+                                    </View>
                                 </View>
-                            </View>
 
-                        </ScrollView>
+                                {/* PAGE 2: WITHDRAW HISTORY */}
+                                <View style={{ width: modalWidth }}>
+                                    <View style={styles.header}>
+                                        <View>
+                                            <Text style={styles.headerTitle}>WITHDRAW HISTORY</Text>
+                                            <View style={styles.underline} />
+                                        </View>
+                                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                                            <MaterialIcon name="close" family="material" size={24} color="#FFF" />
+                                        </TouchableOpacity>
+                                    </View>
 
-                        {/* Action Filter */}
-                        <View style={styles.actionFooter}>
-                            <TouchableOpacity
-                                style={[styles.cancelBtn]}
-                                onPress={onClose}
-                                disabled={isSubmitting}
-                            >
-                                <Text style={styles.cancelBtnText}>CANCEL</Text>
-                            </TouchableOpacity>
+                                    <View style={{ padding: 20 }}>
+                                        {/* Tabs */}
+                                        <View style={styles.tabs}>
+                                            <TouchableOpacity
+                                                style={[styles.tab, historyTab === 'pending' && styles.activeTab]}
+                                                onPress={() => setHistoryTab('pending')}
+                                            >
+                                                <Text style={[styles.tabText, historyTab === 'pending' && styles.activeTabText]}>PENDING</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.tab, historyTab === 'completed' && styles.activeTab]}
+                                                onPress={() => setHistoryTab('completed')}
+                                            >
+                                                <Text style={[styles.tabText, historyTab === 'completed' && styles.activeTabText]}>COMPLETED</Text>
+                                            </TouchableOpacity>
+                                        </View>
 
-                            <TouchableOpacity
-                                style={[
-                                    styles.confirmBtn,
-                                    (!isAmountMet || isSubmitting) && styles.disabledBtn
-                                ]}
-                                onPress={handleWithdraw}
-                                disabled={!isAmountMet || isSubmitting}
-                            >
-                                <LinearGradient
-                                    colors={isAmountMet ? ['#00E0FF', '#007AFF'] : ['#334155', '#1E293B']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                    style={styles.gradientBtn}
-                                >
-                                    <Text style={[styles.confirmBtnText, !isAmountMet && { color: '#64748B' }]}>
-                                        {isSubmitting ? "PROCESSING..." : "CONFIRM WITHDRAWAL"}
-                                    </Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
+                                        <ScrollView
+                                            style={{ width: '100%' }}
+                                            contentContainerStyle={{ paddingBottom: 20 }}
+                                            showsVerticalScrollIndicator={false}
+                                        >
+                                            {loadingHistory ? (
+                                                <View style={{ padding: 40, alignItems: 'center' }}>
+                                                    <ActivityIndicator size="large" color="#00E0FF" />
+                                                </View>
+                                            ) : filterHistory().length === 0 ? (
+                                                <View style={{ padding: 40, alignItems: 'center' }}>
+                                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>
+                                                        No {historyTab} history
+                                                    </Text>
+                                                </View>
+                                            ) : (
+                                                filterHistory().map((item, index) => (
+                                                    <View key={item._id || index} style={styles.historyCard}>
+                                                        <View style={styles.cardHeader}>
+                                                            <View style={styles.amountContainer}>
+                                                                <MaterialIcon name="payments" family="material" size={16} color="#00E0FF" />
+                                                                <Text style={styles.amountText}>
+                                                                    {(item.reward || item.scoreEarning || 0).toFixed(8)} {item.token || 'SHIB'}
+                                                                </Text>
+                                                            </View>
+                                                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+                                                                <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                                                                    {item.status.toUpperCase()}
+                                                                </Text>
+                                                            </View>
+                                                        </View>
+                                                        <Text style={styles.dateText}>
+                                                            {new Date(item.date || item.createdDate).toLocaleDateString()}
+                                                        </Text>
+                                                        {item.walletAddress && (
+                                                            <Text style={styles.walletText} numberOfLines={1} ellipsizeMode="middle">
+                                                                {item.walletAddress}
+                                                            </Text>
+                                                        )}
+                                                    </View>
+                                                ))
+                                            )}
+                                        </ScrollView>
+                                    </View>
+
+                                    {/* Swipe Hint (Back) */}
+                                    <View style={{ alignItems: 'center', paddingBottom: 10 }}>
+                                        <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2 }} />
+                                        <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, marginTop: 4 }}>
+                                            SWIPE FOR REQUEST
+                                        </Text>
+                                    </View>
+                                </View>
+                            </ScrollView>
                         </View>
 
                     </Animated.View>
@@ -779,6 +928,73 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '800',
         letterSpacing: 0.5,
+    },
+    // New Styles for History
+    tabs: {
+        flexDirection: 'row',
+        marginBottom: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 12,
+        padding: 4,
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 10,
+    },
+    activeTab: {
+        backgroundColor: 'rgba(0, 224, 255, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 224, 255, 0.2)',
+    },
+    tabText: {
+        color: 'rgba(255, 255, 255, 0.4)',
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 1,
+    },
+    activeTabText: {
+        color: '#00E0FF',
+    },
+    historyCard: {
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 224, 255, 0.1)',
+    },
+    amountContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    amountText: {
+        color: '#FFF',
+        fontSize: 15,
+        fontWeight: '700',
+        fontFamily: 'monospace',
+    },
+    statusBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    statusText: {
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    dateText: {
+        color: 'rgba(255, 255, 255, 0.3)',
+        fontSize: 10,
+        fontStyle: 'italic',
+        marginBottom: 4,
+    },
+    walletText: {
+        color: 'rgba(255, 255, 255, 0.2)',
+        fontSize: 10,
+        fontFamily: 'monospace',
     },
 });
 

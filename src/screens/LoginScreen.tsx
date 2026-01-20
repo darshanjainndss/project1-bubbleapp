@@ -120,8 +120,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               loop
               style={styles.titleSpaceship}
             />
-            <Text style={styles.gameTitle}>SPACE</Text>
-            <Text style={styles.gameSubtitle}>ADVENTURE</Text>
+            <Text style={styles.gameTitle}>SHIBA INU</Text>
+            <Text style={styles.gameSubtitle}>EARNING MACHINE</Text>
           </View>
 
           {/* Sign In Header */}
@@ -293,14 +293,14 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     padding: 20,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 30,
     minHeight: SCREEN_HEIGHT - 40, // Account for padding
   },
 
   // Title Section - Compact
   titleSection: {
     alignItems: 'center',
-    marginTop: 40,
   },
   titleSpaceship: {
     width: 60,
@@ -308,10 +308,10 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   gameTitle: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '900',
     color: '#00E0FF',
-    letterSpacing: 6,
+    letterSpacing: 3,
     textShadowColor: '#00E0FF',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 15,
@@ -352,7 +352,6 @@ const styles = StyleSheet.create({
 
   // Content Container - Flexible
   contentContainer: {
-    flex: 1,
     backgroundColor: 'rgba(20, 20, 30, 0.95)',
     borderRadius: 15,
     padding: 20,

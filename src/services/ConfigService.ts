@@ -9,8 +9,8 @@ const AD_UNITS_CACHE_KEY = 'cached_ad_units';
 const GAME_CONFIG_CACHE_KEY = 'cached_game_config';
 const CONFIG_TIMESTAMP_KEY = 'config_cache_timestamp';
 
-// Cache duration (5 minutes in development, NO CACHE in production to always get fresh data)
-const CACHE_DURATION = 0; // Always fetch fresh data
+// Cache duration (5 minutes in development, 2 minutes in production for better performance)
+const CACHE_DURATION = __DEV__ ? 5 * 60 * 1000 : 2 * 60 * 1000; // 5 min dev, 2 min prod
 
 
 // Fallback configurations (in case backend is unavailable)

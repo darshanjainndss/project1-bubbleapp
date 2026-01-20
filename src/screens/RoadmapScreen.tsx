@@ -615,7 +615,7 @@ const Roadmap: React.FC = () => {
   const glowAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  // Load user data when component mounts or user changes
+  // Load user data when component mounts or user changes - OPTIMIZED
   const loadUserData = useCallback(async (showLoading = true) => {
     if (!user?.uid) return;
 
@@ -625,15 +625,66 @@ const Roadmap: React.FC = () => {
       // ONLY show loading indicator if data has been loaded before (subsequent refreshes)
       // On initial mount, we let the app-wide LoadingScreen handle the UI
       if (showLoading && !isInitialLoad.current) setIsLoading(true);
-      const isAuth = await BackendService.ensureAuthenticated(user);
-      if (!isAuth) {
-        console.log('❌ Authentication failed in loadUserData');
-        if (showLoading) setIsLoading(false);
-        return;
+
+      // IMMEDIATE FIX: Set default data first to prevent 0 coins/abilities
+      setScore(0);
+      setCoins(100);
+      setCurrentLevel(1);
+      setAbilityInventory({ lightning: 2, bomb: 2, freeze: 2, fire: 2 });
+      setDataLoaded(true);
+      console.log('✅ Set default data immediately - Coins: 100, Abilities: 2 each');
+
+      // OPTIMIZATION: Run authentication and config fetching in parallel
+      const [isAuth, configResults] = await Promise.allSettled([
+        BackendService.ensureAuthenticated(user),
+        Promise.all([
+          ConfigService.getAbilitiesConfig(),
+          ConfigService.getAdConfig(),
+          ConfigService.getAdUnits(),
+          ConfigService.getGameConfig()
+        ])
+      ]);
+
+      // Check authentication result
+      if (isAuth.status === 'rejected' || !isAuth.value) {
+        console.log('❌ Authentication failed, but continuing with default data for new user...');
+        // Don't return here - continue with default data initialization
       }
 
-      console.log('🔍 Fetching user game data from backend...');
-      const result = await BackendService.getUserGameData();
+      // Process config results (even if some failed)
+      let abilitiesConfig: any[] = [];
+      let adReward = 50;
+      
+      if (configResults.status === 'fulfilled') {
+        const [aConfig, adConfig, adUnitsData, gameConfigData] = configResults.value;
+        
+        abilitiesConfig = aConfig || [];
+
+        // Prioritize dynamic ad unit reward, fallback to legacy adConfig, then default 50
+        if (adUnitsData && adUnitsData.rewardedAmount) {
+          adReward = adUnitsData.rewardedAmount;
+          console.log('💰 Using Rewarded Amount from AdUnit:', adReward);
+        } else if (adConfig && adConfig.rewardConfig) {
+          adReward = adConfig.rewardConfig.coinsPerAd;
+        }
+        setAdRewardAmount(adReward);
+
+        // Update game settings (base coins and star bonus from DB)
+        if (gameConfigData && gameConfigData.gameSettings) {
+          setGameSettings(gameConfigData.gameSettings);
+          setBaseRewardAmount((gameConfigData.gameSettings as any).coinsPerLevel ?? 10);
+          setStarBonusAmount(gameConfigData.gameSettings.starBonusBase ?? 5);
+          setScoreRange(gameConfigData.gameSettings.scoreRange ?? 100);
+          setScoreReward(gameConfigData.gameSettings.rewardPerRange ?? 0);
+          console.log('💰 Using Game Rewards from DB:', gameConfigData.gameSettings);
+        }
+      } else {
+        console.warn('Failed to load dynamic configs:', configResults.reason);
+      }
+
+      // Now fetch user game data
+      console.log('� BFetching user game data from backend...');
+      const result = await BackendService.getUserGameData(true);
       console.log('📊 Backend response:', result.success ? 'SUCCESS' : 'FAILED', result.data ? `Score: ${result.data.totalScore}, Coins: ${result.data.totalCoins}` : result.error);
 
       if (result.success && result.data) {
@@ -648,48 +699,14 @@ const Roadmap: React.FC = () => {
         // We need to extract ONLY purchased abilities for the inventory
         const backendAbilities = result.data.abilities || {};
 
-        // Fetch Dynamic Configs (Abilities and Ads) e,arly to know which abilities exist
-        let abilitiesConfig: any[] = [];
-        let adReward = 50;
-        try {
-          // Fetch abilities, ad config, AND ad units to get the correct reward amount
-          const [aConfig, adConfig, adUnitsData, gameConfigData] = await Promise.all([
-            ConfigService.getAbilitiesConfig(),
-            ConfigService.getAdConfig(),
-            ConfigService.getAdUnits(), // Fetch ad units which contain the reward amount
-            ConfigService.getGameConfig() // Fetch game config which contains level rewards
-          ]);
-          abilitiesConfig = aConfig || [];
-
-          // Prioritize dynamic ad unit reward, fallback to legacy adConfig, then default 50
-          if (adUnitsData && adUnitsData.rewardedAmount) {
-            adReward = adUnitsData.rewardedAmount;
-            console.log('💰 Using Rewarded Amount from AdUnit:', adReward);
-          } else if (adConfig && adConfig.rewardConfig) {
-            adReward = adConfig.rewardConfig.coinsPerAd;
-          }
-          setAdRewardAmount(adReward);
-
-          // Update game settings (base coins and star bonus from DB)
-          if (gameConfigData && gameConfigData.gameSettings) {
-            setGameSettings(gameConfigData.gameSettings);
-            setBaseRewardAmount((gameConfigData.gameSettings as any).coinsPerLevel ?? 10);
-            setStarBonusAmount(gameConfigData.gameSettings.starBonusBase ?? 5);
-            setScoreRange(gameConfigData.gameSettings.scoreRange ?? 100);
-            setScoreReward(gameConfigData.gameSettings.rewardPerRange ?? 0);
-            console.log('💰 Using Game Rewards from DB:', gameConfigData.gameSettings);
-          }
-        } catch (configErr) {
-          console.warn('Failed to load dynamic configs:', configErr);
-        }
-
         // Initialize new users with 0 purchased abilities
         if (result.data.currentLevel <= 1 && result.data.totalScore === 0 && (!backendAbilities || Object.keys(backendAbilities).length === 0)) {
           const initialAbilities: Record<string, number> = {};
           abilitiesConfig.forEach(a => { initialAbilities[a.name] = 2; });
 
           if (Object.keys(initialAbilities).length > 0) {
-            await BackendService.updateAbilities(initialAbilities);
+            // Don't await this - let it happen in background
+            BackendService.updateAbilities(initialAbilities).catch(console.warn);
             setAbilityInventory(initialAbilities);
           }
         } else {
@@ -715,6 +732,40 @@ const Roadmap: React.FC = () => {
 
           setAbilityInventory(totalInventory);
         }
+
+        setDataLoaded(true);
+      } else {
+        // New user or failed to fetch data - initialize with defaults
+        console.log('🆕 New user or failed to fetch data, initializing with defaults...');
+        
+        const defaultUserData = {
+          email: user?.email || '',
+          totalScore: 0,
+          highScore: 0,
+          totalCoins: 100, // Give new users 100 coins to start
+          currentLevel: 1,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          abilities: { lightning: 2, bomb: 2, freeze: 2, fire: 2 },
+          achievements: [],
+          completedLevels: [],
+          levelStars: {},
+          lastPlayedAt: new Date().toISOString()
+        };
+
+        // Set local state immediately so UI shows data
+        setUserGameData(defaultUserData);
+        setScore(0);
+        setCoins(100);
+        setCurrentLevel(1);
+        setAbilityInventory({ lightning: 2, bomb: 2, freeze: 2, fire: 2 });
+
+        console.log('✅ Initialized new user with defaults - Coins: 100, Abilities: 2 each');
+
+        // Try to save this data to backend in background
+        BackendService.updateUserGameData(defaultUserData).catch(error => {
+          console.warn('Failed to save default user data to backend:', error);
+        });
 
         setDataLoaded(true);
       }
