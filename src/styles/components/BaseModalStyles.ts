@@ -10,7 +10,7 @@ export const baseModalStyles = StyleSheet.create({
     },
     content: {
         width: '100%',
-        maxWidth: 380,
+        maxWidth: 520,
         backgroundColor: '#0A0F1A',
         borderRadius: 28,
         borderWidth: 1,
@@ -30,15 +30,15 @@ export const baseModalStyles = StyleSheet.create({
     },
     title: {
         color: '#FFF',
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: '900',
         textAlign: 'center',
         letterSpacing: 0.5,
     },
     message: {
         color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 14,
+        lineHeight: 20,
         textAlign: 'center',
         marginBottom: 24,
     },
@@ -64,7 +64,7 @@ export const baseModalStyles = StyleSheet.create({
     },
     primaryBtnText: {
         color: '#000',
-        fontSize: 15,
+        fontSize: 13,
         fontWeight: '900',
         letterSpacing: 1,
         textTransform: 'uppercase',
@@ -81,7 +81,7 @@ export const baseModalStyles = StyleSheet.create({
     },
     secondaryBtnText: {
         color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '800',
         letterSpacing: 1,
         textTransform: 'uppercase',

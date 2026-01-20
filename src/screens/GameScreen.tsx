@@ -51,7 +51,7 @@ const COLOR_MAP: Record<string, any> = {
 
 
 
-const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities, initialStartingCounts, adRewardAmount = 50, levelReward = 10, starBonus = 5 }: {
+const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities, initialStartingCounts, adRewardAmount = 50, levelReward = 10, starBonus = 5, gameSettings }: {
   onBackPress?: () => void,
   level?: number,
   onLevelComplete?: (level: number, score: number, stars: number, coinsEarned?: number, action?: 'next' | 'home', sessionData?: any) => void,
@@ -59,7 +59,8 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
   initialStartingCounts?: Record<string, number>,
   adRewardAmount?: number,
   levelReward?: number,
-  starBonus?: number
+  starBonus?: number,
+  gameSettings?: any
 }) => {
   const { user } = useAuth(); // Get Firebase user
 
@@ -146,15 +147,42 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
     fire: 0
   });
 
-  const [gameSettings, setGameSettings] = useState<any>(null);
+  const [gameSettingsState, setGameSettings] = useState<any>(gameSettings || null);
 
   useEffect(() => {
-    ConfigService.getGameConfig().then(config => {
-      if (config?.gameSettings) {
-        setGameSettings(config.gameSettings);
-      }
-    });
-  }, []);
+    // If gameSettings is passed as prop, use it directly
+    if (gameSettings) {
+      console.log(' Using direct gameSettings prop');
+      setGameSettings(gameSettings);
+    } else {
+      // Fallback to loading config if not passed
+      console.log(' Fetching game config via ConfigService...');
+      ConfigService.getGameConfig().then(config => {
+        if (config?.gameSettings) {
+          console.log(' Loaded gameSettings from service:', config.gameSettings);
+          setGameSettings(config.gameSettings);
+        } else {
+          console.log(' Using HARD fallback settings');
+          setGameSettings({
+            coinsPerLevel: 10,
+            starThresholds: { one: 200, two: 600, three: 1000 },
+            scoreRange: 100,
+            rewardPerRange: 1,
+            minWithdrawAmount: 0.00000001
+          });
+        }
+      }).catch(error => {
+        console.error('❌ Error fetching game config:', error);
+        setGameSettings({
+          coinsPerLevel: 10,
+          starThresholds: { one: 200, two: 600, three: 1000 },
+          scoreRange: 100,
+          rewardPerRange: 1,
+          minWithdrawAmount: 0.00000001
+        });
+      });
+    }
+  }, [gameSettings]);
 
   // Progress tracking
   const lastProgressUpdate = useRef(0);
@@ -170,7 +198,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
     if (now - lastProgressUpdate.current < PROGRESS_UPDATE_INTERVAL) return;
 
     // Use star thresholds from DB config
-    const thresholds = gameSettings?.starThresholds || { one: 100, two: 400, three: 800 };
+    const thresholds = gameSettingsState?.starThresholds || { one: 200, two: 600, three: 1000 };
     const stars = currentScore >= thresholds.three ? 3 : currentScore >= thresholds.two ? 2 : currentScore >= thresholds.one ? 1 : 0;
 
     try {
@@ -188,7 +216,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
     } catch (error) {
       console.error('Failed to update progress:', error);
     }
-  }, [user, level]);
+  }, [user, level, gameSettingsState]);
 
   // Track score changes and send progress updates
   useEffect(() => {
@@ -782,8 +810,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
 
   const goToNextLevel = async () => {
     if (onLevelComplete) {
-      // Use star thresholds from DB config
-      const thresholds = gameSettings?.starThresholds || { one: 100, two: 400, three: 800 };
+      const thresholds = gameSettingsState?.starThresholds || { one: 200, two: 600, three: 1000 };
       const stars = score >= thresholds.three ? 3 : score >= thresholds.two ? 2 : score >= thresholds.one ? 1 : 0;
 
       // Calculate coins earned
@@ -853,13 +880,13 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
 
   // Calculate game results outside modal for accessibility
   // Use star thresholds from DB config
-  const starThresholds = gameSettings?.starThresholds || { one: 100, two: 400, three: 800 };
+  const starThresholds = gameSettingsState?.starThresholds || { one: 200, two: 600, three: 1000 };
   const earnedStars = score >= starThresholds.three ? 3 : score >= starThresholds.two ? 2 : score >= starThresholds.one ? 1 : 0;
 
   // Coin calculation - Strictly use DB values as requested
-  const coinsPerLevel = gameSettings?.coinsPerLevel || 10;
-  const scoreRangeValue = gameSettings?.scoreRange || 100;
-  const rewardValuePerRange = gameSettings?.rewardPerRange ? parseFloat(gameSettings.rewardPerRange.toString()) : 1;
+  const coinsPerLevel = gameSettingsState?.coinsPerLevel || 10;
+  const scoreRangeValue = gameSettingsState?.scoreRange || 100;
+  const rewardValuePerRange = gameSettingsState?.rewardPerRange ? parseFloat(gameSettingsState.rewardPerRange.toString()) : 1;
 
   // Withdrawal Reward (SHIB) calculation
   const earnedRewardValue = (score / scoreRangeValue) * rewardValuePerRange;
@@ -905,6 +932,7 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
         onActivateBomb={activateBomb}
         onActivateFreeze={activateFreeze}
         onActivateFire={activateFire}
+        starThresholds={gameSettingsState?.starThresholds || { one: 200, two: 600, three: 1000 }}
       />
 
       <View style={styles.gameArea} onStartShouldSetResponder={() => true}
@@ -988,10 +1016,10 @@ const GameScreen = ({ onBackPress, level = 1, onLevelComplete, initialAbilities,
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                {gameState === 'won' ? 'LEVEL CLEARED!' : 'OUT OF MOVES'}
+                {(gameState === 'won' || earnedStars >= 2) ? 'LEVEL CLEARED!' : 'OUT OF MOVES'}
               </Text>
 
-              {gameState === 'won' && (
+              {(gameState === 'won' || earnedStars >= 2) && (
                 <View style={styles.rewardDetailsContainer}>
                   {/* Victory Header */}
                   <Text style={styles.rewardTitle}>🎉 MISSION COMPLETE! 🎉</Text>

@@ -54,7 +54,7 @@ const RewardsCard: React.FC<RewardsCardProps> = ({
   return (
     <View style={[styles.container, style]}>
       {/* Compact Rewards Card */}
-      <LinearGradient
+      {/* <LinearGradient
         colors={['rgba(0, 255, 136, 0.12)', 'rgba(0, 255, 136, 0.03)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -98,7 +98,7 @@ const RewardsCard: React.FC<RewardsCardProps> = ({
             </LinearGradient>
           </TouchableOpacity>
         </View>
-      </LinearGradient>
+      </LinearGradient> */}
 
       {/* History Actions Row */}
       <View style={styles.historyRow}>
@@ -129,14 +129,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 16,
   },
   rewardInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'center',
   },
   iconContainer: {
     width: 36,
@@ -167,9 +167,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   withdrawButton: {
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginLeft: 8,
+    width: '100%',
     elevation: 4,
     shadowColor: '#FF4500',
     shadowOffset: { width: 0, height: 4 },
@@ -179,9 +179,10 @@ const styles = StyleSheet.create({
   withdrawGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 6,
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 8,
   },
   disabledButton: {
     opacity: 0.5,
@@ -189,9 +190,9 @@ const styles = StyleSheet.create({
   },
   withdrawButtonText: {
     color: '#FFF',
-    fontSize: SCREEN_WIDTH > 380 ? 12 : 11,
+    fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   historyRow: {
     flexDirection: 'row',

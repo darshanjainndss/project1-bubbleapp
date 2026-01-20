@@ -14,7 +14,7 @@ import ToastNotification, { ToastRef } from '../common/ToastNotification';
 import { GAME_ICONS, ICON_COLORS, ICON_SIZES } from '../../config/icons';
 import BackendService, { type ShopItem } from '../../services/BackendService';
 
-const { height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height } = Dimensions.get('window');
 
 interface ShopProps {
     visible: boolean;
@@ -298,7 +298,7 @@ const Shop: React.FC<ShopProps> = ({
                                         <Text style={[styles.paymentText, !canAffordCoins && styles.disabledText]}>
                                             {item.priceCoins.toLocaleString()} Coins
                                         </Text>
-                                        {!canAffordCoins && <Text style={styles.errorTextSmall}>Not enough coins</Text>}
+                                        {!canAffordCoins}
                                     </View>
                                 </View>
                             </TouchableOpacity>
@@ -461,7 +461,7 @@ const Shop: React.FC<ShopProps> = ({
                 </View>
 
                 {/* Content */}
-                <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.content} showsVerticalScrollIndicator={true} indicatorStyle="white" bounces={true} nestedScrollEnabled={true}>
                     {loading ? (
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color={ICON_COLORS.PRIMARY} />
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
     },
     title: {
         color: '#FFF',
-        fontSize: 24,
+        fontSize: SCREEN_WIDTH > 380 ? 24 : 20,
         fontWeight: '900',
         textShadowColor: 'rgba(0, 224, 255, 0.5)',
         textShadowRadius: 10,
@@ -665,7 +665,7 @@ const styles = StyleSheet.create({
     },
     coinsLabel: {
         color: '#888',
-        fontSize: 10,
+        fontSize: SCREEN_WIDTH > 380 ? 10 : 9,
         fontWeight: '700',
         letterSpacing: 1,
         marginBottom: 2
@@ -677,7 +677,7 @@ const styles = StyleSheet.create({
     },
     coinsText: {
         color: '#FFD60A',
-        fontSize: 28,
+        fontSize: SCREEN_WIDTH > 380 ? 28 : 22,
         fontWeight: '900',
         textShadowColor: 'rgba(255, 214, 10, 0.5)',
         textShadowRadius: 10,
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         position: 'relative',
         overflow: 'hidden',
-        minHeight: 280,
+        minHeight: SCREEN_WIDTH > 380 ? 280 : 240,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     },
     itemName: {
         color: '#FFF',
-        fontSize: 16,
+        fontSize: SCREEN_WIDTH > 380 ? 16 : 14,
         fontWeight: 'bold',
         marginBottom: 6,
         textAlign: 'center',
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
     },
     itemDescription: {
         color: '#94A3B8',
-        fontSize: 12,
+        fontSize: SCREEN_WIDTH > 380 ? 12 : 10,
         textAlign: 'center',
         lineHeight: 16,
         paddingHorizontal: 4,
@@ -785,7 +785,7 @@ const styles = StyleSheet.create({
     },
     priceText: {
         color: '#FFF',
-        fontSize: 13,
+        fontSize: SCREEN_WIDTH > 380 ? 13 : 11,
         fontWeight: 'bold',
         fontFamily: 'monospace',
     },
@@ -808,7 +808,7 @@ const styles = StyleSheet.create({
     },
     buyButtonText: {
         color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: SCREEN_WIDTH > 380 ? 14 : 12,
         fontWeight: '900',
         fontFamily: 'monospace',
         letterSpacing: 1,
@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         color: '#FFF',
-        fontSize: 16,
+        fontSize: SCREEN_WIDTH > 380 ? 16 : 14,
         fontWeight: 'bold',
         letterSpacing: 1,
         marginRight: 12,
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
     },
     successTitle: {
         color: '#00FF88',
-        fontSize: 20,
+        fontSize: SCREEN_WIDTH > 380 ? 20 : 18,
         fontWeight: '900',
         marginBottom: 10,
         textAlign: 'center',
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
     },
     successName: {
         color: '#FFF',
-        fontSize: 18,
+        fontSize: SCREEN_WIDTH > 380 ? 18 : 16,
         fontWeight: 'bold',
         marginBottom: 10,
         textAlign: 'center',
@@ -905,7 +905,7 @@ const styles = StyleSheet.create({
     },
     successDesc: {
         color: '#94A3B8',
-        fontSize: 14,
+        fontSize: SCREEN_WIDTH > 380 ? 14 : 12,
         textAlign: 'center',
         marginBottom: 25,
         lineHeight: 20
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
     },
     okButtonText: {
         color: '#000',
-        fontSize: 16,
+        fontSize: SCREEN_WIDTH > 380 ? 16 : 14,
         fontWeight: '900',
         letterSpacing: 1
     },
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
     },
     paymentTitle: {
         color: '#FFF',
-        fontSize: 18,
+        fontSize: SCREEN_WIDTH > 380 ? 18 : 16,
         fontWeight: 'bold',
         marginBottom: 4,
         fontFamily: 'monospace',
@@ -962,7 +962,7 @@ const styles = StyleSheet.create({
     },
     paymentSubtitle: {
         color: '#94A3B8',
-        fontSize: 12,
+        fontSize: SCREEN_WIDTH > 380 ? 12 : 10,
         marginBottom: 8,
         fontFamily: 'monospace',
         textAlign: 'center',
@@ -986,7 +986,7 @@ const styles = StyleSheet.create({
     },
     paymentText: {
         color: '#FFF',
-        fontSize: 16,
+        fontSize: SCREEN_WIDTH > 380 ? 16 : 14,
         fontWeight: '600',
         fontFamily: 'monospace',
     },
@@ -1007,7 +1007,7 @@ const styles = StyleSheet.create({
     },
     cancelText: {
         color: '#94A3B8',
-        fontSize: 14,
+        fontSize: SCREEN_WIDTH > 380 ? 14 : 12,
         fontFamily: 'monospace',
     },
     paymentItemPreview: {
@@ -1032,7 +1032,7 @@ const styles = StyleSheet.create({
     },
     paymentMethodTitle: {
         color: '#FFF',
-        fontSize: 18,
+        fontSize: SCREEN_WIDTH > 380 ? 18 : 16,
         fontWeight: 'bold',
         textAlign: 'center',
         marginBottom: 20,
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
     },
     inventoryName: {
         color: '#FFF',
-        fontSize: 10,
+        fontSize: SCREEN_WIDTH > 380 ? 10 : 8,
         fontWeight: 'bold',
         textAlign: 'center',
         fontFamily: 'monospace',
@@ -1105,7 +1105,7 @@ const styles = StyleSheet.create({
     },
     inventoryCountText: {
         color: '#000',
-        fontSize: 10,
+        fontSize: SCREEN_WIDTH > 380 ? 10 : 9,
         fontWeight: 'bold',
         fontFamily: 'monospace',
     },
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
     },
     addCoinsTitle: {
         color: '#FFF',
-        fontSize: 20,
+        fontSize: SCREEN_WIDTH > 380 ? 20 : 18,
         fontWeight: 'bold',
         fontFamily: 'monospace',
         flex: 1,
@@ -1152,7 +1152,7 @@ const styles = StyleSheet.create({
     },
     addCoinsSubtitle: {
         color: '#94A3B8',
-        fontSize: 14,
+        fontSize: SCREEN_WIDTH > 380 ? 14 : 12,
         marginBottom: 20,
         fontFamily: 'monospace',
         textAlign: 'center',
@@ -1200,13 +1200,13 @@ const styles = StyleSheet.create({
     },
     coinPackAmount: {
         color: '#FFD700',
-        fontSize: 18,
+        fontSize: SCREEN_WIDTH > 380 ? 18 : 16,
         fontWeight: 'bold',
         fontFamily: 'monospace',
     },
     coinPackCoins: {
         color: '#94A3B8',
-        fontSize: 12,
+        fontSize: SCREEN_WIDTH > 380 ? 12 : 10,
         fontFamily: 'monospace',
         marginBottom: 8,
     },
@@ -1218,7 +1218,7 @@ const styles = StyleSheet.create({
     },
     coinPackPriceText: {
         color: '#FFF',
-        fontSize: 14,
+        fontSize: SCREEN_WIDTH > 380 ? 14 : 12,
         fontWeight: 'bold',
         fontFamily: 'monospace',
     },

@@ -37,6 +37,11 @@ interface GameHUDProps {
     onActivateBomb: () => void;
     onActivateFreeze: () => void;
     onActivateFire: () => void;
+    starThresholds?: {
+        one: number;
+        two: number;
+        three: number;
+    };
 }
 
 export const GameHUD = ({
@@ -51,7 +56,8 @@ export const GameHUD = ({
     onActivateLightning,
     onActivateBomb,
     onActivateFreeze,
-    onActivateFire
+    onActivateFire,
+    starThresholds = { one: 200, two: 600, three: 1000 }
 }: GameHUDProps) => {
     return (
         <>
@@ -67,9 +73,9 @@ export const GameHUD = ({
                         <Text style={styles.statLabel}>SCORE</Text>
                         <Text style={styles.statValue}>{score.toLocaleString()}</Text>
                         <View style={styles.starProgressContainer}>
-                            <View style={[styles.starProgressDot, score >= 100 && styles.starProgressDotActive]} />
-                            <View style={[styles.starProgressDot, score >= 400 && styles.starProgressDotActive]} />
-                            <View style={[styles.starProgressDot, score >= 800 && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= starThresholds.one && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= starThresholds.two && styles.starProgressDotActive]} />
+                            <View style={[styles.starProgressDot, score >= starThresholds.three && styles.starProgressDotActive]} />
                         </View>
                     </View>
                     <HelpButton onPress={onShowInstructions || (() => { })} />

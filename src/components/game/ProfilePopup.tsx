@@ -84,25 +84,24 @@ const ProfilePopup: React.FC<ProfilePopupProps> = ({
             visible={visible}
             onClose={onClose}
             showCloseButton={true}
-            contentStyle={{ padding: 0, overflow: 'hidden' }}
+            scrollable={true}
+            contentStyle={{ 
+                padding: 0, 
+                overflow: 'hidden', 
+                backgroundColor: '#0A0F1A',
+                maxWidth: 720,
+                width: '95%'
+            }}
         >
-            <ScrollView
-                showsVerticalScrollIndicator={true}
-                style={styles.container}
-                contentContainerStyle={styles.scrollContent}
-                nestedScrollEnabled={true}
-                decelerationRate="normal"
-                bounces={true}
-                keyboardShouldPersistTaps="handled"
-            >
+            <View style={styles.contentWrapper}>
                 {/* Custom Header inside ScrollView */}
                 <View style={styles.modalHeader}>
-                    <MaterialIcon
+                    {/* <MaterialIcon
                         name="account-circle"
                         family="material"
                         size={48}
                         color={ICON_COLORS.PRIMARY}
-                    />
+                    /> */}
                     <Text style={styles.modalTitle}>COMMANDER PROFILE</Text>
                 </View>
 
@@ -127,7 +126,7 @@ const ProfilePopup: React.FC<ProfilePopupProps> = ({
                         </View>
                         <View style={styles.nameSection}>
                             <Text style={styles.userName}>{cleanName}</Text>
-                          
+
                         </View>
                     </View>
                 </LinearGradient>
@@ -208,7 +207,7 @@ const ProfilePopup: React.FC<ProfilePopupProps> = ({
                         <Text style={styles.logoutText}>DISCONNECT SESSION</Text>
                     </LinearGradient>
                 </TouchableOpacity>
-            </ScrollView>
+            </View>
         </BaseModal>
     );
 };
@@ -224,14 +223,10 @@ const StatCard = ({ icon, value, label, color }: any) => (
 );
 
 const styles = StyleSheet.create({
-    container: {
-        maxHeight: SCREEN_HEIGHT * 0.75,
-        width: '100%',
-    },
-    scrollContent: {
+    contentWrapper: {
         paddingTop: 10,
         paddingBottom: 30,
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
     },
     modalHeader: {
         alignItems: 'center',
@@ -240,7 +235,8 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     modalTitle: {
-        color: '#FFF',
+        paddingTop: 40,
+        color: '#00E0FF',
         fontSize: SCREEN_WIDTH > 380 ? 24 : 20,
         fontWeight: '900',
         textAlign: 'center',
@@ -257,7 +253,8 @@ const styles = StyleSheet.create({
     avatarSection: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 20,
+        gap: 24,
+        justifyContent: 'flex-start',
     },
     avatarContainer: {
         position: 'relative',
@@ -338,9 +335,11 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         justifyContent: 'space-between',
         rowGap: 12,
+        columnGap: 8,
     },
     statCard: {
-        width: '48%',
+        width: '23%',
+        minWidth: 120,
         backgroundColor: 'rgba(255, 255, 255, 0.04)',
         borderRadius: 20,
         padding: 16,

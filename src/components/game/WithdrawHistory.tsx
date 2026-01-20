@@ -124,7 +124,8 @@ const WithdrawHistory: React.FC<WithdrawHistoryProps> = ({ visible, onClose }) =
                     {/* Content */}
                     <ScrollView
                         style={styles.scrollList}
-                        showsVerticalScrollIndicator={false}
+                        showsVerticalScrollIndicator={true}
+                        indicatorStyle="white"
                         contentContainerStyle={styles.scrollContent}
                     >
                         {loading ? (

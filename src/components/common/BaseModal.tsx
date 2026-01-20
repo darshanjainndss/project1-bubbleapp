@@ -4,11 +4,13 @@ import {
     Text,
     Modal,
     TouchableOpacity,
-    TouchableWithoutFeedback,
     ViewStyle,
     TextStyle,
     ScrollView,
-    Dimensions
+    Dimensions,
+    StyleSheet,
+    KeyboardAvoidingView,
+    Platform
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import MaterialIcon from './MaterialIcon';
@@ -42,6 +44,7 @@ interface BaseModalProps {
     contentStyle?: ViewStyle;
     containerStyle?: ViewStyle;
     scrollable?: boolean;
+    maxWidth?: number;
 }
 
 const BaseModal: React.FC<BaseModalProps> = ({
@@ -58,9 +61,193 @@ const BaseModal: React.FC<BaseModalProps> = ({
     contentStyle,
     containerStyle,
     scrollable = false,
+    maxWidth,
 }) => {
     const { height: screenHeight } = Dimensions.get('window');
     const maxHeight = screenHeight * 0.9;
+
+    const renderContent = () => (
+        <>
+            {scrollable ? (
+                <ScrollView
+                    showsVerticalScrollIndicator={true}
+                    indicatorStyle="white"
+                    bounces={true}
+                    nestedScrollEnabled={true}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ flexGrow: 1 }}
+                >
+                    <View style={{ flex: 1 }}>
+                        {(icon || title) && (
+                            <View style={styles.header}>
+                                {icon && (
+                                    <MaterialIcon
+                                        name={icon}
+                                        size={ICON_SIZES.XLARGE || 48}
+                                        color={iconColor}
+                                    />
+                                )}
+                                {title && <Text style={styles.title}>{title}</Text>}
+                            </View>
+                        )}
+
+                        {message && <Text style={styles.message}>{message}</Text>}
+
+                        {children}
+                    </View>
+
+                    {(primaryAction || secondaryAction) && (
+                        <View style={styles.footer}>
+                            {secondaryAction && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.secondaryBtn,
+                                        secondaryAction.style,
+                                        secondaryAction.disabled && { opacity: 0.5 }
+                                    ]}
+                                    onPress={secondaryAction.onPress}
+                                    disabled={secondaryAction.disabled}
+                                >
+                                    <Text style={[styles.secondaryBtnText, secondaryAction.textStyle]}>
+                                        {secondaryAction.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                            {primaryAction && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.primaryBtn,
+                                        primaryAction.style,
+                                        { backgroundColor: primaryAction.gradientColors ? 'transparent' : (primaryAction.style?.backgroundColor || '#00E0FF') },
+                                        primaryAction.disabled && { opacity: 0.5 }
+                                    ]}
+                                    onPress={primaryAction.onPress}
+                                    disabled={primaryAction.disabled}
+                                    activeOpacity={0.8}
+                                >
+                                    {primaryAction.gradientColors ? (
+                                        <LinearGradient
+                                            colors={primaryAction.gradientColors}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                borderRadius: (primaryAction.style?.borderRadius as number) || 16
+                                            }}
+                                        >
+                                            <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
+                                                {primaryAction.label}
+                                            </Text>
+                                        </LinearGradient>
+                                    ) : (
+                                        <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
+                                            {primaryAction.label}
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+                </ScrollView>
+            ) : (
+                <>
+                    {(icon || title) && (
+                        <View style={styles.header}>
+                            {icon && (
+                                <MaterialIcon
+                                    name={icon}
+                                    size={ICON_SIZES.XLARGE || 48}
+                                    color={iconColor}
+                                />
+                            )}
+                            {title && <Text style={styles.title}>{title}</Text>}
+                        </View>
+                    )}
+
+                    {message && <Text style={styles.message}>{message}</Text>}
+
+                    {children}
+
+                    {(primaryAction || secondaryAction) && (
+                        <View style={styles.footer}>
+                            {secondaryAction && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.secondaryBtn,
+                                        secondaryAction.style,
+                                        secondaryAction.disabled && { opacity: 0.5 }
+                                    ]}
+                                    onPress={secondaryAction.onPress}
+                                    disabled={secondaryAction.disabled}
+                                >
+                                    <Text style={[styles.secondaryBtnText, secondaryAction.textStyle]}>
+                                        {secondaryAction.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                            {primaryAction && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.primaryBtn,
+                                        primaryAction.style,
+                                        { backgroundColor: primaryAction.gradientColors ? 'transparent' : (primaryAction.style?.backgroundColor || '#00E0FF') },
+                                        primaryAction.disabled && { opacity: 0.5 }
+                                    ]}
+                                    onPress={primaryAction.onPress}
+                                    disabled={primaryAction.disabled}
+                                    activeOpacity={0.8}
+                                >
+                                    {primaryAction.gradientColors ? (
+                                        <LinearGradient
+                                            colors={primaryAction.gradientColors}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                borderRadius: (primaryAction.style?.borderRadius as number) || 16
+                                            }}
+                                        >
+                                            <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
+                                                {primaryAction.label}
+                                            </Text>
+                                        </LinearGradient>
+                                    ) : (
+                                        <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
+                                            {primaryAction.label}
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+                </>
+            )}
+
+            {showCloseButton && (
+                <TouchableOpacity
+                    style={[styles.closeButton, { zIndex: 999 }]}
+                    onPress={onClose}
+                    activeOpacity={0.7}
+                >
+                    <View style={{
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        borderRadius: 20,
+                        padding: 8,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.1)'
+                    }}>
+                        <MaterialIcon name="close" size={20} color="#FFF" />
+                    </View>
+                </TouchableOpacity>
+            )}
+        </>
+    );
 
     return (
         <Modal
@@ -69,194 +256,42 @@ const BaseModal: React.FC<BaseModalProps> = ({
             animationType="fade"
             onRequestClose={onClose}
         >
-            <TouchableWithoutFeedback onPress={onClose}>
-                <View style={[styles.overlay, containerStyle]}>
-                    <TouchableWithoutFeedback>
+            <View style={{ flex: 1 }}>
+                {/* Backdrop Click Handler */}
+                <TouchableOpacity
+                    style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)' }]}
+                    activeOpacity={1}
+                    onPress={onClose}
+                />
+
+                <View style={[styles.overlay, containerStyle, { backgroundColor: 'transparent' }]} pointerEvents="box-none">
+                    {Platform.OS === 'ios' ? (
+                        <KeyboardAvoidingView
+                            behavior="padding"
+                            style={{ flex: 1, justifyContent: 'center', width: '100%', alignItems: 'center' }}
+                        >
+                            <View style={[
+                                styles.content,
+                                ...(maxWidth ? [{ maxWidth }] : []),
+                                contentStyle,
+                                scrollable && { maxHeight }
+                            ]} pointerEvents="auto">
+                                {renderContent()}
+                            </View>
+                        </KeyboardAvoidingView>
+                    ) : (
                         <View style={[
-                            styles.content, 
+                            styles.content,
+                            ...(maxWidth ? [{ maxWidth }] : []),
                             contentStyle,
-                            scrollable && { maxHeight }
-                        ]}>
-                            {scrollable ? (
-                                <ScrollView
-                                    showsVerticalScrollIndicator={false}
-                                    bounces={false}
-                                    keyboardShouldPersistTaps="handled"
-                                    contentContainerStyle={{ flexGrow: 1 }}
-                                >
-                                    <View style={{ flex: 1 }}>
-                                        {(icon || title) && (
-                                            <View style={styles.header}>
-                                                {icon && (
-                                                    <MaterialIcon
-                                                        name={icon}
-                                                        size={ICON_SIZES.XLARGE || 48}
-                                                        color={iconColor}
-                                                    />
-                                                )}
-                                                {title && <Text style={styles.title}>{title}</Text>}
-                                            </View>
-                                        )}
-
-                                        {message && <Text style={styles.message}>{message}</Text>}
-
-                                        {children}
-                                    </View>
-
-                                    {(primaryAction || secondaryAction) && (
-                                        <View style={styles.footer}>
-                                            {secondaryAction && (
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.secondaryBtn,
-                                                        secondaryAction.style,
-                                                        secondaryAction.disabled && { opacity: 0.5 }
-                                                    ]}
-                                                    onPress={secondaryAction.onPress}
-                                                    disabled={secondaryAction.disabled}
-                                                >
-                                                    <Text style={[styles.secondaryBtnText, secondaryAction.textStyle]}>
-                                                        {secondaryAction.label}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            )}
-                                            {primaryAction && (
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.primaryBtn,
-                                                        primaryAction.style,
-                                                        { backgroundColor: primaryAction.gradientColors ? 'transparent' : (primaryAction.style?.backgroundColor || '#00E0FF') },
-                                                        primaryAction.disabled && { opacity: 0.5 }
-                                                    ]}
-                                                    onPress={primaryAction.onPress}
-                                                    disabled={primaryAction.disabled}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    {primaryAction.gradientColors ? (
-                                                        <LinearGradient
-                                                            colors={primaryAction.gradientColors}
-                                                            start={{ x: 0, y: 0 }}
-                                                            end={{ x: 1, y: 0 }}
-                                                            style={{
-                                                                width: '100%',
-                                                                height: '100%',
-                                                                justifyContent: 'center',
-                                                                alignItems: 'center',
-                                                                borderRadius: (primaryAction.style?.borderRadius as number) || 16
-                                                            }}
-                                                        >
-                                                            <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
-                                                                {primaryAction.label}
-                                                            </Text>
-                                                        </LinearGradient>
-                                                    ) : (
-                                                        <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
-                                                            {primaryAction.label}
-                                                        </Text>
-                                                    )}
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                    )}
-                                </ScrollView>
-                            ) : (
-                                <>
-                                    {(icon || title) && (
-                                        <View style={styles.header}>
-                                            {icon && (
-                                                <MaterialIcon
-                                                    name={icon}
-                                                    size={ICON_SIZES.XLARGE || 48}
-                                                    color={iconColor}
-                                                />
-                                            )}
-                                            {title && <Text style={styles.title}>{title}</Text>}
-                                        </View>
-                                    )}
-
-                                    {message && <Text style={styles.message}>{message}</Text>}
-
-                                    {children}
-
-                                    {(primaryAction || secondaryAction) && (
-                                        <View style={styles.footer}>
-                                            {secondaryAction && (
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.secondaryBtn,
-                                                        secondaryAction.style,
-                                                        secondaryAction.disabled && { opacity: 0.5 }
-                                                    ]}
-                                                    onPress={secondaryAction.onPress}
-                                                    disabled={secondaryAction.disabled}
-                                                >
-                                                    <Text style={[styles.secondaryBtnText, secondaryAction.textStyle]}>
-                                                        {secondaryAction.label}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            )}
-                                            {primaryAction && (
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.primaryBtn,
-                                                        primaryAction.style,
-                                                        { backgroundColor: primaryAction.gradientColors ? 'transparent' : (primaryAction.style?.backgroundColor || '#00E0FF') },
-                                                        primaryAction.disabled && { opacity: 0.5 }
-                                                    ]}
-                                                    onPress={primaryAction.onPress}
-                                                    disabled={primaryAction.disabled}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    {primaryAction.gradientColors ? (
-                                                        <LinearGradient
-                                                            colors={primaryAction.gradientColors}
-                                                            start={{ x: 0, y: 0 }}
-                                                            end={{ x: 1, y: 0 }}
-                                                            style={{
-                                                                width: '100%',
-                                                                height: '100%',
-                                                                justifyContent: 'center',
-                                                                alignItems: 'center',
-                                                                borderRadius: (primaryAction.style?.borderRadius as number) || 16
-                                                            }}
-                                                        >
-                                                            <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
-                                                                {primaryAction.label}
-                                                            </Text>
-                                                        </LinearGradient>
-                                                    ) : (
-                                                        <Text style={[styles.primaryBtnText, primaryAction.textStyle]}>
-                                                            {primaryAction.label}
-                                                        </Text>
-                                                    )}
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                    )}
-                                </>
-                            )}
-
-                            {showCloseButton && (
-                                <TouchableOpacity
-                                    style={[styles.closeButton, { zIndex: 999 }]}
-                                    onPress={onClose}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={{
-                                        backgroundColor: 'rgba(0,0,0,0.5)',
-                                        borderRadius: 20,
-                                        padding: 8,
-                                        borderWidth: 1,
-                                        borderColor: 'rgba(255,255,255,0.1)'
-                                    }}>
-                                        <MaterialIcon name="close" size={20} color="#FFF" />
-                                    </View>
-                                </TouchableOpacity>
-                            )}
+                            scrollable && { maxHeight },
+                            { width: '90%' }
+                        ]} pointerEvents="auto">
+                            {renderContent()}
                         </View>
-                    </TouchableWithoutFeedback>
+                    )}
                 </View>
-            </TouchableWithoutFeedback>
+            </View>
         </Modal>
     );
 };

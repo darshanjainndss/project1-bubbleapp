@@ -104,7 +104,8 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ onLoadingComplete }) => {
           </View>
 
           {/* App Title */}
-          <Text style={styles.title}>SPACE ADVENTURE</Text>
+          <Text style={styles.subtitle}>Welcome to</Text>
+          <Text style={styles.title}>SHIBA INU Earning Machine </Text>
           <Text style={styles.subtitle}>Loading your game...</Text>
 
           {/* Progress Bar */}

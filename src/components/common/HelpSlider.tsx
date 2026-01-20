@@ -87,7 +87,7 @@ const HelpSlider: React.FC<HelpSliderProps> = ({
         "LIGHTNING: Clears a horizontal row.",
         "BOMB: Explodes everything nearby.",
         "FREEZE: Halts all orbital movement.",
-        "FIRE: Pierces through multiple layers."
+        "FIRE: Pierces through Freezed bubbles."
       ]
     },
     {
@@ -107,7 +107,7 @@ const HelpSlider: React.FC<HelpSliderProps> = ({
       items: [
         `Earn ${levelReward} Base-coins per level victory.`,
         `Get ${starBonus} extra coins for every Star earned.`,
-        `SCORE REWARD: Get ${scoreReward * 0.1} coins per ${scoreRange} points.`,
+        `SCORE REWARD: Get ${scoreReward * 0.1} SHIB per ${scoreRange} points.`,
         "Coins are used to refuel & buy abilities."
       ]
     },
@@ -128,7 +128,7 @@ const HelpSlider: React.FC<HelpSliderProps> = ({
       color: "#D000FF", // Neon Purple
       items: [
         "UNLOCK RULE: You need 2 STARS to advance.",
-        "1 STAR: Level Passed but stuck.",
+        "1 STAR: Not Cleared.",
         "2 STARS: Next Level Unlocked!",
         "Stuck? Replay levels for better scores.",
         "Journey through 2000 levels!"

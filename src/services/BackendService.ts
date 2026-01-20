@@ -7,7 +7,7 @@ const API_BASE_URL = __DEV__
 
 // Fallback URL for emulators and devices
 const API_FALLBACK_URL = 'http://10.0.2.2:3001/api'; // Android emulator localhost
-const API_DEVICE_URL = 'http://192.168.0.135:3001/api'; // For physical devices on network - Updated IP
+const API_DEVICE_URL = 'http://192.168.1.50:3001/api'; // For physical devices on network - Updated IP
 
 // Network test function with fallback URLs
 const testNetworkConnection = async (): Promise<{ success: boolean; url?: string }> => {
@@ -202,6 +202,11 @@ export interface GameConfig {
     scoreRange?: number;
     rewardPerRange?: number;
     minWithdrawAmount?: number;
+    starThresholds?: {
+      one: number;
+      two: number;
+      three: number;
+    };
   };
   platform: 'android' | 'ios';
   rewardAmount: number;

@@ -169,14 +169,14 @@ router.get('/game', async (req, res) => {
         ads: adConfig,
         gameSettings: gameSettings ? {
           coinsPerLevel: gameSettings.coinsPerLevel || 10,
-          starThresholds: gameSettings.starThresholds || { one: 100, two: 400, three: 800 },
+          starThresholds: gameSettings.starThresholds || { one: 200, two: 600, three: 1000 },
           scoreRange: gameSettings.scoreRange || 100,
           rewardPerRange: gameSettings.rewardPerRange ? parseFloat(gameSettings.rewardPerRange.toString()) : 1,
           minWithdrawAmount: gameSettings.minWithdrawAmount ? parseFloat(gameSettings.minWithdrawAmount.toString()) : 0.00000001
         } : {
           // Default fallbacks if no config in DB
           coinsPerLevel: 10,
-          starThresholds: { one: 100, two: 400, three: 800 },
+          starThresholds: { one: 200, two: 600, three: 1000 },
           scoreRange: 100,
           rewardPerRange: 1,
           minWithdrawAmount: 0.00000001

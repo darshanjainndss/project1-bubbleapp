@@ -123,7 +123,8 @@ const RewardHistory: React.FC<RewardHistoryProps> = ({ visible, onClose }) => {
                     {/* Content Section */}
                     <ScrollView
                         style={styles.scrollList}
-                        showsVerticalScrollIndicator={false}
+                        showsVerticalScrollIndicator={true}
+                        indicatorStyle="white"
                         contentContainerStyle={styles.scrollContent}
                     >
                         {loading ? (

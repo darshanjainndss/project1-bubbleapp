@@ -106,7 +106,7 @@ router.post('/progress', auth, async (req, res) => {
 
     if (isActuallyComplete) {
       const config = await GameConfig.getConfig();
-      const thresholds = config?.starThresholds || { one: 100, two: 400, three: 800 };
+      const thresholds = config?.starThresholds || { one: 200, two: 600, three: 1000 };
 
       // Use star threshold from DB
       const calculatedStars = score >= thresholds.three ? 3 : score >= thresholds.two ? 2 : score >= thresholds.one ? 1 : 0;

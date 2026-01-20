@@ -9,8 +9,8 @@ const AD_UNITS_CACHE_KEY = 'cached_ad_units';
 const GAME_CONFIG_CACHE_KEY = 'cached_game_config';
 const CONFIG_TIMESTAMP_KEY = 'config_cache_timestamp';
 
-// Cache duration (5 minutes in development, 24 hours in production)
-const CACHE_DURATION = __DEV__ ? 0 : 24 * 60 * 60 * 1000;
+// Cache duration (5 minutes in development, NO CACHE in production to always get fresh data)
+const CACHE_DURATION = 0; // Always fetch fresh data
 
 
 // Fallback configurations (in case backend is unavailable)
@@ -233,7 +233,8 @@ class ConfigService {
             starBonusLevelMultiplier: 0.5,
             completionBonusMultiplier: 1.2,
             scoreRange: 100,
-            rewardPerRange: 1
+            rewardPerRange: 1,
+            starThresholds: { one: 200, two: 600, three: 1000 }
           },
           platform: platform,
           rewardAmount: 50
@@ -355,6 +356,22 @@ class ConfigService {
     }
 
     return await this.getAdUnits(true);
+  }
+
+  // Force refresh game config only (useful when game settings are updated in database)
+  async refreshGameConfig(): Promise<GameConfig> {
+    console.log('🔄 Force refreshing game config from database...');
+    this.gameConfig = null;
+
+    // Clear game config cache and timestamp to force fresh fetch
+    try {
+      await AsyncStorage.multiRemove([GAME_CONFIG_CACHE_KEY, CONFIG_TIMESTAMP_KEY]);
+      console.log('🗑️ Cleared game config cache and timestamp');
+    } catch (error) {
+      console.error('Error clearing game config cache:', error);
+    }
+
+    return await this.getGameConfig(true);
   }
 
   // Nuclear option - clear everything and start fresh

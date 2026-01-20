@@ -55,7 +55,10 @@ gameConfigSchema.pre('save', function (next) {
 
 // Static methods
 gameConfigSchema.statics.getConfig = async function () {
-    return await this.findOne({ key: 'default' });
+    // Try to find the default config, or just the first available one to be more robust
+    const config = await this.findOne({ key: 'default' });
+    if (config) return config;
+    return await this.findOne({});
 };
 
 module.exports = mongoose.model('GameConfig', gameConfigSchema);

@@ -526,7 +526,7 @@ const TopHUD = ({ coins, score, onProfilePress, onHelp }: any) => (
 );
 
 // Bottom Navigation Bar Component - with Center Map Button
-const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) => (
+const BottomNavBar = ({ onLeaderboard, onShop, onAd, onWithdraw, onMap }: any) => (
   <View style={localStyles.bottomNavGrid}>
     {/* Left Side */}
     <TouchableOpacity style={localStyles.navItem} onPress={onLeaderboard}>
@@ -548,9 +548,9 @@ const BottomNavBar = ({ onLeaderboard, onShop, onAd, onProfile, onMap }: any) =>
       <Text style={localStyles.navText}>Earn</Text>
     </TouchableOpacity>
 
-    <TouchableOpacity style={localStyles.navItem} onPress={onProfile}>
-      <MaterialIcon name="person" family="material" size={26} color="#FFFFFF" />
-      <Text style={localStyles.navText}>Profile</Text>
+    <TouchableOpacity style={localStyles.navItem} onPress={onWithdraw}>
+      <MaterialIcon name="account-balance-wallet" family="material" size={26} color="#FFFFFF" />
+      <Text style={localStyles.navText}>Redeem</Text>
     </TouchableOpacity>
 
     {/* Center Map Button - Raised & Floating */}
@@ -597,6 +597,7 @@ const Roadmap: React.FC = () => {
   const [scoreReward, setScoreReward] = useState(0);
   const [abilityStartingCounts, setAbilityStartingCounts] = useState<Record<string, number>>({});
   const [loadingDirection, setLoadingDirection] = useState<'toFight' | 'toBase'>('toFight');
+  const [gameSettings, setGameSettings] = useState<any>(null);
   const toastRef = useRef<ToastRef>(null);
   const isInitialLoad = useRef(true);
 
@@ -671,6 +672,7 @@ const Roadmap: React.FC = () => {
 
           // Update game settings (base coins and star bonus from DB)
           if (gameConfigData && gameConfigData.gameSettings) {
+            setGameSettings(gameConfigData.gameSettings);
             setBaseRewardAmount((gameConfigData.gameSettings as any).coinsPerLevel ?? 10);
             setStarBonusAmount(gameConfigData.gameSettings.starBonusBase ?? 5);
             setScoreRange(gameConfigData.gameSettings.scoreRange ?? 100);
@@ -1151,7 +1153,7 @@ const Roadmap: React.FC = () => {
       <Text style={styles.loadingText}>
         {loadingDirection === 'toFight'
           ? `Preparing for Battle - Level ${selectedLevel}...`
-          : 'Mission Complete - Returning to Base...'
+          : 'Returning to Base...'
         }
       </Text>
       <View style={{ marginTop: 20 }}>
@@ -1388,6 +1390,7 @@ const Roadmap: React.FC = () => {
           adRewardAmount={adRewardAmount}
           levelReward={baseRewardAmount}
           starBonus={starBonusAmount}
+          gameSettings={gameSettings}
         />
       ) : (
         <View style={{ flex: 1 }}>
@@ -1482,6 +1485,7 @@ const Roadmap: React.FC = () => {
                 }
               }
             }}
+
             onLeaderboard={() => {
               safeVibrate();
               setShowLeaderboard(true);
@@ -1491,10 +1495,7 @@ const Roadmap: React.FC = () => {
               setShowShop(true);
             }}
             onAd={handleRewardedAdPress}
-            onProfile={() => {
-              safeVibrate();
-              setShowProfilePopup(true);
-            }}
+            onWithdraw={() => setShowWithdrawModal(true)}
           />
 
           {/* Ad Banner - Restored */}
@@ -1528,7 +1529,6 @@ const Roadmap: React.FC = () => {
           <WithdrawModal
             visible={showWithdrawModal}
             onClose={() => setShowWithdrawModal(false)}
-            scoreEarnings={(Number(scoreRange) || 100) > 0 ? (Number(userGameData?.totalScore || 0) / Number(scoreRange) * Number(scoreReward)) : 0}
           />
 
           <RewardHistory
